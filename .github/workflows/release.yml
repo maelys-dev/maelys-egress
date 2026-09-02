@@ -41,10 +41,7 @@ jobs:
       - run: scripts/checkout-cli.sh
       - name: Install packaging tools
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y build-essential dpkg-dev file rpm ripgrep
-      - name: Install boundary-audit tools
-        if: runner.os == 'macOS'
-        run: brew install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y build-essential dpkg-dev file rpm
       - run: bash scripts/package-release.sh ${{ matrix.target }}
       - uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1
         with:

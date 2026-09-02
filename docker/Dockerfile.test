@@ -1,7 +1,7 @@
 FROM ubuntu:24.04
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ca-certificates clang libclang-rt-18-dev curl gcc g++ git make nodejs pkg-config python3 ripgrep && \
+    ca-certificates clang libclang-rt-18-dev curl gcc g++ git make nodejs pkg-config python3 && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src

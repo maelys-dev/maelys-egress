@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Speed up the gates without touching the code: the boundary audit uses
+  POSIX `grep -E`, so ripgrep is no longer installed on any runner or image;
+  the five mutants of `scripts/mutation-check.sh` build and test in parallel
+  over one shared dependency build.
 - Advance the pinned Maelys CLI framework to `v0.5.1` and adopt its new
   surface: shell completion is the framework built-in generated from the
   catalog (the product `completion` command and its schema are removed;
