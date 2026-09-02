@@ -13,8 +13,10 @@ framework's and are not redefined here.
 
 ## Before changing the surface
 
-1. Run `build/release/bin/maelys-egress describe --format json --compact` and,
-   for configuration work, `config describe --format json --compact`.
+1. Run `build/release/bin/maelys-egress describe --summary --format json
+   --compact` and, for configuration work, `config describe --format json
+   --compact`. `help`, `version`, `describe` and `completion` come from the
+   framework and are never reimplemented here.
 2. Classify the change: `read` envelope, validation report (exit 2) or
    `stream`. State its stdout contract, stderr diagnostics and exit statuses.
 3. Declare it first. Commands, operands and options live in `cli/main.c`

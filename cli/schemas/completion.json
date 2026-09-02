@@ -1,9 +1,0 @@
-{
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["shell", "script"],
-  "properties": {
-    "shell": {"enum": ["bash", "zsh", "fish"]},
-    "script": {"type": "string"}
-  }
-}

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Advance the pinned Maelys CLI framework to `v0.5.1` and adopt its new
+  surface: shell completion is the framework built-in generated from the
+  catalog (the product `completion` command and its schema are removed;
+  `maelys-egress completion bash|zsh|fish` keeps working), the reference
+  generator is release-neutral by default (the `0.0.0` contract build is
+  gone), `MAELYS_CLI_FORMAT=json` turns a `serve` startup failure into an
+  `agent-cli/v2` envelope on stderr and the Python and Node.js SDKs set it,
+  the writer refuses invalid UTF-8 and `NULL`, and the framework agent
+  instructions are installed (`maelys agents install`).
 - Advance the Maelys System pin from the relicense branch commit `7a5b232`
   to its `main` merge commit `cbe08b3`; identical sources, ABI 1 and 0.5.0.
 

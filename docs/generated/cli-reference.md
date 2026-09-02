@@ -4,17 +4,18 @@
 Common contract: `agent-cli/v2`. For the machine-readable detail run
 `PROGRAM describe COMMAND_ID --format json`.
 
-## `maelys-egress` (Maelys Egress 0.0.0)
+## `maelys-egress` (Maelys Egress)
 
 | Identifier | Usage | Effect | Output | Purpose |
 | --- | --- | --- | --- | --- |
 | help | `help [COMMAND_ID] \| --help` | read | json-envelope | Show the generated CLI guide or one command's help. |
 | version | `version \| --version` | read | json-envelope | Return product identity. |
 | describe | `describe [COMMAND_ID] [--summary]` | read | json-envelope | Return the machine-readable catalog, summary or one descriptor. |
+| completion | `completion SHELL` | read | json-envelope | Print the shell completion script generated from the catalog. |
+| complete.candidates | `__complete [WORDS...]` | read | json-records | Return completion candidates for a partial command line. |
 | config.describe | `config describe` | read | json-envelope | Describe every supported configuration key and constraint. |
 | config.validate | `config validate --config FILE` | read | json-envelope | Validate a complete configuration without opening listeners; exit 2 reports violations in data. |
 | serve | `serve --config FILE` | stream | protocol-stream (maelys-egress-lifecycle/1) | Start mediation and run until SIGINT or SIGTERM; stdout carries the lifecycle JSON Lines stream. |
-| completion | `completion SHELL` | read | json-envelope | Generate completion code for bash, zsh or fish. |
 
 Global options:
 

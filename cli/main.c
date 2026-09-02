@@ -5,16 +5,12 @@
 /* Application identity and command catalog. Everything public about the
  * command line (patterns, options, effects, output modes, exit codes) is
  * declared here and served by libmaelys_cli: help, version, describe,
- * parsing, rendering and error envelopes are the framework's. */
+ * completion, parsing, rendering and error envelopes are the framework's. */
 
 static const maelys_cli_option_t config_options[] = {
     {MAELYS_CLI_PATH("config", "FILE",
      "Complete daemon configuration file declaring schema_version = 1."),
      .required = 1},
-};
-
-static const maelys_cli_operand_t completion_operands[] = {
-    {MAELYS_CLI_OPERAND("SHELL", "Completion dialect: bash, zsh or fish.")},
 };
 
 static const maelys_cli_command_t commands[] = {
@@ -33,21 +29,13 @@ static const maelys_cli_command_t commands[] = {
      "lifecycle JSON Lines stream.",
      egress_cli_command_serve, "maelys-egress-lifecycle/1"),
      MAELYS_CLI_OPTIONS(config_options)},
-    {MAELYS_CLI_READ("completion", "completion",
-     "Generate completion code for bash, zsh or fish.",
-     egress_cli_command_completion),
-     MAELYS_CLI_OPERANDS(completion_operands),
-     MAELYS_CLI_SCHEMA(egress_completion_schema)},
 };
 
 int main(int argc, char **argv) {
     maelys_cli_app_t app = {
         .program = "maelys-egress",
         .product = "Maelys Egress",
-        /* The build macro, not the library string: the release-neutral
-         * contract build (make cli-reference, make contract-check) overrides
-         * it to 0.0.0 so generated references do not churn per release. */
-        .version = MAELYS_EGRESS_BUILD_VERSION,
+        .version = maelys_egress_version_string(),
         .summary = "policy-enforced forward proxy for sandboxed workloads",
         .commands = commands,
         .command_count = MAELYS_CLI_COUNT(commands),

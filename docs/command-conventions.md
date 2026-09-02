@@ -15,8 +15,8 @@ Egress.
 maelys-egress COMMAND [SUBCOMMAND] [OPERANDS] [OPTIONS]
 ```
 
-`help`, `version` and `describe` are the framework built-ins. The product
-commands are `config describe`, `config validate`, `serve` and `completion`.
+`help`, `version`, `describe` and `completion` are the framework built-ins.
+The product commands are `config describe`, `config validate` and `serve`.
 
 `serve` and `config validate` accept one complete configuration file, never
 operational policy or listener flags:
@@ -45,7 +45,15 @@ exit status  0 completed, 1 failed, 2 validation report with violations
 Every lifecycle line is independently parseable and conforms to
 `protocol/egress-lifecycle-v1.schema.json`. Receipts and reload events
 continue after `ready`. `fatal`, or a non-zero exit, is a failure. A `serve`
-that cannot start writes nothing on stdout and reports one failure on stderr.
+that cannot start writes nothing on stdout and reports one failure on stderr,
+as text by default or as an `agent-cli/v2` envelope when the environment
+sets `MAELYS_CLI_FORMAT=json`; the process SDKs set it.
+
+## Shell completion
+
+`maelys-egress completion bash|zsh|fish` prints the completion script
+generated from the catalog by the framework; it completes command words,
+options and `--config` values.
 
 ## Commands with a validation report
 
