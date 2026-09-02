@@ -98,6 +98,19 @@ states `COMPLETE`, `WANT_READ`, `WANT_WRITE`, `CLOSED` and `FAILED`. The
 optional Mbed TLS and wolfSSL modules implement that same contract without
 changing the Egress core. See [docs/tls.md](docs/tls.md).
 
+## Install
+
+```sh
+brew install maelys-dev/tap/maelys-egress
+```
+
+The formula builds the released source with its pinned Maelys System and
+Maelys CLI and installs the daemon, `libmaelys_egress.a`, `libmaelys_sys.a`,
+the headers and pkg-config files. It conflicts with the `maelys-warden`
+formula until the tap carries one shared `maelys-system` formula. Prebuilt
+tarballs, Debian and RPM packages with provenance attestations are attached
+to every [GitHub release](https://github.com/maelys-dev/maelys-egress/releases).
+
 ## Build
 
 ```sh

@@ -1,5 +1,9 @@
 name: release
 
+# Shared Maelys release mechanics (maelys-dev/maelys-release): signed-tag
+# verification, three-target packaging with provenance attestation, GitHub
+# release, then the Homebrew formula rendered from this tag and pushed to
+# maelys-dev/homebrew-tap when the tap credentials are configured.
 on:
   push:
     tags: ["v*"]
@@ -8,69 +12,26 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            target: linux-x86_64
-          - os: ubuntu-24.04-arm
-            target: linux-arm64
-          - os: macos-15
-            target: macos-arm64
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 0
-      - name: Verify version and signed annotated tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "v$(cat VERSION)" = "${GITHUB_REF_NAME}"
-          tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}" --jq .object.sha)"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq .verification.verified)" = true
-      - run: scripts/checkout-system.sh
-      - run: scripts/checkout-cli.sh
-      - name: Install packaging tools
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y build-essential dpkg-dev file rpm
-      - run: bash scripts/package-release.sh ${{ matrix.target }}
-      - uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1
-        with:
-          subject-path: 'dist/*'
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: dist-${{ matrix.target }}
-          path: dist/
-          if-no-files-found: error
-
-  publish:
-    needs: build
-    runs-on: ubuntu-24.04
-    environment: release
+  release:
+    uses: maelys-dev/maelys-release/.github/workflows/release.yml@d48ebbb5bc4913d880e51296b2f140ee809bcb14 # v0.1.1
     permissions:
       contents: write
-    steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          path: incoming
-      - name: Assemble and verify
-        run: |
-          mkdir -p dist
-          find incoming -type f \( -name '*.tar.gz' -o -name '*.deb' -o -name '*.rpm' -o -name '*.sha256' \) -exec cp {} dist/ \;
-          (cd dist && sha256sum -c -- ./*.sha256)
-          (cd dist && sha256sum -- ./*.tar.gz ./*.deb ./*.rpm >SHA256SUMS)
-      - name: Publish GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
-            --title "maelys-egress ${GITHUB_REF_NAME#v}" --generate-notes --verify-tag dist/*
+      id-token: write
+      attestations: write
+    with:
+      product: maelys-egress
+      dependency_checkout: |
+        scripts/checkout-system.sh
+        scripts/checkout-cli.sh
+      linux_packages: build-essential dpkg-dev file rpm
+      macos_runner: '"macos-15"'
+
+  tap:
+    needs: release
+    uses: maelys-dev/maelys-release/.github/workflows/tap.yml@d48ebbb5bc4913d880e51296b2f140ee809bcb14 # v0.1.1
+    with:
+      product: maelys-egress
+      render_command: sh scripts/render-homebrew-formula.sh TAG OUTPUT
+    secrets:
+      tap_token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      tap_signing_key: ${{ secrets.HOMEBREW_TAP_SIGNING_KEY }}
