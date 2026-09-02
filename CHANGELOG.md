@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Advance the Maelys System pin from the relicense branch commit `7a5b232`
+  to its `main` merge commit `cbe08b3`; identical sources, ABI 1 and 0.5.0.
+
 ## 0.12.0 — 2026-09-02
 
 - Build the command line on the shared `libmaelys_cli` framework, pinned to
