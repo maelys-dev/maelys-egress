@@ -73,7 +73,7 @@ EXAMPLE_BINS := $(EXAMPLE_NAMES:%=$(BIN)/example-%)
 
 .PHONY: all clean check test examples-check sdk-check audit check-system-contract check-cli-contract \
 	system-integration-check mutation-check \
-	cli-reference contract-check lifecycle-contract-check schema-check \
+	cli-reference contract-check lifecycle-contract-check schema-check package-homebrew \
 	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-binaries \
 	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check dist
 
@@ -293,6 +293,10 @@ tls-binaries: $(MBEDTLS_CLI) $(WOLFSSL_CLI)
 audit:
 	scripts/audit-boundaries.sh
 
+# Renders the Homebrew formula for an already-pushed tag (default: VERSION).
+package-homebrew:
+	scripts/render-homebrew-formula.sh v$(VERSION)
+
 system-integration-check: $(STATIC_LIB) $(MAELYS_SYSTEM_LIB)
 	@symbols="$$(nm -u $(STATIC_LIB))"; \
 	for symbol in maelys_sys_loop_create maelys_sys_loop_watch_fd \
@@ -388,6 +392,7 @@ install: $(STATIC_LIB) $(CLI) $(PC) $(MAELYS_SYSTEM_LIB)
 		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/skills/egress-cli-contract/
 	install -d $(DESTDIR)$(PREFIX)/share/doc/maelys-egress/examples
 	install -m 0644 packaging/maelys-egress.conf.example \
+		packaging/homebrew/maelys-egress.rb.in \
 		packaging/systemd/maelys-egress.service \
 		packaging/launchd/com.maelys.egress.plist docker/Dockerfile.sidecar \
 		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/examples/

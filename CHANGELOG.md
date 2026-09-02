@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Release through the shared `maelys-dev/maelys-release` workflows (signed
+  tag, three-target packaging, provenance, GitHub release) and publish a
+  Homebrew formula to `maelys-dev/homebrew-tap`: `packaging/homebrew/
+  maelys-egress.rb.in` is rendered from the released tag with the tag's own
+  System and CLI pins by `scripts/render-homebrew-formula.sh` (`make
+  package-homebrew`). The formula builds from source, installs the daemon,
+  libraries and headers, and conflicts with `maelys-warden` until the tap
+  has a shared `maelys-system` formula.
 - Speed up the gates without touching the code: the boundary audit uses
   POSIX `grep -E`, so ripgrep is no longer installed on any runner or image;
   the five mutants of `scripts/mutation-check.sh` build and test in parallel
