@@ -1,0 +1,11 @@
+{
+  "name": "@maelys/egress",
+  "version": "0.12.0",
+  "description": "Dependency-free process SDK for the Maelys Egress mediator",
+  "type": "module",
+  "main": "index.js",
+  "exports": "./index.js",
+  "engines": {"node": ">=18"},
+  "license": "MPL-2.0",
+  "scripts": {"test": "node --test test/egress.test.js"}
+}

@@ -1,0 +1,29 @@
+# Build with:
+# docker build --build-context maelys-system=../maelys-system \
+#   --build-context maelys-cli=../maelys-cli \
+#   -f docker/Dockerfile.sidecar -t maelys-egress-sidecar .
+FROM ubuntu:24.04 AS build
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    build-essential ca-certificates git ripgrep && rm -rf /var/lib/apt/lists/*
+COPY --from=maelys-system . /maelys-system
+COPY --from=maelys-cli . /maelys-cli
+COPY . /src
+WORKDIR /src
+RUN git -C /maelys-system init -q && git -C /maelys-system add . && \
+    git -C /maelys-system -c user.name=builder -c user.email=builder.invalid commit -qm snapshot && \
+    system_pin=$(git -C /maelys-system rev-parse HEAD) && \
+    git -C /maelys-cli init -q && git -C /maelys-cli add . && \
+    git -C /maelys-cli -c user.name=builder -c user.email=builder.invalid commit -qm snapshot && \
+    cli_pin=$(git -C /maelys-cli rev-parse HEAD) && \
+    make clean check MAELYS_SYSTEM_DIR=/maelys-system MAELYS_SYSTEM_PIN=$system_pin \
+      MAELYS_CLI_DIR=/maelys-cli MAELYS_CLI_PIN=$cli_pin && \
+    make install MAELYS_SYSTEM_DIR=/maelys-system MAELYS_SYSTEM_PIN=$system_pin \
+      MAELYS_CLI_DIR=/maelys-cli MAELYS_CLI_PIN=$cli_pin DESTDIR=/stage PREFIX=/usr
+
+FROM ubuntu:24.04
+RUN groupadd --system maelys-egress && useradd --system --gid maelys-egress maelys-egress && \
+    install -d -o maelys-egress -g maelys-egress -m 0700 /run/maelys-egress
+COPY --from=build /stage/usr/bin/maelys-egress /usr/bin/maelys-egress
+USER maelys-egress:maelys-egress
+ENTRYPOINT ["/usr/bin/maelys-egress"]
+CMD ["serve", "--config", "/etc/maelys-egress.conf", "--non-interactive"]

@@ -1,0 +1,563 @@
+{
+  "contract": "agent-cli/v2",
+  "programs": {
+    "maelys-egress": {
+      "cliApi": 1,
+      "commands": [
+        {
+          "effect": "read",
+          "exitCodes": {
+            "0": "command completed",
+            "1": "execution failed",
+            "2": "valid report with violations"
+          },
+          "external": false,
+          "hidden": false,
+          "id": "help",
+          "input": {
+            "constraints": [],
+            "operands": [
+              {
+                "name": "COMMAND_ID",
+                "required": false,
+                "summary": "Stable command identifier whose help is shown.",
+                "variadic": false
+              }
+            ],
+            "options": [],
+            "passthrough": false,
+            "synopsis": "help [COMMAND_ID] | --help"
+          },
+          "outputMode": "json-envelope",
+          "outputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "commands": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "text",
+              "commands"
+            ],
+            "type": "object"
+          },
+          "pattern": [
+            "help"
+          ],
+          "purpose": "Show the generated CLI guide or one command's help.",
+          "usage": "help [COMMAND_ID] | --help"
+        },
+        {
+          "effect": "read",
+          "exitCodes": {
+            "0": "command completed",
+            "1": "execution failed",
+            "2": "valid report with violations"
+          },
+          "external": false,
+          "hidden": false,
+          "id": "version",
+          "input": {
+            "constraints": [],
+            "operands": [],
+            "options": [],
+            "passthrough": false,
+            "synopsis": "version | --version"
+          },
+          "outputMode": "json-envelope",
+          "outputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "cliApi": {
+                "type": "integer"
+              },
+              "contract": {
+                "const": "agent-cli/v2"
+              },
+              "framework": {
+                "type": "string"
+              },
+              "product": {
+                "type": "string"
+              },
+              "program": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "product",
+              "program",
+              "version",
+              "contract",
+              "cliApi",
+              "framework"
+            ],
+            "type": "object"
+          },
+          "pattern": [
+            "version"
+          ],
+          "purpose": "Return product identity.",
+          "usage": "version | --version"
+        },
+        {
+          "effect": "read",
+          "exitCodes": {
+            "0": "command completed",
+            "1": "execution failed",
+            "2": "valid report with violations"
+          },
+          "external": false,
+          "hidden": false,
+          "id": "describe",
+          "input": {
+            "constraints": [],
+            "operands": [
+              {
+                "name": "COMMAND_ID",
+                "required": false,
+                "summary": "Stable command identifier returned by the catalog.",
+                "variadic": false
+              }
+            ],
+            "options": [
+              {
+                "conflictsWith": [],
+                "long": "--summary",
+                "repeatable": false,
+                "required": false,
+                "requires": [],
+                "summary": "Return the compact command inventory without output schemas."
+              }
+            ],
+            "passthrough": false,
+            "synopsis": "describe [COMMAND_ID] [--summary]"
+          },
+          "outputMode": "json-envelope",
+          "outputSchema": {
+            "additionalProperties": true,
+            "description": "Command catalog, summary or single descriptor.",
+            "required": [
+              "schemaVersion",
+              "kind",
+              "program",
+              "commands"
+            ],
+            "type": "object"
+          },
+          "pattern": [
+            "describe"
+          ],
+          "purpose": "Return the machine-readable catalog, summary or one descriptor.",
+          "usage": "describe [COMMAND_ID] [--summary]"
+        },
+        {
+          "effect": "read",
+          "exitCodes": {
+            "0": "command completed",
+            "1": "execution failed",
+            "2": "valid report with violations"
+          },
+          "external": false,
+          "hidden": false,
+          "id": "config.describe",
+          "input": {
+            "constraints": [],
+            "operands": [],
+            "options": [],
+            "passthrough": false,
+            "synopsis": "config describe"
+          },
+          "outputMode": "json-envelope",
+          "outputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "configurationSchemaVersion": {
+                "const": 1
+              },
+              "constraints": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "grammar": {
+                "const": "strict-key-value"
+              },
+              "keys": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "allowedValues": {
+                      "type": "string"
+                    },
+                    "conflicts": {
+                      "type": "string"
+                    },
+                    "default": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "range": {
+                      "type": "string"
+                    },
+                    "repeatable": {
+                      "type": "boolean"
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "requires": {
+                      "type": "string"
+                    },
+                    "secret": {
+                      "type": "boolean"
+                    },
+                    "type": {
+                      "enum": [
+                        "path",
+                        "string",
+                        "boolean",
+                        "endpoint",
+                        "destination",
+                        "integer",
+                        "enum"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "required",
+                    "repeatable",
+                    "secret",
+                    "description"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "tlsListener": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "configurationSchemaVersion",
+              "grammar",
+              "tlsListener",
+              "keys",
+              "constraints"
+            ],
+            "type": "object"
+          },
+          "pattern": [
+            "config",
+            "describe"
+          ],
+          "purpose": "Describe every supported configuration key and constraint.",
+          "usage": "config describe"
+        },
+        {
+          "effect": "read",
+          "exitCodes": {
+            "0": "command completed",
+            "1": "execution failed",
+            "2": "valid report with violations"
+          },
+          "external": false,
+          "hidden": false,
+          "id": "config.validate",
+          "input": {
+            "constraints": [],
+            "operands": [],
+            "options": [
+              {
+                "argument": {
+                  "name": "FILE",
+                  "type": "path"
+                },
+                "conflictsWith": [],
+                "long": "--config",
+                "repeatable": false,
+                "required": true,
+                "requires": [],
+                "summary": "Complete daemon configuration file declaring schema_version = 1."
+              }
+            ],
+            "passthrough": false,
+            "synopsis": "config validate --config FILE"
+          },
+          "outputMode": "json-envelope",
+          "outputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "configurationSchemaVersion": {
+                "const": 1
+              },
+              "diagnostics": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "hint": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "policy": {
+                "additionalProperties": false,
+                "properties": {
+                  "algorithm": {
+                    "const": "sha256"
+                  },
+                  "digest": {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "algorithm",
+                  "digest"
+                ],
+                "type": "object"
+              },
+              "valid": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "valid",
+              "configurationSchemaVersion"
+            ],
+            "type": "object"
+          },
+          "pattern": [
+            "config",
+            "validate"
+          ],
+          "purpose": "Validate a complete configuration without opening listeners; exit 2 reports violations in data.",
+          "usage": "config validate --config FILE"
+        },
+        {
+          "effect": "stream",
+          "exitCodes": {
+            "0": "command completed",
+            "1": "execution failed",
+            "2": "valid report with violations"
+          },
+          "external": false,
+          "hidden": false,
+          "id": "serve",
+          "input": {
+            "constraints": [],
+            "operands": [],
+            "options": [
+              {
+                "argument": {
+                  "name": "FILE",
+                  "type": "path"
+                },
+                "conflictsWith": [],
+                "long": "--config",
+                "repeatable": false,
+                "required": true,
+                "requires": [],
+                "summary": "Complete daemon configuration file declaring schema_version = 1."
+              }
+            ],
+            "passthrough": false,
+            "synopsis": "serve --config FILE"
+          },
+          "outputMode": "protocol-stream",
+          "outputSchema": {
+            "type": "object"
+          },
+          "pattern": [
+            "serve"
+          ],
+          "protocol": "maelys-egress-lifecycle/1",
+          "purpose": "Start mediation and run until SIGINT or SIGTERM; stdout carries the lifecycle JSON Lines stream.",
+          "usage": "serve --config FILE"
+        },
+        {
+          "effect": "read",
+          "exitCodes": {
+            "0": "command completed",
+            "1": "execution failed",
+            "2": "valid report with violations"
+          },
+          "external": false,
+          "hidden": false,
+          "id": "completion",
+          "input": {
+            "constraints": [],
+            "operands": [
+              {
+                "name": "SHELL",
+                "required": true,
+                "summary": "Completion dialect: bash, zsh or fish.",
+                "variadic": false
+              }
+            ],
+            "options": [],
+            "passthrough": false,
+            "synopsis": "completion SHELL"
+          },
+          "outputMode": "json-envelope",
+          "outputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "script": {
+                "type": "string"
+              },
+              "shell": {
+                "enum": [
+                  "bash",
+                  "zsh",
+                  "fish"
+                ]
+              }
+            },
+            "required": [
+              "shell",
+              "script"
+            ],
+            "type": "object"
+          },
+          "pattern": [
+            "completion"
+          ],
+          "purpose": "Generate completion code for bash, zsh or fish.",
+          "usage": "completion SHELL"
+        }
+      ],
+      "contract": "agent-cli/v2",
+      "framework": "0.1.0",
+      "globalOptions": [
+        {
+          "argument": {
+            "choices": [
+              "text",
+              "json",
+              "jsonl"
+            ],
+            "name": "VALUE",
+            "type": "choice"
+          },
+          "conflictsWith": [],
+          "default": "text",
+          "long": "--format",
+          "repeatable": false,
+          "required": false,
+          "requires": [],
+          "summary": "Select text for humans, json for one envelope or jsonl for records."
+        },
+        {
+          "conflictsWith": [],
+          "long": "--json",
+          "repeatable": false,
+          "required": false,
+          "requires": [],
+          "summary": "Exact alias of --format json."
+        },
+        {
+          "conflictsWith": [],
+          "long": "--compact",
+          "repeatable": false,
+          "required": false,
+          "requires": [],
+          "summary": "Render JSON on a single line."
+        },
+        {
+          "conflictsWith": [],
+          "long": "--pretty",
+          "repeatable": false,
+          "required": false,
+          "requires": [],
+          "summary": "--pretty=false selects compact JSON."
+        },
+        {
+          "conflictsWith": [],
+          "long": "--non-interactive",
+          "repeatable": false,
+          "required": false,
+          "requires": [],
+          "summary": "Never prompt; fail instead of asking a question."
+        },
+        {
+          "argument": {
+            "choices": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "name": "VALUE",
+            "type": "choice"
+          },
+          "conflictsWith": [],
+          "default": "auto",
+          "long": "--color",
+          "repeatable": false,
+          "required": false,
+          "requires": [],
+          "summary": "Control ANSI colors on terminals."
+        },
+        {
+          "conflictsWith": [],
+          "long": "--help",
+          "repeatable": false,
+          "required": false,
+          "requires": [],
+          "summary": "Show the help of the selected command."
+        }
+      ],
+      "invariants": [
+        "usage and agent discovery share one catalog",
+        "transactional commands plan by default and require --apply",
+        "stdout carries success data; stderr carries failures",
+        "--json and --format json are identical",
+        "unknown or duplicated options are refused",
+        "stream commands reject envelope rendering flags",
+        "external commands receive their arguments verbatim"
+      ],
+      "kind": "catalog",
+      "output": {
+        "contract": "agent-cli/v2",
+        "schemaVersion": 2,
+        "stderr": "diagnostics and failure envelopes",
+        "stdout": "success data only; protocol streams are explicit exceptions"
+      },
+      "product": "Maelys Egress",
+      "program": "maelys-egress",
+      "schemaVersion": 1,
+      "version": "0.0.0"
+    }
+  }
+}

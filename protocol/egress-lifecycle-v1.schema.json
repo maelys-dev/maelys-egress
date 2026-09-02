@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maelys.dev/schemas/egress-lifecycle-v1.schema.json",
+  "title": "Maelys Egress daemon lifecycle event",
+  "type": "object",
+  "required": ["schemaVersion", "contract", "event"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "contract": { "const": "maelys-egress-lifecycle/1" },
+    "event": {
+      "enum": [
+        "ready",
+        "policy-reloaded",
+        "policy-reload-rejected",
+        "receipt",
+        "stopping",
+        "stopped",
+        "fatal"
+      ]
+    },
+    "message": { "type": "string" },
+    "proxy": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["transport", "host", "port"],
+          "properties": {
+            "transport": { "const": "tcp" },
+            "host": { "type": "string", "minLength": 1 },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["transport", "path"],
+          "properties": {
+            "transport": { "const": "unix" },
+            "path": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "admin": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["host", "port"],
+          "properties": {
+            "host": { "type": "string", "minLength": 1 },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "policy": {
+      "type": "object",
+      "required": ["generation", "digest"],
+      "properties": {
+        "generation": { "type": "integer", "minimum": 1 },
+        "algorithm": { "const": "sha256" },
+        "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "receipt": { "type": "object" }
+  },
+  "additionalProperties": false
+}

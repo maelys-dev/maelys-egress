@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maelys.dev/schemas/agent-cli-v2.schema.json",
+  "title": "Maelys finite CLI result envelope (libmaelys_cli)",
+  "type": "object",
+  "required": ["schemaVersion", "contract", "command", "ok", "exitCode"],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "contract": { "const": "agent-cli/v2" },
+    "command": { "type": "string", "minLength": 1 },
+    "ok": { "type": "boolean" },
+    "exitCode": { "type": "integer", "minimum": 0, "maximum": 255 },
+    "data": { "type": "object" },
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "hint": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "ok": { "const": true } } },
+      "then": { "required": ["data"], "not": { "required": ["error"] } },
+      "else": { "required": ["error"], "not": { "required": ["data"] } }
+    }
+  ],
+  "additionalProperties": false
+}

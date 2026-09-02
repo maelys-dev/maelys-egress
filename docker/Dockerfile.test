@@ -1,0 +1,12 @@
+FROM ubuntu:24.04
+
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    ca-certificates clang libclang-rt-18-dev curl gcc g++ git make nodejs pkg-config python3 ripgrep && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY . .
+RUN scripts/checkout-system.sh /maelys-system
+RUN scripts/checkout-cli.sh /maelys-cli
+
+CMD ["make", "check", "CC=clang", "CXX=clang++"]

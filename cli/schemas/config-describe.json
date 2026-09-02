@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["configurationSchemaVersion", "grammar", "tlsListener", "keys", "constraints"],
+  "properties": {
+    "configurationSchemaVersion": {"const": 1},
+    "grammar": {"const": "strict-key-value"},
+    "tlsListener": {"type": "boolean"},
+    "keys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "type", "required", "repeatable", "secret", "description"],
+        "properties": {
+          "name": {"type": "string"},
+          "type": {"enum": ["path", "string", "boolean", "endpoint", "destination", "integer", "enum"]},
+          "required": {"type": "boolean"},
+          "repeatable": {"type": "boolean"},
+          "secret": {"type": "boolean"},
+          "default": {"type": "string"},
+          "range": {"type": "string"},
+          "allowedValues": {"type": "string"},
+          "requires": {"type": "string"},
+          "conflicts": {"type": "string"},
+          "description": {"type": "string"}
+        }
+      }
+    },
+    "constraints": {"type": "array", "items": {"type": "string"}}
+  }
+}

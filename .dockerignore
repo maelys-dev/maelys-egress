@@ -1,0 +1,8 @@
+.git
+.github
+build
+**/build
+dist
+*.plist
+!packaging/launchd/*.plist
+*.sarif

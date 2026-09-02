@@ -1,0 +1,16 @@
+# Strict key=value configuration. Repeat only allow directives.
+schema_version = 1
+listen_unix = /run/maelys-egress/egress.sock
+unix_peer = same-euid
+token_file = /run/secrets/maelys-egress-token
+max_connections = 128
+# quota_connections = 8
+# quota_bytes = 104857600
+# admin_listen = 127.0.0.1:9901
+# audit_log = /var/log/maelys-egress/audit.jsonl
+# audit_key_file = /run/secrets/maelys-egress-audit-key
+# audit_key_id = host-2026-08
+
+# Exact egress policy.
+allow_tls_sni = github.com:443
+allow_tls_sni = api.anthropic.com:443
