@@ -196,6 +196,8 @@ export class EgressProcess extends EventEmitter {
         "serve", "--config", configPath, "--non-interactive",
       ], {
         stdio: ["ignore", "pipe", this.stderr],
+        // A startup failure is then one agent-cli/v2 envelope on stderr.
+        env: { ...process.env, MAELYS_CLI_FORMAT: "json" },
       });
       await this.#waitReady();
       if (this.proxyPort === 0 || this.adminPort === 0) {

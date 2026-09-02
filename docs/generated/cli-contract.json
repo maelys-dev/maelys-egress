@@ -5,6 +5,7 @@
       "cliApi": 1,
       "commands": [
         {
+          "available": true,
           "effect": "read",
           "exitCodes": {
             "0": "command completed",
@@ -55,6 +56,7 @@
           "usage": "help [COMMAND_ID] | --help"
         },
         {
+          "available": true,
           "effect": "read",
           "exitCodes": {
             "0": "command completed",
@@ -111,6 +113,7 @@
           "usage": "version | --version"
         },
         {
+          "available": true,
           "effect": "read",
           "exitCodes": {
             "0": "command completed",
@@ -162,6 +165,119 @@
           "usage": "describe [COMMAND_ID] [--summary]"
         },
         {
+          "available": true,
+          "effect": "read",
+          "exitCodes": {
+            "0": "command completed",
+            "1": "execution failed",
+            "2": "valid report with violations"
+          },
+          "external": false,
+          "hidden": false,
+          "id": "completion",
+          "input": {
+            "constraints": [],
+            "operands": [
+              {
+                "choices": [
+                  "bash",
+                  "zsh",
+                  "fish"
+                ],
+                "name": "SHELL",
+                "required": true,
+                "summary": "Shell whose completion script is printed.",
+                "type": "choice",
+                "variadic": false
+              }
+            ],
+            "options": [],
+            "passthrough": false,
+            "synopsis": "completion SHELL"
+          },
+          "outputMode": "json-envelope",
+          "outputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "script": {
+                "type": "string"
+              },
+              "shell": {
+                "enum": [
+                  "bash",
+                  "zsh",
+                  "fish"
+                ]
+              }
+            },
+            "required": [
+              "shell",
+              "script"
+            ],
+            "type": "object"
+          },
+          "pattern": [
+            "completion"
+          ],
+          "purpose": "Print the shell completion script generated from the catalog.",
+          "usage": "completion SHELL"
+        },
+        {
+          "available": true,
+          "effect": "read",
+          "exitCodes": {
+            "0": "command completed",
+            "1": "execution failed",
+            "2": "valid report with violations"
+          },
+          "external": false,
+          "hidden": true,
+          "id": "complete.candidates",
+          "input": {
+            "constraints": [],
+            "operands": [
+              {
+                "name": "WORDS",
+                "required": false,
+                "summary": "Command line words after the program name; the last one is the prefix being completed.",
+                "variadic": true
+              }
+            ],
+            "options": [],
+            "passthrough": false,
+            "synopsis": "__complete [WORDS...]"
+          },
+          "outputMode": "json-records",
+          "outputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "count": {
+                "type": "integer"
+              },
+              "records": {
+                "items": {
+                  "required": [
+                    "word"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "count",
+              "records"
+            ],
+            "type": "object"
+          },
+          "pattern": [
+            "__complete"
+          ],
+          "purpose": "Return completion candidates for a partial command line.",
+          "usage": "__complete [WORDS...]"
+        },
+        {
+          "available": true,
           "effect": "read",
           "exitCodes": {
             "0": "command completed",
@@ -273,6 +389,7 @@
           "usage": "config describe"
         },
         {
+          "available": true,
           "effect": "read",
           "exitCodes": {
             "0": "command completed",
@@ -366,6 +483,7 @@
           "usage": "config validate --config FILE"
         },
         {
+          "available": true,
           "effect": "stream",
           "exitCodes": {
             "0": "command completed",
@@ -405,61 +523,9 @@
           "protocol": "maelys-egress-lifecycle/1",
           "purpose": "Start mediation and run until SIGINT or SIGTERM; stdout carries the lifecycle JSON Lines stream.",
           "usage": "serve --config FILE"
-        },
-        {
-          "effect": "read",
-          "exitCodes": {
-            "0": "command completed",
-            "1": "execution failed",
-            "2": "valid report with violations"
-          },
-          "external": false,
-          "hidden": false,
-          "id": "completion",
-          "input": {
-            "constraints": [],
-            "operands": [
-              {
-                "name": "SHELL",
-                "required": true,
-                "summary": "Completion dialect: bash, zsh or fish.",
-                "variadic": false
-              }
-            ],
-            "options": [],
-            "passthrough": false,
-            "synopsis": "completion SHELL"
-          },
-          "outputMode": "json-envelope",
-          "outputSchema": {
-            "additionalProperties": false,
-            "properties": {
-              "script": {
-                "type": "string"
-              },
-              "shell": {
-                "enum": [
-                  "bash",
-                  "zsh",
-                  "fish"
-                ]
-              }
-            },
-            "required": [
-              "shell",
-              "script"
-            ],
-            "type": "object"
-          },
-          "pattern": [
-            "completion"
-          ],
-          "purpose": "Generate completion code for bash, zsh or fish.",
-          "usage": "completion SHELL"
         }
       ],
       "contract": "agent-cli/v2",
-      "framework": "0.1.0",
       "globalOptions": [
         {
           "argument": {
@@ -556,8 +622,7 @@
       },
       "product": "Maelys Egress",
       "program": "maelys-egress",
-      "schemaVersion": 1,
-      "version": "0.0.0"
+      "schemaVersion": 1
     }
   }
 }

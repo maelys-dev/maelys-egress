@@ -119,7 +119,6 @@ def check_finite(binary: Path, envelope_schema: dict, data_schemas: dict, config
          "config-validate"),
         ("config validate (missing file)", ("config", "validate", "--config", str(missing)),
          1, None),
-        ("completion zsh", ("completion", "zsh"), 0, "completion"),
     ]
     for label, arguments, expected_status, data_schema in cases:
         status, out, err = run(binary, *arguments)

@@ -12,13 +12,14 @@ unmodified source is available at the repository and commit named above.
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-## Maelys CLI 0.1.0
+## Maelys CLI 0.5.1
 
 The `maelys-egress` command-line binary statically links `libmaelys_cli`
-from Maelys CLI at tag `v0.1.0`, commit
-`9f620aed2cc17dc4f977cab32bf734ac471de3e5`
+from Maelys CLI at tag `v0.5.1`, commit
+`193786914f19f2f42b12815a267ba2d4ff8a6f3a`
 (https://github.com/maelys-dev/maelys-cli). The Maelys Egress library
-`libmaelys_egress` does not link it.
+`libmaelys_egress` does not link it, and neither archive links
+`libmaelys_cli_extension` or maelys-json.
 
 Maelys CLI is licensed under the Mozilla Public License, v. 2.0, the same
 license as this repository. Its complete, unmodified source is available at

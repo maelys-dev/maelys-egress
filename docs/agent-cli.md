@@ -27,7 +27,8 @@ Read `data.valid` and, on exit `2`, `data.diagnostics[].code` and
 that `serve` will announce.
 
 `serve` is a protocol-stream command: never pass rendering options to it and
-never parse its stdout as an envelope. Read stdout line by line, wait for
+never parse its stdout as an envelope. Set `MAELYS_CLI_FORMAT=json` in its
+environment so that a startup failure is one envelope on stderr. Read stdout line by line, wait for
 `event == "ready"`, record the listener it selected (`proxy.transport` with
 `host` and `port` or `path`, `admin`, `policy.digest`), then keep draining
 `receipt`, `policy-reloaded` and `policy-reload-rejected` events until exit.

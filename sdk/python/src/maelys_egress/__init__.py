@@ -222,6 +222,8 @@ class EgressProcess:
                 stderr=self.stderr,
                 close_fds=True,
                 start_new_session=True,
+                # A startup failure is then one agent-cli/v2 envelope on stderr.
+                env={**os.environ, "MAELYS_CLI_FORMAT": "json"},
             )
             self._ready_signal.clear()
             self._lifecycle_error = None

@@ -56,8 +56,6 @@ STATIC_LIB := $(LIB)/libmaelys_egress.a
 MBEDTLS_LIB := $(LIB)/libmaelys_egress_tls_mbedtls.a
 WOLFSSL_LIB := $(LIB)/libmaelys_egress_tls_wolfssl.a
 CLI := $(BIN)/maelys-egress
-CONTRACT_BIN := $(BUILD)/contract/bin
-CONTRACT_CLI := $(CONTRACT_BIN)/maelys-egress
 MBEDTLS_CLI := $(BIN)/maelys-egress-mbedtls
 WOLFSSL_CLI := $(BIN)/maelys-egress-wolfssl
 TEST := $(BIN)/test-egress
@@ -103,6 +101,8 @@ check-cli-contract:
 	@git -C "$(MAELYS_CLI_DIR)" diff --quiet "$(MAELYS_CLI_PIN)" -- include src tools || \
 		{ echo "pinned maelys-cli contract is modified" >&2; exit 1; }
 	@grep -Fq '#define MAELYS_CLI_ABI 1' "$(MAELYS_CLI_DIR)/include/maelys/cli/version.h"
+	@grep -Fq '#define MAELYS_CLI_VERSION "$(MAELYS_CLI_TAG:v%=%)"' \
+		"$(MAELYS_CLI_DIR)/include/maelys/cli/version.h"
 	@grep -Fq '#define MAELYS_CLI_CONTRACT "agent-cli/v2"' \
 		"$(MAELYS_CLI_DIR)/include/maelys/cli/version.h"
 
@@ -157,17 +157,6 @@ $(WOLFSSL_LIB): $(OBJ)/providers/tls_wolfssl.o
 $(CLI_OBJECTS): | $(MAELYS_SYSTEM_LIB) $(MAELYS_CLI_LIB) $(GENERATED)/egress_schemas.h
 
 $(CLI): $(CLI_OBJECTS) $(CLI_SCHEMA_OBJECT) $(STATIC_LIB) $(MAELYS_CLI_LIB) | $(MAELYS_SYSTEM_LIB)
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
-
-# Release-neutral contract build: only the catalog object carries the version.
-$(OBJ)/cli/main-contract.o: cli/main.c | $(MAELYS_SYSTEM_LIB) $(MAELYS_CLI_LIB) $(GENERATED)/egress_schemas.h
-	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CLI_CPPFLAGS) -UMAELYS_EGRESS_BUILD_VERSION \
-		-DMAELYS_EGRESS_BUILD_VERSION='"0.0.0"' $(CFLAGS) -MMD -MP -c $< -o $@
-
-$(CONTRACT_CLI): $(OBJ)/cli/main-contract.o $(filter-out $(OBJ)/cli/main.o,$(CLI_OBJECTS)) \
-		$(CLI_SCHEMA_OBJECT) $(STATIC_LIB) $(MAELYS_CLI_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
@@ -244,22 +233,22 @@ test: all $(OPERATIONS_TEST)
 	tests/test_cli.sh $(CLI)
 
 # The command reference and contract come from the maelys-cli generator; the
-# configuration-key reference is Egress specific. Both read `describe` from
-# the release-neutral contract build, so a release never rewrites them.
-cli-reference: $(CONTRACT_CLI)
-	python3 $(MAELYS_CLI_REFERENCE) --build $(abspath $(CONTRACT_BIN)) \
+# configuration-key reference is Egress specific. Both read `describe`; the
+# generator omits versions by default, so a release never rewrites them.
+cli-reference: $(CLI)
+	python3 $(MAELYS_CLI_REFERENCE) --build $(abspath $(BIN)) \
 		--markdown docs/generated/cli-reference.md \
 		--json docs/generated/cli-contract.json maelys-egress
-	python3 tools/generate_config_reference.py --binary $(abspath $(CONTRACT_CLI)) \
+	python3 tools/generate_config_reference.py --binary $(abspath $(CLI)) \
 		--output docs/generated/config-reference.md
 
 # Rejects stale generated documentation; part of `check`.
-contract-check: $(CONTRACT_CLI)
+contract-check: $(CLI)
 	@mkdir -p $(BUILD)/contract
-	python3 $(MAELYS_CLI_REFERENCE) --build $(abspath $(CONTRACT_BIN)) \
+	python3 $(MAELYS_CLI_REFERENCE) --build $(abspath $(BIN)) \
 		--markdown $(BUILD)/contract/cli-reference.md \
 		--json $(BUILD)/contract/cli-contract.json maelys-egress
-	python3 tools/generate_config_reference.py --binary $(abspath $(CONTRACT_CLI)) \
+	python3 tools/generate_config_reference.py --binary $(abspath $(CLI)) \
 		--output $(BUILD)/contract/config-reference.md
 	@for name in cli-reference.md cli-contract.json config-reference.md; do \
 		cmp -s $(BUILD)/contract/$$name docs/generated/$$name || \

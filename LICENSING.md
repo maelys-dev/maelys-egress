@@ -16,6 +16,14 @@ statically or otherwise, or embeds the daemon, keeps its own license
 in Source Code Form under MPL-2.0. Workloads mediated by the proxy are not
 covered software.
 
+## Installed agent texts: CC0-1.0
+
+The managed `maelys-cli` blocks of `AGENTS.md` and `CLAUDE.md`,
+`docs/maelys-cli-guide.md` and `.claude/skills/maelys-cli-command/SKILL.md`
+are installed by `maelys agents install` from the Maelys CLI distribution,
+whose `share/` texts are dedicated to the public domain under CC0-1.0. They
+carry no license obligation of their own.
+
 ## Redistributed material
 
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) lists the pinned Maelys

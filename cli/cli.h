@@ -9,8 +9,7 @@
  * implementation files together:
  *
  *   main.c            application identity and command catalog
- *   commands.c        handlers: config describe, config validate, serve,
- *                     completion
+ *   commands.c        handlers: config describe, config validate, serve
  *   config_catalog.c  executable catalog of configuration keys
  *   config_file.c     strict key = value loader producing typed settings
  *   secrets.c         owner-only token and audit-key files
@@ -129,6 +128,5 @@ int egress_cli_run(
 int egress_cli_command_config_describe(maelys_cli_context_t *context);
 int egress_cli_command_config_validate(maelys_cli_context_t *context);
 int egress_cli_command_serve(maelys_cli_context_t *context);
-int egress_cli_command_completion(maelys_cli_context_t *context);
 
 #endif
