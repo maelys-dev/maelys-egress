@@ -96,7 +96,7 @@ shell or PATH lookup.
 <!-- maelys-cli:end -->
 
 <!-- maelys-release:begin -->
-# Maelys release socle (maelys-release v0.2.5)
+# Maelys release socle (maelys-release v0.2.6)
 
 This repository publishes through the shared maelys-release workflows. The
 rules below hold for every release-related change; the complete conventions
@@ -125,4 +125,7 @@ are in `docs/conventions.md` of maelys-release.
   GitHub-hosted runners only. A self-hosted runner is reserved for hardware
   gates, on signed tags or `workflow_dispatch`, behind the `release`
   environment.
+- A tag whose release exists but whose formula or bottles failed is
+  replayed with `gh workflow run release.yml -f tag=vX.Y.Z` after adopting
+  a corrected socle; a tag is never moved or recreated.
 <!-- maelys-release:end -->
