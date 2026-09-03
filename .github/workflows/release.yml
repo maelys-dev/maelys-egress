@@ -1,6 +1,6 @@
 name: release
 
-# Managed by maelys-release v0.2.0 (0.2.0). Regenerate with
+# Managed by maelys-release v0.2.1 (0.2.1). Regenerate with
 # scripts/adopt.sh of maelys-release; do not edit by hand.
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   release:
-    uses: maelys-dev/maelys-release/.github/workflows/release.yml@1cf1436d4b8b1efa14ea4c01fa30a755bd9a4641 # v0.2.0
+    uses: maelys-dev/maelys-release/.github/workflows/release.yml@d25b2ebf19980139e6b8c0836fe6f8c1e48b063e # v0.2.1
     permissions:
       contents: write
       id-token: write
@@ -22,14 +22,14 @@ jobs:
         scripts/checkout-cli.sh
         scripts/checkout-system.sh
 
-  tap:
+  tap-maelys-egress:
     needs: release
-    uses: maelys-dev/maelys-release/.github/workflows/tap.yml@1cf1436d4b8b1efa14ea4c01fa30a755bd9a4641 # v0.2.0
+    uses: maelys-dev/maelys-release/.github/workflows/tap.yml@d25b2ebf19980139e6b8c0836fe6f8c1e48b063e # v0.2.1
     permissions:
       contents: write
     with:
       product: maelys-egress
-      render_command: sh scripts/render-homebrew-formula.sh TAG OUTPUT
+      render_command: sh scripts/render-homebrew-formula.sh TAG OUTPUT maelys-egress
       bottles: '["macos-15","macos-26"]'
     secrets:
       tap_token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
