@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Regenerate the release workflow with maelys-release 0.2.2, which declares
+  the permission ceiling GitHub requires of a workflow calling reusable
+  workflows.
 - Adopt maelys-release 0.2.0 through its `adopt.sh`: the release workflow
   is generated (bottles for macOS 15 and 26, tap credentials optional), the
   maelys-release agent block, Claude skill and `RELEASING.md` are installed,
