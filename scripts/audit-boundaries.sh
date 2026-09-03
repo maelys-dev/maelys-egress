@@ -35,7 +35,7 @@ fi
 # Sockets are created, connected, accepted, read, written and shut down through
 # maelys-system handles. The one bare socket is the embedder-owned end of the
 # private connector pair in server_listener.c, which System cannot hand over.
-if grep_tree '(^|[^A-Za-z0-9_.>])(socket|accept|accept4|connect|bind|listen|recv|send|shutdown)[[:space:]]*\(' \
+if grep_tree '(^|[^A-Za-z0-9_.>])(socket|accept|accept4|connect|bind|listen|recv|send|shutdown|setsockopt)[[:space:]]*\(' \
     --exclude=server_listener.c src; then
     echo "Egress must consume maelys-system sockets" >&2
     exit 1

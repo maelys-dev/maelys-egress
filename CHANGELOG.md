@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Pin Maelys System `v0.5.5` (`97231ceb6b8ee29625838fe15787e6c336ba6105`) and
+  bind listeners with `maelys_sys_socket_bind_with` (`reuse_address`), the
+  last network `setsockopt` of the server; the boundary audit now refuses it
+  outside the connector's bare embedder end.
+- A peer half-close (`HUP`) is handled as readability, not as an end of
+  stream: queued bytes are read until System reports the socket closed, and
+  when the read buffer is full the watch is dropped until upstream progress
+  frees room, so a level-triggered `HUP` neither loses the tail nor spins.
+  Every System backend now reports half-closes this way (poll gained
+  `POLLRDHUP` in 0.5.5). The operations listener answers a client that
+  half-closes after its request instead of dropping it.
 - Sockets go through Maelys System: listeners, accepted clients, upstream
   connects, the relay's receive, send and half-close, the operations listener
   and the relayed end of the private connector pair are `maelys_sys_socket_t`

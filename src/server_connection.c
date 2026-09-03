@@ -142,6 +142,13 @@ int egress_connection_update_watches(maelys_egress_server_t *server, size_t slot
             client_interests |= connection->tls_shutdown_interest;
         }
     }
+    unsigned client_read = connection->tls_session && connection->tls_read_interest ?
+        connection->tls_read_interest : MAELYS_SYS_INTEREST_READ;
+    if (connection->client_hup && !connection->client_eof && !(client_interests & client_read)) {
+        /* Half-closed peer and no room to read: drop the watch instead of
+         * spinning on the level-triggered HUP; upstream progress re-arms it. */
+        client_interests = 0u;
+    }
     if (!client_interests) {
         if (connection->client_watch) {
             (void)maelys_sys_loop_unwatch(server->loop, connection->client_watch);
@@ -163,6 +170,10 @@ int egress_connection_update_watches(maelys_egress_server_t *server, size_t slot
         if (connection->client_to_upstream.length) {
             upstream_interests |= MAELYS_SYS_INTEREST_WRITE;
         }
+    }
+    if (connection->upstream_hup && !connection->upstream_eof &&
+        !(upstream_interests & MAELYS_SYS_INTEREST_READ)) {
+        upstream_interests = 0u;
     }
     if (!upstream_interests) {
         if (connection->upstream_watch) {

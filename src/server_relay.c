@@ -242,6 +242,15 @@ void egress_relay_dispatch(
     egress_connection_t *connection = &server->connections[slot];
     int ok = 1;
     int progress = 0;
+    /* A peer half-close is delivered as HUP whether or not READ is armed. It
+     * is not an EOF by itself: bytes may still be queued, so it is handled
+     * as readability and the stream ends only when receive reports closed. */
+    if ((flags & MAELYS_SYS_EVENT_HUP) && !(flags & MAELYS_SYS_EVENT_READ) &&
+        !(flags & MAELYS_SYS_EVENT_ERROR)) {
+        if (side == TOKEN_SIDE_CLIENT) connection->client_hup = 1;
+        else if (connection->state != CONNECTION_CONNECTING) connection->upstream_hup = 1;
+        flags |= MAELYS_SYS_EVENT_READ;
+    }
     if (side == TOKEN_SIDE_CLIENT) {
         if (connection->state == CONNECTION_TLS_HANDSHAKE &&
             (flags & connection->tls_handshake_interest)) {
@@ -266,7 +275,7 @@ void egress_relay_dispatch(
             ok = write_to_client(server, connection, &progress);
             if (ok && progress) connection->last_activity_ms = monotonic_now();
         }
-        if ((flags & (MAELYS_SYS_EVENT_ERROR | MAELYS_SYS_EVENT_HUP)) &&
+        if ((flags & MAELYS_SYS_EVENT_ERROR) &&
             !(flags & MAELYS_SYS_EVENT_READ)) connection->client_eof = 1;
     } else if (side == TOKEN_SIDE_UPSTREAM) {
         if (connection->state == CONNECTION_CONNECTING &&
@@ -297,7 +306,7 @@ void egress_relay_dispatch(
                                 SIZE_MAX, &progress);
                 if (ok && progress) connection->last_activity_ms = monotonic_now();
             }
-            if ((flags & (MAELYS_SYS_EVENT_ERROR | MAELYS_SYS_EVENT_HUP)) &&
+            if ((flags & MAELYS_SYS_EVENT_ERROR) &&
                 !(flags & MAELYS_SYS_EVENT_READ)) connection->upstream_eof = 1;
         }
     }

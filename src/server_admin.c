@@ -157,7 +157,10 @@ void egress_admin_dispatch(
             return;
         }
     }
-    if (flags & (MAELYS_SYS_EVENT_ERROR | MAELYS_SYS_EVENT_HUP)) {
+    /* A client may send its request and half-close; the response still goes
+     * out. Only an error, or a hang-up with nothing left to send, closes. */
+    if ((flags & MAELYS_SYS_EVENT_ERROR) ||
+        ((flags & MAELYS_SYS_EVENT_HUP) && !connection->response_length)) {
         egress_admin_close(server, connection);
         return;
     }
