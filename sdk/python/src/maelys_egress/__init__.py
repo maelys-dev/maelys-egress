@@ -19,7 +19,7 @@ from urllib.parse import quote
 from urllib.request import urlopen
 
 __all__ = ["Destination", "EgressConfig", "EgressProcess"]
-__version__ = "0.12.0"
+__version__ = "0.13.0"
 
 _LIFECYCLE_CONTRACT = "maelys-egress-lifecycle/1"
 

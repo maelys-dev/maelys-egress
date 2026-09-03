@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.13.0 — 2026-09-03
 
 - Pin Maelys System by tag and commit (`v0.5.3`,
   `8fe2924da268f742b8071c6557e4bb0d6d6ad116`, the first System release

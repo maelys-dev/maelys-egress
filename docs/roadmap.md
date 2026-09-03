@@ -108,6 +108,15 @@ lifecycle stream has one writer; emitted envelopes, data and lifecycle events
 are validated against the committed schemas in CI; the repository, its SDKs
 and the pinned Maelys System are relicensed under MPL-2.0.
 
+## 0.13 — packaged distribution
+
+Delivered: releases go through the shared `maelys-release` socle (signed tag,
+three targets, provenance, GitHub release, Homebrew formula with bottles);
+Maelys System is pinned by tag and commit and may be linked already
+installed (`MAELYS_SYSTEM_PREFIX`), so the Homebrew formula depends on the
+tap's `libmaelys-sys` instead of vendoring it; every installation registers
+the daemon with the `maelys` dispatcher through `share/maelys/commands/egress.json`.
+
 TLS inspection, transparent interception and content inspection have no
 release number until their PKI and threat-model design is accepted
 adversarially. If accepted, inspection remains an explicit isolated capability,
