@@ -59,8 +59,8 @@ run_mutant destination-port src/policy.c \
     'comparison == 0 && port == destination->port' \
     'comparison == 0 && port != destination->port' &
 run_mutant relay-half-close src/server_relay.c \
-    'shutdown(connection->upstream_fd, SHUT_WR)' \
-    'shutdown(connection->upstream_fd, SHUT_RD)' &
+    'maelys_sys_socket_shutdown(connection->upstream_socket, SHUT_WR)' \
+    'maelys_sys_socket_shutdown(connection->upstream_socket, SHUT_RD)' &
 wait
 
 killed=0

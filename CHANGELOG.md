@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Sockets go through Maelys System: listeners, accepted clients, upstream
+  connects, the relay's receive, send and half-close, the operations listener
+  and the relayed end of the private connector pair are `maelys_sys_socket_t`
+  handles, created non-blocking, close-on-exec and SIGPIPE-safe by System and
+  completed with `connect_start`/`connect_complete` instead of `SO_ERROR`.
+  The reactor and TLS providers keep borrowing the native descriptors. The
+  only bare socket left is the blocking TCP end handed to the embedder by the
+  connector, which a System handle cannot give up; `SO_REUSEADDR` on
+  listeners and the Unix peer identity checks use the native descriptor
+  because System exposes no socket options. `scripts/audit-boundaries.sh`
+  refuses raw socket calls elsewhere and `system-integration-check` requires
+  the socket symbols.
+- Behaviour note: a peer reset while receiving now ends the stream like an
+  orderly EOF (System reports both as closed) and propagates as a half-close
+  instead of failing the connection with an I/O result.
 - Regenerate the release workflow with maelys-release 0.2.8 (the tap publish
   job styles the merged formula inside its staging tap; the 0.13.1 tap
   publication was replayed with it).

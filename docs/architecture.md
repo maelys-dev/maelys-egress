@@ -2,7 +2,7 @@
 
 ## Boundaries
 
-Maelys System owns readiness, clocks, wakeup and descriptor mechanics. Egress
+Maelys System owns readiness, clocks, wakeup, descriptor and socket mechanics. Egress
 owns protocol parsing, authentication, policy matching, connection state,
 buffers, DNS pinning, backpressure and receipts. Executor and Sandbox are not
 Egress core link dependencies; a separately built integration adapter may link

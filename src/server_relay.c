@@ -15,25 +15,26 @@
  * steps, half-close propagation and the per-event connection dispatcher. */
 
 static int read_into(
-    int fd, egress_buffer_t *buffer, uint64_t *counter, int *eof,
-    size_t maximum, int *made_progress) {
+    maelys_sys_socket_t *socket_handle, egress_buffer_t *buffer, uint64_t *counter,
+    int *eof, size_t maximum, int *made_progress) {
     if (made_progress) *made_progress = 0;
-    if (fd < 0 || !buffer || !counter || !eof) return 0;
+    if (!socket_handle || !buffer || !counter || !eof) return 0;
     size_t available = buffer_available(buffer);
     if (available > maximum) available = maximum;
     if (!available) return 1;
-    ssize_t received;
-    do {
-        received = recv(fd, buffer->data + buffer->offset + buffer->length,
-                        available, 0);
-    } while (received < 0 && errno == EINTR);
-    if (received > 0) {
-        buffer->length += (size_t)received;
+    size_t received = 0u;
+    maelys_sys_result_t result = maelys_sys_socket_receive(
+        socket_handle, buffer->data + buffer->offset + buffer->length,
+        available, &received);
+    if (result == MAELYS_SYS_OK) {
+        buffer->length += received;
         *counter += (uint64_t)received;
         if (made_progress) *made_progress = 1;
         return 1;
     }
-    if (received == 0) {
+    /* System reports EOF and a reset peer alike as ERR_CLOSED: both end the
+     * stream and propagate as a half-close. */
+    if (result == MAELYS_SYS_ERR_CLOSED) {
         *eof = 1;
         if (made_progress) *made_progress = 1;
         return 1;
@@ -78,7 +79,7 @@ static int read_from_client(
     size_t maximum = allowance > (uint64_t)SIZE_MAX ? SIZE_MAX : (size_t)allowance;
     uint64_t before = connection->bytes_from_client;
     if (!connection->tls_session) {
-        int ok = read_into(connection->client_fd, &connection->client_to_upstream,
+        int ok = read_into(connection->client_socket, &connection->client_to_upstream,
             &connection->bytes_from_client, &connection->client_eof,
             maximum, made_progress);
         if (ok && connection->state != CONNECTION_HANDSHAKE &&
@@ -122,15 +123,15 @@ static int read_from_client(
 }
 
 static int write_from(
-    int fd, egress_buffer_t *buffer, uint64_t *counter, size_t maximum,
-    int *made_progress) {
+    maelys_sys_socket_t *socket_handle, egress_buffer_t *buffer, uint64_t *counter,
+    size_t maximum, int *made_progress) {
     if (made_progress) *made_progress = 0;
     if (!buffer->length) return 1;
     size_t written = 0u;
     size_t requested = buffer->length < maximum ? buffer->length : maximum;
-    if (!requested) return 0;
-    maelys_sys_result_t result = maelys_sys_socket_send_nosigpipe(
-        fd, buffer->data + buffer->offset, requested, &written);
+    if (!requested || !socket_handle) return 0;
+    maelys_sys_result_t result = maelys_sys_socket_send(
+        socket_handle, buffer->data + buffer->offset, requested, &written);
     if (result == MAELYS_SYS_OK) {
         buffer_consume(buffer, written);
         *counter += (uint64_t)written;
@@ -155,7 +156,7 @@ static int write_to_client(
     size_t maximum = allowance > (uint64_t)SIZE_MAX ? SIZE_MAX : (size_t)allowance;
     uint64_t before = connection->bytes_to_client;
     if (!connection->tls_session) {
-        int ok = write_from(connection->client_fd,
+        int ok = write_from(connection->client_socket,
             &connection->upstream_to_client, &connection->bytes_to_client,
             maximum, made_progress);
         uint64_t written = connection->bytes_to_client - before;
@@ -199,14 +200,14 @@ static int write_to_client(
 static int apply_half_closes(
     maelys_egress_server_t *server, egress_connection_t *connection) {
     if (connection->client_eof && !connection->client_to_upstream.length &&
-        connection->upstream_fd >= 0 && !connection->upstream_write_shutdown) {
-        (void)shutdown(connection->upstream_fd, SHUT_WR);
+        connection->upstream_socket && !connection->upstream_write_shutdown) {
+        (void)maelys_sys_socket_shutdown(connection->upstream_socket, SHUT_WR);
         connection->upstream_write_shutdown = 1;
     }
     if (connection->upstream_eof && !connection->upstream_to_client.length &&
-        connection->client_fd >= 0 && !connection->client_write_shutdown) {
+        connection->client_socket && !connection->client_write_shutdown) {
         if (!connection->tls_session) {
-            (void)shutdown(connection->client_fd, SHUT_WR);
+            (void)maelys_sys_socket_shutdown(connection->client_socket, SHUT_WR);
             connection->client_write_shutdown = 1;
         } else {
             maelys_egress_tls_provider_t *provider = server->config.tls_provider;
@@ -271,29 +272,27 @@ void egress_relay_dispatch(
         if (connection->state == CONNECTION_CONNECTING &&
             (flags & (MAELYS_SYS_EVENT_WRITE | MAELYS_SYS_EVENT_ERROR |
                       MAELYS_SYS_EVENT_HUP))) {
-            int socket_error = 0;
-            socklen_t error_length = sizeof(socket_error);
-            if (getsockopt(connection->upstream_fd, SOL_SOCKET, SO_ERROR,
-                           &socket_error, &error_length) == 0 && socket_error == 0) {
+            if (maelys_sys_socket_connect_complete(connection->upstream_socket) ==
+                MAELYS_SYS_OK) {
                 egress_connection_connected(server, slot);
                 if (connection->state == CONNECTION_UNUSED) return;
             } else {
                 (void)maelys_sys_loop_unwatch(server->loop, connection->upstream_watch);
                 connection->upstream_watch = 0u;
-                (void)maelys_sys_fd_close(&connection->upstream_fd);
+                egress_socket_release(&connection->upstream_socket, &connection->upstream_fd);
                 ok = egress_connection_connect_next(server, slot);
             }
         } else if (connection->state == CONNECTION_RELAY) {
             if (flags & MAELYS_SYS_EVENT_READ) {
                 uint64_t ignored = 0u;
-                ok = read_into(connection->upstream_fd, &connection->upstream_to_client,
+                ok = read_into(connection->upstream_socket, &connection->upstream_to_client,
                                &ignored, &connection->upstream_eof, SIZE_MAX,
                                &progress);
                 if (ok && progress) connection->last_activity_ms = monotonic_now();
             }
             if (ok && (flags & MAELYS_SYS_EVENT_WRITE)) {
                 uint64_t ignored = 0u;
-                ok = write_from(connection->upstream_fd,
+                ok = write_from(connection->upstream_socket,
                                 &connection->client_to_upstream, &ignored,
                                 SIZE_MAX, &progress);
                 if (ok && progress) connection->last_activity_ms = monotonic_now();

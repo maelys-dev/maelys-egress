@@ -32,6 +32,20 @@ if grep_tree '(^|[^A-Za-z0-9_])(close|pipe|socketpair)[[:space:]]*\(' src; then
     exit 1
 fi
 
+# Sockets are created, connected, accepted, read, written and shut down through
+# maelys-system handles. The one bare socket is the embedder-owned end of the
+# private connector pair in server_listener.c, which System cannot hand over.
+if grep_tree '(^|[^A-Za-z0-9_.>])(socket|accept|accept4|connect|bind|listen|recv|send|shutdown)[[:space:]]*\(' \
+    --exclude=server_listener.c src; then
+    echo "Egress must consume maelys-system sockets" >&2
+    exit 1
+fi
+if grep_tree '(^|[^A-Za-z0-9_.>])(accept|accept4|bind|listen|recv|send|shutdown)[[:space:]]*\(' \
+    src/server_listener.c; then
+    echo "server_listener.c may only create the embedder-owned connector end bare" >&2
+    exit 1
+fi
+
 if grep_tree '(^|[^A-Za-z0-9_])(puts|printf|fputs|fputc|fwrite)[[:space:]]*\(|fprintf[[:space:]]*\([[:space:]]*stdout' \
     --exclude=output.c cli; then
     echo "only cli/output.c may write the lifecycle stream to stdout" >&2
