@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Regenerate the release workflow with maelys-release 0.2.8 (the tap publish
+  job styles the merged formula inside its staging tap; the 0.13.1 tap
+  publication was replayed with it).
+
 ## 0.13.1 — 2026-09-03
 
 - Regenerate the release workflow with maelys-release 0.2.7 (the tap publish
