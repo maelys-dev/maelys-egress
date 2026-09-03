@@ -16,10 +16,11 @@
   `maelys egress` for the maelys-cli dispatcher.
 - `make install-check` aborts on the first missing file instead of only
   reporting the last test.
-- Regenerate the release workflow with maelys-release 0.2.4, which declares
+- Regenerate the release workflow with maelys-release 0.2.5, which declares
   the permission ceiling GitHub requires of a workflow calling reusable
-  workflows, grants the tap job what its bottle attestation needs and
-  trusts the staging tap before merging the bottle digests.
+  workflows, grants the tap job what its bottle attestation needs, trusts
+  the staging tap before merging the bottle digests and sums only the
+  archives the product built.
 - Adopt maelys-release 0.2.0 through its `adopt.sh`: the release workflow
   is generated (bottles for macOS 15 and 26, tap credentials optional), the
   maelys-release agent block, Claude skill and `RELEASING.md` are installed,
