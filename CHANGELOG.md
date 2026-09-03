@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Pin Maelys System by tag and commit (`v0.5.3`,
+  `8fe2924da268f742b8071c6557e4bb0d6d6ad116`, the first System release
+  published through the shared socle); the pinned version replaces the
+  `0.5.0` the Makefile and `scripts/package-release.sh` hard-coded.
+- `MAELYS_SYSTEM_PREFIX` builds and installs against an already installed
+  Maelys System (ABI 1, at least the pinned version) instead of the pinned
+  checkout, and then installs neither `libmaelys_sys` nor its headers. The
+  Homebrew formula uses it: it now depends on the tap's `libmaelys-sys`
+  instead of vendoring System, and no longer conflicts with `maelys-warden`.
+- `make install` writes `share/maelys/commands/egress.json`, the
+  `maelys.cli-extension/v1` manifest that registers the daemon as
+  `maelys egress` for the maelys-cli dispatcher.
+- `make install-check` aborts on the first missing file instead of only
+  reporting the last test.
 - Regenerate the release workflow with maelys-release 0.2.3, which declares
   the permission ceiling GitHub requires of a workflow calling reusable
   workflows and grants the tap job what its bottle attestation needs.

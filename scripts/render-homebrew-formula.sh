@@ -3,8 +3,9 @@
 # usage: scripts/render-homebrew-formula.sh vX.Y.Z [OUTPUT [FORMULA]]
 # FORMULA defaults to maelys-egress, the only formula of this repository.
 # The source archive of the tag is downloaded to compute its digest, and the
-# dependency pins are read from the tag's own adapter/ files, so the formula
-# always builds the exact dependency closure the release was verified with.
+# maelys-cli pin is read from the tag's own adapter/ file, so the formula
+# builds the framework the release was verified with. Maelys System comes
+# from the tap's libmaelys-sys formula.
 set -eu
 
 root=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
@@ -24,7 +25,6 @@ curl -fsSL --retry 5 --retry-delay 3 -o "$work/source.tar.gz" "$url"
 digest=$(shasum -a 256 "$work/source.tar.gz" | awk '{print $1}')
 mkdir -p "$work/tag"
 tar -xzf "$work/source.tar.gz" -C "$work/tag" --strip-components=1
-system_pin=$(sed -n '1p' "$work/tag/adapter/MAELYS_SYSTEM_PIN")
 cli_tag=$(sed -n '1p' "$work/tag/adapter/MAELYS_CLI_PIN")
 cli_pin=$(sed -n '2p' "$work/tag/adapter/MAELYS_CLI_PIN")
 test "$(cat "$work/tag/VERSION")" = "$version" || {
@@ -33,7 +33,7 @@ test "$(cat "$work/tag/VERSION")" = "$version" || {
 }
 mkdir -p "$(dirname "$output")"
 sed -e "s|@URL@|$url|g" -e "s|@VERSION@|$version|g" -e "s|@SHA256@|$digest|g" \
-    -e "s|@SYSTEM_PIN@|$system_pin|g" -e "s|@CLI_TAG@|$cli_tag|g" \
+    -e "s|@CLI_TAG@|$cli_tag|g" \
     -e "s|@CLI_PIN@|$cli_pin|g" \
     "$work/tag/packaging/homebrew/maelys-egress.rb.in" >"$output"
 grep -q '@[A-Z_]*@' "$output" && { echo "unrendered placeholder in $output" >&2; exit 1; }

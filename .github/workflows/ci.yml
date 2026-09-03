@@ -131,6 +131,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y build-essential dpkg-dev file rpm
       - run: PACKAGE_VERSION_OVERRIDE=0.0.0 bash scripts/package-release.sh ${{ matrix.target }}
+      - run: sh scripts/check-installed-system.sh
       - name: Inspect Linux packages
         if: runner.os == 'Linux'
         run: |

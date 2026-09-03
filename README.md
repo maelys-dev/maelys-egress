@@ -123,10 +123,15 @@ make install-check
 make tls-providers-check tls-binaries # optional development packages required
 ```
 
-The build requires the exact public `maelys-system` commit recorded in
+The build requires the `maelys-system` tag and commit recorded in
 `adapter/MAELYS_SYSTEM_PIN` and the `maelys-cli` tag recorded in
 `adapter/MAELYS_CLI_PIN`. CI obtains them with `scripts/checkout-system.sh`
-and `scripts/checkout-cli.sh`.
+and `scripts/checkout-cli.sh`. Packaging may link an installed Maelys System
+instead of the checkout: `make install MAELYS_SYSTEM_PREFIX=/opt/homebrew/opt/libmaelys-sys`
+accepts any installation with ABI 1 and at least the pinned version, and
+then installs neither `libmaelys_sys` nor its headers. Every installation
+also writes `share/maelys/commands/egress.json`, the manifest that lets the
+`maelys` dispatcher of maelys-cli run the daemon as `maelys egress`.
 
 ## CLI
 
