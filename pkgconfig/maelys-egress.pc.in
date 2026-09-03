@@ -7,5 +7,5 @@ Name: maelys-egress
 Description: Policy-enforced HTTP CONNECT and SOCKS5 network mediator
 Version: @VERSION@
 Libs: -L${libdir} -lmaelys_egress -pthread
-Requires.private: maelys-sys >= 0.5.0
+Requires.private: maelys-sys >= @SYSTEM_VERSION@
 Cflags: -I${includedir}

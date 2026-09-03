@@ -10,10 +10,25 @@ BIN := $(BUILD)/bin
 PREFIX ?= /usr/local
 CC ?= cc
 CXX ?= c++
+# Maelys System is either built from the pinned checkout MAELYS_SYSTEM_DIR
+# (the default, used by every gate) or taken already installed under
+# MAELYS_SYSTEM_PREFIX (packaging, for instance the Homebrew formula that
+# depends on libmaelys-sys). adapter/MAELYS_SYSTEM_PIN records the tag and
+# the commit; an installed System must carry the same ABI and at least the
+# pinned version.
 MAELYS_SYSTEM_DIR ?= ../maelys-system
-MAELYS_SYSTEM_PIN := $(shell cat adapter/MAELYS_SYSTEM_PIN)
+MAELYS_SYSTEM_PREFIX ?=
+MAELYS_SYSTEM_TAG := $(word 1,$(shell cat adapter/MAELYS_SYSTEM_PIN))
+MAELYS_SYSTEM_PIN := $(word 2,$(shell cat adapter/MAELYS_SYSTEM_PIN))
+MAELYS_SYSTEM_VERSION := $(patsubst v%,%,$(MAELYS_SYSTEM_TAG))
+ifeq ($(MAELYS_SYSTEM_PREFIX),)
 MAELYS_SYSTEM_BUILD := $(abspath $(BUILD)/deps/maelys-system)
 MAELYS_SYSTEM_LIB := $(MAELYS_SYSTEM_BUILD)/lib/libmaelys_sys.a
+MAELYS_SYSTEM_INCLUDE := $(MAELYS_SYSTEM_DIR)/include
+else
+MAELYS_SYSTEM_LIB := $(MAELYS_SYSTEM_PREFIX)/lib/libmaelys_sys.a
+MAELYS_SYSTEM_INCLUDE := $(MAELYS_SYSTEM_PREFIX)/include
+endif
 MAELYS_CLI_DIR ?= ../maelys-cli
 MAELYS_CLI_TAG := $(word 1,$(shell cat adapter/MAELYS_CLI_PIN))
 MAELYS_CLI_PIN := $(word 2,$(shell cat adapter/MAELYS_CLI_PIN))
@@ -24,7 +39,7 @@ MAELYS_CLI_REFERENCE := $(MAELYS_CLI_DIR)/tools/generate_cli_reference.py
 GENERATED := $(BUILD)/generated
 SANITIZE_FLAGS ?=
 
-override CPPFLAGS := -Iinclude -I. -I$(MAELYS_SYSTEM_DIR)/include $(CPPFLAGS) \
+override CPPFLAGS := -Iinclude -I. -I$(MAELYS_SYSTEM_INCLUDE) $(CPPFLAGS) \
 	-DMAELYS_EGRESS_BUILD_VERSION='"$(VERSION)"'
 CFLAGS ?= -O2 -g
 override CFLAGS += -std=c11 -Wall -Wextra -Wpedantic -Werror -Wconversion \
@@ -66,6 +81,7 @@ TLS_TEST_STAMP := $(BUILD)/tls-fixtures/generated
 TLS_TEST_CERT := $(BUILD)/tls-fixtures/tls-cert.pem
 TLS_TEST_KEY := $(BUILD)/tls-fixtures/tls-key.pem
 PC := $(LIB)/pkgconfig/maelys-egress.pc
+MANIFEST := $(BUILD)/share/maelys/commands/egress.json
 EXAMPLE_NAMES := basic_proxy native_connector policy_reload metrics_snapshot durable_audit custom_attestor
 EXAMPLE_BINS := $(EXAMPLE_NAMES:%=$(BIN)/example-%)
 
@@ -77,8 +93,9 @@ EXAMPLE_BINS := $(EXAMPLE_NAMES:%=$(BIN)/example-%)
 	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-binaries \
 	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check dist
 
-all: $(STATIC_LIB) $(CLI) $(TEST) $(PC)
+all: $(STATIC_LIB) $(CLI) $(TEST) $(PC) $(MANIFEST)
 
+ifeq ($(MAELYS_SYSTEM_PREFIX),)
 check-system-contract:
 	@test -f "$(MAELYS_SYSTEM_DIR)/include/maelys/sys.h" || \
 		{ echo "MAELYS_SYSTEM_DIR must name maelys-system" >&2; exit 1; }
@@ -86,12 +103,31 @@ check-system-contract:
 		{ echo "maelys-system must be pinned to $(MAELYS_SYSTEM_PIN)" >&2; exit 1; }
 	@git -C "$(MAELYS_SYSTEM_DIR)" diff --quiet "$(MAELYS_SYSTEM_PIN)" -- include src || \
 		{ echo "pinned maelys-system contract is modified" >&2; exit 1; }
+	@test "$$(cat "$(MAELYS_SYSTEM_DIR)/VERSION")" = "$(MAELYS_SYSTEM_VERSION)" || \
+		{ echo "pinned maelys-system must be version $(MAELYS_SYSTEM_VERSION)" >&2; exit 1; }
 	@grep -Fq '#define MAELYS_SYS_ABI_VERSION 1u' \
 		"$(MAELYS_SYSTEM_DIR)/include/maelys/sys/version.h"
 
 $(MAELYS_SYSTEM_LIB): check-system-contract
 	$(MAKE) -C $(MAELYS_SYSTEM_DIR) BUILD=$(MAELYS_SYSTEM_BUILD) CC=$(CC) CXX=$(CXX) \
-		VERSION=0.5.0 CPPFLAGS= CFLAGS='-O2 -g $(SANITIZE_FLAGS)' all
+		VERSION=$(MAELYS_SYSTEM_VERSION) CPPFLAGS= \
+		CFLAGS='-O2 -g $(SANITIZE_FLAGS)' all
+else
+check-system-contract:
+	@test -f "$(MAELYS_SYSTEM_INCLUDE)/maelys/sys/version.h" -a -f "$(MAELYS_SYSTEM_LIB)" || \
+		{ echo "MAELYS_SYSTEM_PREFIX must hold an installed maelys-system" >&2; exit 1; }
+	@grep -Fq '#define MAELYS_SYS_ABI_VERSION 1u' \
+		"$(MAELYS_SYSTEM_INCLUDE)/maelys/sys/version.h" || \
+		{ echo "installed maelys-system has another ABI than 1" >&2; exit 1; }
+	@installed=$$(sed -n 's/^#define MAELYS_SYS_VERSION "\(.*\)"$$/\1/p' \
+		"$(MAELYS_SYSTEM_INCLUDE)/maelys/sys/version.h"); \
+	oldest=$$(printf '%s\n%s\n' "$(MAELYS_SYSTEM_VERSION)" "$$installed" | \
+		sort -t. -k1,1n -k2,2n -k3,3n | sed -n '1p'); \
+	test "$$oldest" = "$(MAELYS_SYSTEM_VERSION)" || \
+		{ echo "installed maelys-system $$installed is older than $(MAELYS_SYSTEM_VERSION)" >&2; exit 1; }
+
+$(OBJECTS) $(CLI_OBJECTS) $(OBJ)/tests/test_egress.o $(OBJ)/tests/test_operations.o: | check-system-contract
+endif
 
 check-cli-contract:
 	@test -f "$(MAELYS_CLI_DIR)/include/maelys/cli.h" || \
@@ -223,7 +259,14 @@ $(WOLFSSL_TEST): tests/test_tls_provider.c $(WOLFSSL_LIB) $(STATIC_LIB) $(TLS_TE
 		tests/test_tls_provider.c $(WOLFSSL_LIB) $(STATIC_LIB) \
 		$(LDLIBS) $$(pkg-config --libs wolfssl) -o $@
 
-$(PC): pkgconfig/maelys-egress.pc.in VERSION
+$(PC): pkgconfig/maelys-egress.pc.in VERSION adapter/MAELYS_SYSTEM_PIN
+	@mkdir -p $(@D)
+	sed -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@VERSION@|$(VERSION)|g' \
+		-e 's|@SYSTEM_VERSION@|$(MAELYS_SYSTEM_VERSION)|g' $< >$@
+
+# Manifest read by the `maelys` dispatcher of maelys-cli: it registers the
+# installed daemon as `maelys egress`.
+$(MANIFEST): packaging/maelys/egress.json.in VERSION
 	@mkdir -p $(@D)
 	sed -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@VERSION@|$(VERSION)|g' $< >$@
 
@@ -367,11 +410,16 @@ fuzz:
 	build/fuzz/bin/fuzz-socks -runs=10000
 	build/fuzz/bin/fuzz-clienthello -runs=10000
 
-install: $(STATIC_LIB) $(CLI) $(PC) $(MAELYS_SYSTEM_LIB)
-	$(MAKE) -C $(MAELYS_SYSTEM_DIR) BUILD=$(MAELYS_SYSTEM_BUILD) VERSION=0.5.0 \
-		CPPFLAGS= DESTDIR=$(DESTDIR) PREFIX=$(PREFIX) install
+install: $(STATIC_LIB) $(CLI) $(PC) $(MANIFEST) $(MAELYS_SYSTEM_LIB)
+ifeq ($(MAELYS_SYSTEM_PREFIX),)
+	$(MAKE) -C $(MAELYS_SYSTEM_DIR) BUILD=$(MAELYS_SYSTEM_BUILD) \
+		VERSION=$(MAELYS_SYSTEM_VERSION) CPPFLAGS= DESTDIR=$(DESTDIR) \
+		PREFIX=$(PREFIX) install
+endif
 	install -d $(DESTDIR)$(PREFIX)/include/maelys $(DESTDIR)$(PREFIX)/lib/pkgconfig \
-		$(DESTDIR)$(PREFIX)/bin $(DESTDIR)$(PREFIX)/share/doc/maelys-egress
+		$(DESTDIR)$(PREFIX)/bin $(DESTDIR)$(PREFIX)/share/doc/maelys-egress \
+		$(DESTDIR)$(PREFIX)/share/maelys/commands
+	install -m 0644 $(MANIFEST) $(DESTDIR)$(PREFIX)/share/maelys/commands/
 	install -m 0644 include/maelys/egress.h include/maelys/egress_tls.h \
 		include/maelys/egress_profile.h \
 		$(DESTDIR)$(PREFIX)/include/maelys/
@@ -424,11 +472,12 @@ install-tls-modules: tls-binaries
 	install -m 0755 $(MBEDTLS_CLI) $(WOLFSSL_CLI) $(DESTDIR)$(PREFIX)/bin/
 
 install-check: all
-	@stage="$$(mktemp -d)"; trap 'rm -rf "$$stage"' EXIT; \
+	@set -e; stage="$$(mktemp -d)"; trap 'rm -rf "$$stage"' EXIT; \
 	$(MAKE) DESTDIR="$$stage" install; \
 	test -x "$$stage$(PREFIX)/bin/maelys-egress"; \
 	test -f "$$stage$(PREFIX)/lib/libmaelys_egress.a"; \
-	test -f "$$stage$(PREFIX)/lib/libmaelys_sys.a"; \
+	if [ -z "$(MAELYS_SYSTEM_PREFIX)" ]; then test -f "$$stage$(PREFIX)/lib/libmaelys_sys.a"; fi; \
+	test -f "$$stage$(PREFIX)/share/maelys/commands/egress.json"; \
 	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/examples/c/basic_proxy.c"; \
 	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/sdk/python/pyproject.toml"; \
 	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/sdk/node/package.json"; \

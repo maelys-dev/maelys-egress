@@ -34,7 +34,9 @@ EOF
   -L"$stage/usr/local/lib" -lmaelys_egress -lmaelys_sys -pthread -o "$tmp/smoke"
 "$tmp/smoke"
 test "$("$stage/usr/local/bin/maelys-egress" version)" = "maelys-egress $version"
-grep -Fq 'Version: 0.5.0' "$stage/usr/local/lib/pkgconfig/maelys-sys.pc"
+system_version="$(sed -n '1p' adapter/MAELYS_SYSTEM_PIN)"
+grep -Fq "Version: ${system_version#v}" "$stage/usr/local/lib/pkgconfig/maelys-sys.pc"
+grep -Fq '"command": "egress"' "$stage/usr/local/share/maelys/commands/egress.json"
 
 tar_name="maelys-egress-${version}-${target}.tar.gz"
 tar -czf "$dist/$tar_name" -C "$stage" .
