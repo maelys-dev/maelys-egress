@@ -1,7 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.13.1 — 2026-09-03
 
+- Pin Maelys System `v0.5.4` (`07e8ad33950f07049096ca33a2ebf90c5a2039ca`): the
+  public System repository restarted its history under MPL-2.0 and the
+  `v0.5.3` release Egress 0.13.0 pinned now lives in a private archive. The
+  Homebrew formula follows the `libmaelys-sys` 0.5.4 bottles.
 - Regenerate the release workflow with maelys-release 0.2.6: the shared tap
   is tapped before bottles are built (the `maelys-egress` bottles of 0.13.0
   failed to find `libmaelys-sys`), and `workflow_dispatch` with a `tag`
