@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Adopt maelys-release 0.2.0 through its `adopt.sh`: the release workflow
+  is generated (bottles for macOS 15 and 26, tap credentials optional), the
+  maelys-release agent block, Claude skill and `RELEASING.md` are installed,
+  and CI verifies with `adopt.sh --check` that the workflow has not drifted
+  from the pinned socle.
 - Release through the shared `maelys-dev/maelys-release` workflows (signed
   tag, three-target packaging, provenance, GitHub release) and publish a
   Homebrew formula to `maelys-dev/homebrew-tap`: `packaging/homebrew/

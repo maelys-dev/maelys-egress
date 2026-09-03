@@ -1,9 +1,7 @@
 name: release
 
-# Shared Maelys release mechanics (maelys-dev/maelys-release): signed-tag
-# verification, three-target packaging with provenance attestation, GitHub
-# release, then the Homebrew formula rendered from this tag and pushed to
-# maelys-dev/homebrew-tap when the tap credentials are configured.
+# Managed by maelys-release v0.2.0 (0.2.0). Regenerate with
+# scripts/adopt.sh of maelys-release; do not edit by hand.
 on:
   push:
     tags: ["v*"]
@@ -13,7 +11,7 @@ permissions:
 
 jobs:
   release:
-    uses: maelys-dev/maelys-release/.github/workflows/release.yml@d48ebbb5bc4913d880e51296b2f140ee809bcb14 # v0.1.1
+    uses: maelys-dev/maelys-release/.github/workflows/release.yml@1cf1436d4b8b1efa14ea4c01fa30a755bd9a4641 # v0.2.0
     permissions:
       contents: write
       id-token: write
@@ -21,17 +19,18 @@ jobs:
     with:
       product: maelys-egress
       dependency_checkout: |
-        scripts/checkout-system.sh
         scripts/checkout-cli.sh
-      linux_packages: build-essential dpkg-dev file rpm
-      macos_runner: '"macos-15"'
+        scripts/checkout-system.sh
 
   tap:
     needs: release
-    uses: maelys-dev/maelys-release/.github/workflows/tap.yml@d48ebbb5bc4913d880e51296b2f140ee809bcb14 # v0.1.1
+    uses: maelys-dev/maelys-release/.github/workflows/tap.yml@1cf1436d4b8b1efa14ea4c01fa30a755bd9a4641 # v0.2.0
+    permissions:
+      contents: write
     with:
       product: maelys-egress
       render_command: sh scripts/render-homebrew-formula.sh TAG OUTPUT
+      bottles: '["macos-15","macos-26"]'
     secrets:
       tap_token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
       tap_signing_key: ${{ secrets.HOMEBREW_TAP_SIGNING_KEY }}
