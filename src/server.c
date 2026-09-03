@@ -173,13 +173,14 @@ maelys_egress_result_t maelys_egress_server_create(
             maelys_egress_server_destroy(server);
             return MAELYS_EGRESS_ERR_DENIED;
         }
-        server->listener_fd = egress_listener_create_unix(
+        server->listener_socket = egress_listener_create_unix(
             config, &server->unix_socket_device, &server->unix_socket_inode);
-        server->unix_socket_created = server->listener_fd >= 0;
+        server->unix_socket_created = server->listener_socket != NULL;
     } else {
-        server->listener_fd = egress_listener_create_tcp(config, &server->bound_port);
+        server->listener_socket = egress_listener_create_tcp(config, &server->bound_port);
     }
-    if (!config->native_only && (server->listener_fd < 0 ||
+    server->listener_fd = maelys_sys_socket_native_fd(server->listener_socket);
+    if (!config->native_only && (!server->listener_socket ||
         maelys_sys_loop_watch_fd(server->loop, server->listener_fd,
             MAELYS_SYS_INTEREST_READ, TOKEN_LISTENER, &server->listener_watch) != MAELYS_SYS_OK)) {
         if (config->listen_unix) {
@@ -198,9 +199,11 @@ maelys_egress_result_t maelys_egress_server_create(
         (void)snprintf(admin.listen_host, sizeof(admin.listen_host), "%s",
                        config->admin_host);
         admin.port = config->admin_port;
-        server->admin_listener_fd = egress_listener_create_tcp(
+        server->admin_listener_socket = egress_listener_create_tcp(
             &admin, &server->admin_bound_port);
-        if (server->admin_listener_fd < 0 ||
+        server->admin_listener_fd =
+            maelys_sys_socket_native_fd(server->admin_listener_socket);
+        if (!server->admin_listener_socket ||
             maelys_sys_loop_watch_fd(server->loop, server->admin_listener_fd,
                 MAELYS_SYS_INTEREST_READ, TOKEN_ADMIN_LISTENER,
                 &server->admin_listener_watch) != MAELYS_SYS_OK) {
@@ -408,8 +411,8 @@ void maelys_egress_server_destroy(maelys_egress_server_t *server) {
             egress_admin_close(server, &server->admin_connections[i]);
         }
     }
-    (void)maelys_sys_fd_close(&server->listener_fd);
-    (void)maelys_sys_fd_close(&server->admin_listener_fd);
+    egress_socket_release(&server->listener_socket, &server->listener_fd);
+    egress_socket_release(&server->admin_listener_socket, &server->admin_listener_fd);
     if (server->unix_socket_created) {
         egress_listener_unlink_unix_identity(server->config.unix_path,
                              server->unix_socket_device,

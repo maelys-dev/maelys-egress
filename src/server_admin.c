@@ -25,7 +25,7 @@ void egress_admin_close(
     if (connection->watch) {
         (void)maelys_sys_loop_unwatch(server->loop, connection->watch);
     }
-    (void)maelys_sys_fd_close(&connection->fd);
+    egress_socket_release(&connection->socket, &connection->fd);
     uint64_t generation = connection->generation;
     memset(connection, 0, sizeof(*connection));
     connection->fd = -1;
@@ -126,13 +126,14 @@ void egress_admin_dispatch(
     egress_admin_connection_t *connection = &server->admin_connections[slot];
     if (!connection->response_length && (flags & MAELYS_SYS_EVENT_READ)) {
         size_t available = sizeof(connection->request) - 1u - connection->request_length;
-        ssize_t amount = recv(connection->fd,
-            connection->request + connection->request_length, available, 0);
-        if (amount > 0) {
-            connection->request_length += (size_t)amount;
+        size_t amount = 0u;
+        maelys_sys_result_t received = maelys_sys_socket_receive(connection->socket,
+            connection->request + connection->request_length, available, &amount);
+        if (received == MAELYS_SYS_OK) {
+            connection->request_length += amount;
             prepare_admin_response(server, connection);
-        } else if (amount == 0 ||
-                   (amount < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) {
+        } else if (received == MAELYS_SYS_ERR_CLOSED ||
+                   (errno != EAGAIN && errno != EWOULDBLOCK)) {
             egress_admin_close(server, connection);
             return;
         }
@@ -143,8 +144,8 @@ void egress_admin_dispatch(
     }
     if (connection->response_length && (flags & MAELYS_SYS_EVENT_WRITE)) {
         size_t written = 0u;
-        maelys_sys_result_t result = maelys_sys_socket_send_nosigpipe(
-            connection->fd, connection->response + connection->response_offset,
+        maelys_sys_result_t result = maelys_sys_socket_send(
+            connection->socket, connection->response + connection->response_offset,
             connection->response_length - connection->response_offset, &written);
         if (result != MAELYS_SYS_OK && errno != EAGAIN && errno != EWOULDBLOCK) {
             egress_admin_close(server, connection);
@@ -166,21 +167,19 @@ void egress_admin_dispatch(
 
 void egress_admin_accept_all(maelys_egress_server_t *server) {
     for (;;) {
-        int client = accept(server->admin_listener_fd, NULL, NULL);
-        if (client < 0) { if (errno == EINTR) continue; return; }
-        if (maelys_sys_fd_set_cloexec(client) != MAELYS_SYS_OK ||
-            maelys_sys_fd_set_nonblocking(client) != MAELYS_SYS_OK) {
-            (void)maelys_sys_fd_close(&client); continue;
-        }
+        maelys_sys_socket_t *client = NULL;
+        if (maelys_sys_socket_accept(server->admin_listener_socket, NULL, NULL, &client) !=
+            MAELYS_SYS_OK) return;
         size_t slot = 0u;
         while (slot < EGRESS_MAX_ADMIN_CONNECTIONS &&
                server->admin_connections[slot].fd >= 0) ++slot;
         if (slot == EGRESS_MAX_ADMIN_CONNECTIONS) {
-            (void)maelys_sys_fd_close(&client); continue;
+            (void)maelys_sys_socket_release(&client); continue;
         }
         egress_admin_connection_t *connection = &server->admin_connections[slot];
         memset(connection, 0, sizeof(*connection));
-        connection->fd = client;
+        connection->socket = client;
+        connection->fd = maelys_sys_socket_native_fd(client);
         connection->generation = ++server->next_admin_generation;
         connection->deadline_ms = add_saturating(monotonic_now(), 5000u);
         if (!admin_watch(server, slot, MAELYS_SYS_INTEREST_READ)) {

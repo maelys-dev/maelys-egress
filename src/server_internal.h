@@ -54,6 +54,10 @@ typedef struct egress_open_command egress_open_command_t;
 typedef struct egress_connection {
     connection_state_t state;
     uint64_t generation;
+    /* Sockets are owned System handles; the int views are borrowed native
+     * descriptors for the reactor and TLS providers, -1 when the handle is NULL. */
+    maelys_sys_socket_t *client_socket;
+    maelys_sys_socket_t *upstream_socket;
     int client_fd;
     int upstream_fd;
     maelys_sys_watch_t client_watch;
@@ -108,7 +112,9 @@ struct egress_open_command {
     maelys_sys_mutex_t *mutex;
     maelys_sys_condition_t *condition;
     egress_open_command_t *next;
-    int server_fd;
+    /* Egress relays server_socket; client_fd is the blocking TCP end handed
+     * to the embedder, so it stays a bare descriptor. */
+    maelys_sys_socket_t *server_socket;
     int client_fd;
     int completed;
     maelys_egress_result_t result;
@@ -120,6 +126,7 @@ struct egress_open_command {
 };
 
 typedef struct egress_admin_connection {
+    maelys_sys_socket_t *socket;
     int fd;
     maelys_sys_watch_t watch;
     uint64_t generation;
@@ -136,9 +143,11 @@ struct maelys_egress_server {
     maelys_egress_policy_t *policy;
     maelys_egress_config_t config;
     maelys_sys_loop_t *loop;
+    maelys_sys_socket_t *listener_socket;
     int listener_fd;
     maelys_sys_watch_t listener_watch;
     uint16_t bound_port;
+    maelys_sys_socket_t *admin_listener_socket;
     int admin_listener_fd;
     maelys_sys_watch_t admin_listener_watch;
     uint16_t admin_bound_port;
@@ -238,12 +247,16 @@ void egress_server_control_release(maelys_egress_server_t *server);
 
 /* server_listener.c */
 int egress_listener_is_loopback_host(const char *host);
-int egress_listener_create_tcp(const maelys_egress_config_t *config, uint16_t *out_port);
+maelys_sys_socket_t *egress_listener_create_tcp(
+    const maelys_egress_config_t *config, uint16_t *out_port);
 void egress_listener_unlink_unix_identity(const char *path, dev_t device, ino_t inode);
-int egress_listener_create_unix(
+maelys_sys_socket_t *egress_listener_create_unix(
     const maelys_egress_config_t *config, dev_t *out_device, ino_t *out_inode);
 int egress_listener_unix_peer_allowed(const maelys_egress_server_t *server, int client);
-int egress_listener_create_private_tcp_pair(int *out_server, int *out_client);
+int egress_listener_create_private_tcp_pair(
+    maelys_sys_socket_t **out_server, int *out_client);
+/* Releases the System handle and resets its borrowed descriptor view. */
+void egress_socket_release(maelys_sys_socket_t **socket_handle, int *fd_view);
 
 /* server_quota.c */
 uint64_t egress_quota_allowance(

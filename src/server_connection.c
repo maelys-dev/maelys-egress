@@ -39,8 +39,8 @@ void egress_connection_close(maelys_egress_server_t *server, size_t slot) {
             server->config.tls_provider->context, connection->tls_session);
         connection->tls_session = NULL;
     }
-    (void)maelys_sys_fd_close(&connection->client_fd);
-    (void)maelys_sys_fd_close(&connection->upstream_fd);
+    egress_socket_release(&connection->client_socket, &connection->client_fd);
+    egress_socket_release(&connection->upstream_socket, &connection->upstream_fd);
     if (connection->quota_admitted &&
         connection->principal_index < server->config.principal_count &&
         server->principal_active[connection->principal_index]) {
@@ -88,7 +88,7 @@ void egress_connection_fail(
         (void)maelys_sys_loop_unwatch(server->loop, connection->upstream_watch);
         connection->upstream_watch = 0u;
     }
-    (void)maelys_sys_fd_close(&connection->upstream_fd);
+    egress_socket_release(&connection->upstream_socket, &connection->upstream_fd);
     if (connection->protocol == MAELYS_EGRESS_PROTOCOL_CONNECTOR) {
         egress_connection_close(server, slot);
         return;
@@ -242,27 +242,23 @@ int egress_connection_connect_next(maelys_egress_server_t *server, size_t slot) 
     while (connection->address_index < connection->destination->address_count) {
         const egress_address_t *address =
             &connection->destination->addresses[connection->address_index++];
-        int fd = socket(address->storage.ss_family, SOCK_STREAM, IPPROTO_TCP);
-        if (fd < 0) continue;
-        if (maelys_sys_fd_set_cloexec(fd) != MAELYS_SYS_OK ||
-            maelys_sys_fd_set_nonblocking(fd) != MAELYS_SYS_OK) {
-            (void)maelys_sys_fd_close(&fd);
-            continue;
-        }
-#ifdef SO_NOSIGPIPE
-        int enabled = 1;
-        (void)setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled));
-#endif
-        connection->upstream_fd = fd;
-        if (connect(fd, (const struct sockaddr *)&address->storage, address->length) == 0) {
+        maelys_sys_socket_t *upstream = NULL;
+        if (maelys_sys_socket_create(address->storage.ss_family, SOCK_STREAM,
+                                     IPPROTO_TCP, &upstream) != MAELYS_SYS_OK) continue;
+        connection->upstream_socket = upstream;
+        connection->upstream_fd = maelys_sys_socket_native_fd(upstream);
+        maelys_sys_connect_state_t state = MAELYS_SYS_CONNECT_IN_PROGRESS;
+        maelys_sys_result_t started = maelys_sys_socket_connect_start(
+            upstream, (const struct sockaddr *)&address->storage, address->length, &state);
+        if (started == MAELYS_SYS_OK && state == MAELYS_SYS_CONNECT_CONNECTED) {
             egress_connection_connected(server, slot);
             return 1;
         }
-        if (errno == EINPROGRESS) {
+        if (started == MAELYS_SYS_OK) {
             connection->state = CONNECTION_CONNECTING;
             return egress_connection_update_watches(server, slot);
         }
-        (void)maelys_sys_fd_close(&connection->upstream_fd);
+        egress_socket_release(&connection->upstream_socket, &connection->upstream_fd);
     }
     egress_connection_fail(server, slot, MAELYS_EGRESS_ERR_IO, 0);
     return egress_connection_update_watches(server, slot);
@@ -408,31 +404,25 @@ int egress_connection_process_handshake(maelys_egress_server_t *server, size_t s
 
 void egress_connection_accept_all(maelys_egress_server_t *server) {
     for (;;) {
-        int client = accept(server->listener_fd, NULL, NULL);
-        if (client < 0) {
-            if (errno == EINTR) continue;
+        maelys_sys_socket_t *client = NULL;
+        if (maelys_sys_socket_accept(server->listener_socket, NULL, NULL, &client) !=
+            MAELYS_SYS_OK) {
             return;
         }
-        if (!egress_listener_unix_peer_allowed(server, client)) {
-            (void)maelys_sys_fd_close(&client);
+        if (!egress_listener_unix_peer_allowed(server, maelys_sys_socket_native_fd(client))) {
+            (void)maelys_sys_socket_release(&client);
             continue;
         }
         (void)atomic_fetch_add(&server->metric_accepted, 1u);
-        if (maelys_sys_fd_set_cloexec(client) != MAELYS_SYS_OK ||
-            maelys_sys_fd_set_nonblocking(client) != MAELYS_SYS_OK ||
-            server->connection_count >= server->config.max_connections) {
-            (void)maelys_sys_fd_close(&client);
+        if (server->connection_count >= server->config.max_connections) {
+            (void)maelys_sys_socket_release(&client);
             continue;
         }
-#ifdef SO_NOSIGPIPE
-        int enabled = 1;
-        (void)setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled));
-#endif
         size_t slot = 0u;
         while (slot < server->config.max_connections &&
                server->connections[slot].state != CONNECTION_UNUSED) ++slot;
         if (slot == server->config.max_connections) {
-            (void)maelys_sys_fd_close(&client);
+            (void)maelys_sys_socket_release(&client);
             continue;
         }
         egress_connection_t *connection = &server->connections[slot];
@@ -441,7 +431,8 @@ void egress_connection_accept_all(maelys_egress_server_t *server) {
         connection->state = server->config.tls_provider ?
             CONNECTION_TLS_HANDSHAKE : CONNECTION_HANDSHAKE;
         connection->generation = generation;
-        connection->client_fd = client;
+        connection->client_socket = client;
+        connection->client_fd = maelys_sys_socket_native_fd(client);
         connection->upstream_fd = -1;
         connection->principal_index = SIZE_MAX;
         connection->client_to_upstream.capacity = server->config.buffer_bytes;
@@ -465,7 +456,7 @@ void egress_connection_accept_all(maelys_egress_server_t *server) {
             maelys_egress_result_t tls_result =
                 server->config.tls_provider->ops.session_create(
                     server->config.tls_provider->context, MAELYS_EGRESS_TLS_SERVER,
-                    client, NULL, &connection->tls_session, &tls_error);
+                    connection->client_fd, NULL, &connection->tls_session, &tls_error);
             maelys_egress_error_free(tls_error);
             if (tls_result == MAELYS_EGRESS_OK) {
                 if (!egress_relay_advance_tls_handshake(server, connection)) {

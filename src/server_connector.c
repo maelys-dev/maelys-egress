@@ -22,7 +22,7 @@ static void open_command_retain(egress_open_command_t *command) {
 
 static void open_command_release(egress_open_command_t *command) {
     if (!command || atomic_fetch_sub(&command->references, 1u) != 1u) return;
-    (void)maelys_sys_fd_close(&command->server_fd);
+    (void)maelys_sys_socket_release(&command->server_socket);
     (void)maelys_sys_fd_close(&command->client_fd);
     maelys_sys_condition_destroy(command->condition);
     maelys_sys_mutex_destroy(command->mutex);
@@ -76,8 +76,9 @@ void egress_open_commands_process(maelys_egress_server_t *server) {
         memset(connection, 0, sizeof(*connection));
         connection->state = CONNECTION_HANDSHAKE;
         connection->generation = generation;
-        connection->client_fd = command->server_fd;
-        command->server_fd = -1;
+        connection->client_socket = command->server_socket;
+        connection->client_fd = maelys_sys_socket_native_fd(command->server_socket);
+        command->server_socket = NULL;
         connection->upstream_fd = -1;
         connection->principal_index = command->principal_index;
         connection->protocol = MAELYS_EGRESS_PROTOCOL_CONNECTOR;
@@ -223,13 +224,13 @@ maelys_egress_result_t egress_server_open_stream(
     }
     egress_open_command_t *command = calloc(1, sizeof(*command));
     if (!command) return MAELYS_EGRESS_ERR_MEMORY;
-    command->server_fd = -1;
+    command->server_socket = NULL;
     command->client_fd = -1;
     atomic_init(&command->references, 1u);
     atomic_init(&command->cancelled, 0);
     if (maelys_sys_mutex_create(&command->mutex) != MAELYS_SYS_OK ||
         maelys_sys_condition_create(&command->condition) != MAELYS_SYS_OK ||
-        !egress_listener_create_private_tcp_pair(&command->server_fd, &command->client_fd)) {
+        !egress_listener_create_private_tcp_pair(&command->server_socket, &command->client_fd)) {
         open_command_release(command);
         egress_set_error(out_error, "cannot create private connector stream: %s",
                        strerror(errno));
