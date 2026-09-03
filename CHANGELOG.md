@@ -2,6 +2,8 @@
 
 ## 0.13.1 — 2026-09-03
 
+- Regenerate the release workflow with maelys-release 0.2.7 (the tap publish
+  job no longer trips on the previous formula of the shared tap).
 - Pin Maelys System `v0.5.4` (`07e8ad33950f07049096ca33a2ebf90c5a2039ca`): the
   public System repository restarted its history under MPL-2.0 and the
   `v0.5.3` release Egress 0.13.0 pinned now lives in a private archive. The
