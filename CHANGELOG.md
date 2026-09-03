@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Regenerate the release workflow with maelys-release 0.2.6: the shared tap
+  is tapped before bottles are built (the `maelys-egress` bottles of 0.13.0
+  failed to find `libmaelys-sys`), and `workflow_dispatch` with a `tag`
+  input replays the Homebrew publication of an existing tag.
+
 ## 0.13.0 — 2026-09-03
 
 - Pin Maelys System by tag and commit (`v0.5.3`,
