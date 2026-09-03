@@ -1,14 +1,17 @@
 #!/bin/sh
 # Render packaging/homebrew/maelys-egress.rb.in for one released tag.
-# usage: scripts/render-homebrew-formula.sh vX.Y.Z [OUTPUT]
+# usage: scripts/render-homebrew-formula.sh vX.Y.Z [OUTPUT [FORMULA]]
+# FORMULA defaults to maelys-egress, the only formula of this repository.
 # The source archive of the tag is downloaded to compute its digest, and the
 # dependency pins are read from the tag's own adapter/ files, so the formula
 # always builds the exact dependency closure the release was verified with.
 set -eu
 
 root=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
-tag=${1:?usage: render-homebrew-formula.sh vX.Y.Z [OUTPUT]}
+tag=${1:?usage: render-homebrew-formula.sh vX.Y.Z [OUTPUT [FORMULA]]}
 output=${2:-$root/dist/homebrew/maelys-egress.rb}
+formula=${3:-maelys-egress}
+test "$formula" = maelys-egress || { echo "unknown formula: $formula" >&2; exit 64; }
 repository=${MAELYS_SOURCE_REPOSITORY:-maelys-dev/maelys-egress}
 version=${tag#v}
 url="https://github.com/$repository/archive/refs/tags/$tag.tar.gz"
