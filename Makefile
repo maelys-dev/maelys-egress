@@ -344,7 +344,7 @@ system-integration-check: $(STATIC_LIB) $(MAELYS_SYSTEM_LIB)
 	@symbols="$$(nm -u $(STATIC_LIB))"; \
 	for symbol in maelys_sys_loop_create maelys_sys_loop_watch_fd \
 		maelys_sys_loop_step maelys_sys_loop_stop maelys_sys_fd_close \
-		maelys_sys_socket_create maelys_sys_socket_bind maelys_sys_socket_listen \
+		maelys_sys_socket_create maelys_sys_socket_bind_with maelys_sys_socket_listen \
 		maelys_sys_socket_accept maelys_sys_socket_connect_start \
 		maelys_sys_socket_connect_complete maelys_sys_socket_receive \
 		maelys_sys_socket_send maelys_sys_socket_shutdown \

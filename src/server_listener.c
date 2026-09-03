@@ -50,13 +50,10 @@ maelys_sys_socket_t *egress_listener_create_tcp(
             saved = errno;
             continue;
         }
-        /* System exposes no socket options; the listener needs address reuse
-         * so a restart does not wait out TIME_WAIT. */
-        int enabled = 1;
-        (void)setsockopt(maelys_sys_socket_native_fd(listener), SOL_SOCKET,
-                         SO_REUSEADDR, &enabled, sizeof(enabled));
-        if (maelys_sys_socket_bind(listener, address->ai_addr,
-                                   address->ai_addrlen) != MAELYS_SYS_OK ||
+        /* Address reuse so a restart does not wait out TIME_WAIT. */
+        maelys_sys_socket_bind_options_t options = { 1 };
+        if (maelys_sys_socket_bind_with(listener, address->ai_addr,
+                                        address->ai_addrlen, &options) != MAELYS_SYS_OK ||
             maelys_sys_socket_listen(listener, 128) != MAELYS_SYS_OK) {
             saved = errno;
             (void)maelys_sys_socket_release(&listener);

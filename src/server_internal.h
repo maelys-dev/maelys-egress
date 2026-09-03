@@ -70,6 +70,11 @@ typedef struct egress_connection {
     int upstream_eof;
     int client_write_shutdown;
     int upstream_write_shutdown;
+    /* Peer half-close seen while READ was not armed: reads resume when the
+     * buffer has room and the watch is dropped meanwhile, so a level-triggered
+     * HUP never spins and no queued bytes are lost. */
+    int client_hup;
+    int upstream_hup;
     const egress_destination_t *destination;
     egress_destination_t destination_snapshot;
     char policy_digest_hex[65];
