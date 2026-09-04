@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.14.0 — 2026-09-04
 
 - Pin Maelys System `v0.5.6` (`31e52fa210d86851b141ecd75e8e2231c0d15ae2`).
   The private connector pair is built entirely through System: both ends are
