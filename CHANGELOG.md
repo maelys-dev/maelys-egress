@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Adopt maelys-release 0.5.0: the managed `scripts/checkout-dependency.sh`
+  replaces the product's `checkout-system.sh` and `checkout-cli.sh`,
+  `adapter/PACKAGES` declares the runner packages (none beyond the socle's
+  own), CI checks socle drift with `maelys-release check`, and the release
+  workflow is regenerated.
 - Pin Maelys System `v0.5.5` (`97231ceb6b8ee29625838fe15787e6c336ba6105`) and
   bind listeners with `maelys_sys_socket_bind_with` (`reuse_address`), the
   last network `setsockopt` of the server; the boundary audit now refuses it
