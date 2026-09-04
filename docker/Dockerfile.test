@@ -6,7 +6,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 
 WORKDIR /src
 COPY . .
-RUN scripts/checkout-system.sh /maelys-system
-RUN scripts/checkout-cli.sh /maelys-cli
+RUN sh scripts/checkout-dependency.sh maelys-system /maelys-system
+RUN sh scripts/checkout-dependency.sh maelys-cli /maelys-cli
 
 CMD ["make", "check", "CC=clang", "CXX=clang++"]
