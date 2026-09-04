@@ -15,7 +15,6 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
-#include <time.h>
 #include <unistd.h>
 
 /* Listening sockets: loopback/remote TCP, private AF_UNIX with identity
@@ -162,9 +161,18 @@ int egress_listener_unix_peer_allowed(const maelys_egress_server_t *server, int 
 
 int egress_listener_create_private_tcp_pair(
     maelys_sys_socket_t **out_server, int *out_client) {
+    enum { PAIR_LISTENER = 1u, PAIR_CLIENT = 2u };
     *out_server = NULL;
     *out_client = -1;
     maelys_sys_socket_t *listener = NULL;
+    maelys_sys_socket_t *client = NULL;
+    maelys_sys_socket_t *server_socket = NULL;
+    maelys_sys_loop_t *loop = NULL;
+    maelys_sys_watch_t listener_watch = 0u;
+    maelys_sys_watch_t client_watch = 0u;
+    int client_fd = -1;
+    int connected = 0;
+    int ok = 0;
     if (maelys_sys_socket_create(AF_INET, SOCK_STREAM, IPPROTO_TCP, &listener) !=
         MAELYS_SYS_OK) return 0;
     struct sockaddr_in address;
@@ -177,40 +185,69 @@ int egress_listener_create_private_tcp_pair(
         maelys_sys_socket_listen(listener, 1) != MAELYS_SYS_OK ||
         getsockname(maelys_sys_socket_native_fd(listener),
                     (struct sockaddr *)&address, &address_length) != 0) {
-        (void)maelys_sys_socket_release(&listener);
-        return 0;
+        goto done;
     }
-    /* The embedder receives a blocking TCP descriptor it owns outright, so
-     * this end is created bare: a System handle cannot give up its
-     * descriptor. Its peer, relayed by Egress, is accepted through System. */
-    int client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (client < 0 || maelys_sys_fd_set_cloexec(client) != MAELYS_SYS_OK ||
-        connect(client, (const struct sockaddr *)&address, address_length) != 0) {
-        (void)maelys_sys_fd_close(&client);
-        (void)maelys_sys_socket_release(&listener);
-        return 0;
+    /* Both ends are System sockets. The embedder's end is connected here,
+     * then detached and made blocking, as the connector contract promises a
+     * blocking TCP descriptor the caller owns; the relayed end is accepted. */
+    if (maelys_sys_socket_create(AF_INET, SOCK_STREAM, IPPROTO_TCP, &client) !=
+        MAELYS_SYS_OK) goto done;
+    maelys_sys_connect_state_t state = MAELYS_SYS_CONNECT_IN_PROGRESS;
+    if (maelys_sys_socket_connect_start(client, (const struct sockaddr *)&address,
+                                        address_length, &state) != MAELYS_SYS_OK) {
+        goto done;
     }
-#ifdef SO_NOSIGPIPE
-    int enabled = 1;
-    (void)setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled));
-#endif
-    maelys_sys_socket_t *server_socket = NULL;
-    maelys_sys_result_t accepted = MAELYS_SYS_ERR_OS;
-    /* The loopback connect completed, so the peer is queued; the listener is
-     * non-blocking and may still report EAGAIN for an instant. */
-    for (unsigned attempt = 0u; attempt < 200u; ++attempt) {
-        accepted = maelys_sys_socket_accept(listener, NULL, NULL, &server_socket);
-        if (accepted == MAELYS_SYS_OK ||
-            (errno != EAGAIN && errno != EWOULDBLOCK)) break;
-        struct timespec pause = { 0, 1000000L };
-        (void)nanosleep(&pause, NULL);
+    connected = state == MAELYS_SYS_CONNECT_CONNECTED;
+    /* A private reactor waits for the listener to become readable and the
+     * client writable; this runs on the embedder's thread, never on the
+     * server loop. */
+    if (maelys_sys_loop_create(MAELYS_SYS_LOOP_AUTO, &loop) != MAELYS_SYS_OK) goto done;
+    if (maelys_sys_loop_watch_fd(loop, maelys_sys_socket_native_fd(listener),
+                                 MAELYS_SYS_INTEREST_READ, PAIR_LISTENER,
+                                 &listener_watch) != MAELYS_SYS_OK) goto done;
+    if (!connected &&
+        maelys_sys_loop_watch_fd(loop, maelys_sys_socket_native_fd(client),
+                                 MAELYS_SYS_INTEREST_WRITE, PAIR_CLIENT,
+                                 &client_watch) != MAELYS_SYS_OK) goto done;
+    uint64_t deadline = add_saturating(monotonic_now(), 5000u);
+    while (!server_socket || !connected) {
+        maelys_sys_event_t events[2];
+        size_t count = 0u;
+        maelys_sys_step_result_t step = MAELYS_SYS_STEP_PROGRESS;
+        if (maelys_sys_loop_step(loop, deadline, events, 2u, &count, &step) !=
+            MAELYS_SYS_OK || step == MAELYS_SYS_STEP_TIMEOUT) goto done;
+        for (size_t i = 0u; i < count; ++i) {
+            if (events[i].token == PAIR_LISTENER && !server_socket) {
+                maelys_sys_result_t accepted = maelys_sys_socket_accept(
+                    listener, NULL, NULL, &server_socket);
+                if (accepted != MAELYS_SYS_OK &&
+                    errno != EAGAIN && errno != EWOULDBLOCK) goto done;
+            } else if (events[i].token == PAIR_CLIENT && !connected) {
+                if (maelys_sys_socket_connect_complete(client) != MAELYS_SYS_OK) goto done;
+                connected = 1;
+                (void)maelys_sys_loop_unwatch(loop, client_watch);
+                client_watch = 0u;
+            }
+        }
+    }
+    if (listener_watch) { (void)maelys_sys_loop_unwatch(loop, listener_watch); listener_watch = 0u; }
+    if (maelys_sys_socket_detach(&client, &client_fd) != MAELYS_SYS_OK ||
+        maelys_sys_fd_set_blocking(client_fd) != MAELYS_SYS_OK) goto done;
+    ok = 1;
+done:
+    if (loop) {
+        if (client_watch) (void)maelys_sys_loop_unwatch(loop, client_watch);
+        if (listener_watch) (void)maelys_sys_loop_unwatch(loop, listener_watch);
+        maelys_sys_loop_destroy(&loop);
     }
     (void)maelys_sys_socket_release(&listener);
-    if (accepted != MAELYS_SYS_OK) {
-        (void)maelys_sys_fd_close(&client);
-        return 0;
+    if (ok) {
+        *out_server = server_socket;
+        *out_client = client_fd;
+        return 1;
     }
-    *out_server = server_socket;
-    *out_client = client;
-    return 1;
+    (void)maelys_sys_socket_release(&client);
+    (void)maelys_sys_socket_release(&server_socket);
+    (void)maelys_sys_fd_close(&client_fd);
+    return 0;
 }

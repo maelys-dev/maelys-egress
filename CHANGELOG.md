@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Pin Maelys System `v0.5.6` (`31e52fa210d86851b141ecd75e8e2231c0d15ae2`).
+  The private connector pair is built entirely through System: both ends are
+  `socket_create`, the embedder's end goes through `connect_start`, a
+  private reactor waiting for writability, `connect_complete`, then
+  `maelys_sys_socket_detach` and `maelys_sys_fd_set_blocking` before it is
+  handed over as the blocking TCP descriptor the contract promises. No
+  native socket call remains in the server; the Unix peer identity read
+  stays on the native descriptor by design, and the boundary audit now
+  refuses every native socket call in `src/`.
 - Adopt maelys-release 0.5.0: the managed `scripts/checkout-dependency.sh`
   replaces the product's `checkout-system.sh` and `checkout-cli.sh`,
   `adapter/PACKAGES` declares the runner packages (none beyond the socle's
