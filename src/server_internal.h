@@ -258,6 +258,8 @@ void egress_listener_unlink_unix_identity(const char *path, dev_t device, ino_t 
 maelys_sys_socket_t *egress_listener_create_unix(
     const maelys_egress_config_t *config, dev_t *out_device, ino_t *out_inode);
 int egress_listener_unix_peer_allowed(const maelys_egress_server_t *server, int client);
+/* Both ends are created through System; the embedder's end is detached and
+ * made blocking, the relayed end stays a handle. */
 int egress_listener_create_private_tcp_pair(
     maelys_sys_socket_t **out_server, int *out_client);
 /* Releases the System handle and resets its borrowed descriptor view. */

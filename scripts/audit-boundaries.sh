@@ -32,17 +32,11 @@ if grep_tree '(^|[^A-Za-z0-9_])(close|pipe|socketpair)[[:space:]]*\(' src; then
     exit 1
 fi
 
-# Sockets are created, connected, accepted, read, written and shut down through
-# maelys-system handles. The one bare socket is the embedder-owned end of the
-# private connector pair in server_listener.c, which System cannot hand over.
-if grep_tree '(^|[^A-Za-z0-9_.>])(socket|accept|accept4|connect|bind|listen|recv|send|shutdown|setsockopt)[[:space:]]*\(' \
-    --exclude=server_listener.c src; then
+# Sockets are created, connected, accepted, read, written, shut down and
+# handed over through maelys-system handles; the Unix peer identity is the
+# only read on a native descriptor.
+if grep_tree '(^|[^A-Za-z0-9_.>])(socket|accept|accept4|connect|bind|listen|recv|send|shutdown|setsockopt)[[:space:]]*\(' src; then
     echo "Egress must consume maelys-system sockets" >&2
-    exit 1
-fi
-if grep_tree '(^|[^A-Za-z0-9_.>])(accept|accept4|bind|listen|recv|send|shutdown)[[:space:]]*\(' \
-    src/server_listener.c; then
-    echo "server_listener.c may only create the embedder-owned connector end bare" >&2
     exit 1
 fi
 

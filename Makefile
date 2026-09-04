@@ -348,7 +348,8 @@ system-integration-check: $(STATIC_LIB) $(MAELYS_SYSTEM_LIB)
 		maelys_sys_socket_accept maelys_sys_socket_connect_start \
 		maelys_sys_socket_connect_complete maelys_sys_socket_receive \
 		maelys_sys_socket_send maelys_sys_socket_shutdown \
-		maelys_sys_socket_release maelys_sys_monotonic_ms; do \
+		maelys_sys_socket_release maelys_sys_socket_detach \
+		maelys_sys_fd_set_blocking maelys_sys_monotonic_ms; do \
 		echo "$$symbols" | grep -q "$$symbol" || \
 			{ echo "Egress does not consume $$symbol" >&2; exit 1; }; \
 	done
