@@ -117,6 +117,17 @@ installed (`MAELYS_SYSTEM_PREFIX`), so the Homebrew formula depends on the
 tap's `libmaelys-sys` instead of vendoring it; every installation registers
 the daemon with the `maelys` dispatcher through `share/maelys/commands/egress.json`.
 
+## 0.14 — sockets through Maelys System
+
+Delivered: every socket of the server is a Maelys System handle, from the
+listeners and accepted clients to the upstream connects, the relay's
+receive, send and half-close, the operations listener and both ends of the
+private connector pair (`connect_start`, `connect_complete`, `detach`); the
+boundary audit refuses native socket calls in `src/`. A peer half-close is
+handled as readability, so no queued byte is lost and no level-triggered
+`HUP` spins. Releases go through maelys-release 0.5.0 with the managed
+dependency checkout and the tag preflight.
+
 TLS inspection, transparent interception and content inspection have no
 release number until their PKI and threat-model design is accepted
 adversarially. If accepted, inspection remains an explicit isolated capability,
