@@ -132,8 +132,7 @@ void egress_admin_dispatch(
         if (received == MAELYS_SYS_OK) {
             connection->request_length += amount;
             prepare_admin_response(server, connection);
-        } else if (received == MAELYS_SYS_ERR_CLOSED ||
-                   (errno != EAGAIN && errno != EWOULDBLOCK)) {
+        } else if (received != MAELYS_SYS_ERR_WOULD_BLOCK) {
             egress_admin_close(server, connection);
             return;
         }
@@ -147,7 +146,7 @@ void egress_admin_dispatch(
         maelys_sys_result_t result = maelys_sys_socket_send(
             connection->socket, connection->response + connection->response_offset,
             connection->response_length - connection->response_offset, &written);
-        if (result != MAELYS_SYS_OK && errno != EAGAIN && errno != EWOULDBLOCK) {
+        if (result != MAELYS_SYS_OK && result != MAELYS_SYS_ERR_WOULD_BLOCK) {
             egress_admin_close(server, connection);
             return;
         }

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Pin Maelys System `v0.9.0` (`6bd51950c83eaad9ec16cbac318549ab9bb2e928`).
+  A peer's reset is `ERR_RESET` again distinct from an orderly close: it
+  fails the connection with an I/O result, as before 0.14.0, instead of
+  passing as an end of stream. Would-block is the result code
+  `ERR_WOULD_BLOCK`, no longer `errno`; the relay, the operations listener
+  and the connector test the code. The private connector pair waits with
+  `maelys_sys_fd_wait` on each descriptor instead of a private reactor.
+  0.8.1's reactor fixes (watch and timer ids never collide, `unwatch` of a
+  closed descriptor, no starvation with a small event array, HUP promised
+  with READ only) are inherited without change here.
 - Adopt maelys-release 0.10.0: the managed texts carry no socle version,
   the provenance attestation follows the repository's visibility, and CI
   calls the socle's `check-product.yml` (checkouts, packages, `make check`
