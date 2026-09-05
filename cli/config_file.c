@@ -1,6 +1,10 @@
 #include "cli/cli.h"
 
 #include <errno.h>
+
+#ifndef EFTYPE
+#define EFTYPE EINVAL
+#endif
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -233,13 +237,20 @@ static const char *check_constraints(const egress_cli_settings_t *s) {
     return NULL;
 }
 
-static int file_failure(maelys_cli_error_t *error, const char *path, int saved) {
+/* A refusal of the file's identity (link, type, owner, mode, links) stays an
+ * ACCESS_DENIED for this command, as its contract documents; the framework
+ * classifies the other errno values. */
+static int file_failure(
+    maelys_cli_error_t *error, const char *path, int saved, const char *explanation) {
+    int identity = saved == EPERM || saved == ELOOP || saved == EMLINK ||
+        saved == EFTYPE || saved == EINVAL || saved == EISDIR;
     maelys_cli_error_set(error,
-        saved == ENOENT || saved == ENOTDIR ? MAELYS_CLI_CODE_NOT_FOUND :
-        saved == EACCES || saved == EPERM || saved == ELOOP ?
-            MAELYS_CLI_CODE_ACCESS_DENIED : MAELYS_CLI_CODE_IO_FAILED,
-        "Name an existing, non-symlink configuration file readable by the daemon.",
-        "%s: %s", path, strerror(saved));
+        identity ? MAELYS_CLI_CODE_ACCESS_DENIED : maelys_cli_file_error_code(saved),
+        identity ? "Make the file a regular, single-link file owned by root or the "
+                   "daemon user, without group or world write permission, and not "
+                   "a symbolic link." :
+                   "Name an existing configuration file readable by the daemon.",
+        "%s: %s", path, explanation ? explanation : strerror(saved));
     errno = saved;
     return -1;
 }
@@ -251,25 +262,17 @@ int egress_cli_settings_load(
     (void)snprintf(settings->listen_host, sizeof(settings->listen_host), "127.0.0.1");
     settings->unix_peer = MAELYS_EGRESS_UNIX_PEER_AUTHENTICATED;
     settings->max_connections = 128u;
-#ifdef O_NOFOLLOW
-    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
-#else
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
-#endif
-    if (fd < 0) return file_failure(error, path, errno);
-    struct stat status;
-    if (fstat(fd, &status) != 0 || !S_ISREG(status.st_mode) ||
-        status.st_nlink != 1u ||
-        (status.st_uid != geteuid() && status.st_uid != 0u) ||
-        (status.st_mode & (S_IWGRP | S_IWOTH)) != 0u) {
-        (void)close(fd);
-        maelys_cli_error_set(error, MAELYS_CLI_CODE_ACCESS_DENIED,
-            "Make the file a regular, single-link file owned by root or the daemon "
-            "user, without group or world write permission.",
-            "%s: configuration must be a non-symlink regular file owned by root or "
-            "the daemon and not group/world writable", path);
-        errno = EPERM;
-        return -1;
+    /* The framework judges the descriptor it opens: regular, not a symbolic
+     * link, one hard link, owned by root or the daemon user, not writable by
+     * group or world. */
+    int fd = -1;
+    const char *explanation = NULL;
+    if (maelys_cli_open_trusted(path,
+            MAELYS_CLI_FILE_REGULAR | MAELYS_CLI_FILE_NO_SYMLINK |
+            MAELYS_CLI_FILE_SINGLE_LINK | MAELYS_CLI_FILE_OWNER_TRUSTED |
+            MAELYS_CLI_FILE_NOT_WRITABLE_BY_OTHERS,
+            &fd, &explanation) != 0) {
+        return file_failure(error, path, errno, explanation);
     }
     FILE *stream = fdopen(fd, "r");
     if (!stream) {
