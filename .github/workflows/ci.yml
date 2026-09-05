@@ -8,6 +8,15 @@ permissions:
   contents: read
 
 jobs:
+  # The socle's product CI: the same checkouts and packages as the release,
+  # `make check` on the three release targets and the socle drift check.
+  # Sanitizers, mutation, TLS providers, Docker and packaging stay below.
+  socle:
+    uses: maelys-dev/maelys-release/.github/workflows/check-product.yml@316f6a6cdacf1f3b3ed63e6b48412ab1e8f589e1 # v0.10.0
+    with:
+      product: maelys-egress
+      sanitizer_command: ""
+
   native:
     strategy:
       fail-fast: false
@@ -40,15 +49,6 @@ jobs:
         if: runner.os == 'macOS'
         run: test "$(uname -m)" = arm64
       - run: make check CC=${{ matrix.cc }} CXX=${{ matrix.cxx }}
-      - name: Release socle drift
-        if: matrix.os == 'ubuntu-24.04' && matrix.cc == 'clang'
-        run: |
-          set -euo pipefail
-          sha="$(sed -n 's|.*maelys-release/.github/workflows/release.yml@\([0-9a-f]\{40\}\).*|\1|p' .github/workflows/release.yml)"
-          test -n "$sha"
-          git clone -q https://github.com/maelys-dev/maelys-release.git "$RUNNER_TEMP/maelys-release"
-          git -C "$RUNNER_TEMP/maelys-release" checkout -q "$sha"
-          "$RUNNER_TEMP/maelys-release/bin/maelys-release" check . --product maelys-egress
       - name: Require arm64 archive
         if: runner.os == 'macOS'
         run: test "$(lipo -archs build/release/lib/libmaelys_egress.a)" = arm64
