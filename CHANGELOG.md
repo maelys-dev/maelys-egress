@@ -19,6 +19,8 @@
   product's own; the hand-written drift step is gone.
 - Adopt maelys-release 0.13.0 (socle on the Python framework of maelys-cli
   0.5.14, agent-cli-spec 2.2.0): only the two `uses:` lines change.
+- Adopt maelys-release 0.14.2 (0.14.1 and 0.14.2 fix the socle's own version
+  file and refusal messages; only the two `uses:` lines change here).
 - Adopt maelys-release 0.14.0: the declarations move from `adapter/` to
   `dependencies/` (`maelys-system.pin`, `maelys-cli.pin`, `packages`); the
   Makefile, the packaging and installed-System scripts, the formula renderer
