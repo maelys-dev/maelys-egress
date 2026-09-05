@@ -6,7 +6,7 @@ catalog, `describe`, `agent-cli/v2` envelopes, causal validation, stable
 error codes and exit statuses `0`, `1` and `2`. They are documented in
 `command-conventions.md` of the maelys-cli distribution
 (`PREFIX/share/maelys-cli/docs/`, or `docs/` of the checkout pinned by
-`adapter/MAELYS_CLI_PIN`). This document keeps only what is specific to
+`dependencies/maelys-cli.pin`). This document keeps only what is specific to
 Egress.
 
 ## Grammar
