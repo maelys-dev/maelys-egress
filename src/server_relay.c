@@ -32,14 +32,14 @@ static int read_into(
         if (made_progress) *made_progress = 1;
         return 1;
     }
-    /* System reports EOF and a reset peer alike as ERR_CLOSED: both end the
-     * stream and propagate as a half-close. */
+    /* An orderly end of stream propagates as a half-close; a peer's reset
+     * (ERR_RESET) is a failure of the connection, never an end of stream. */
     if (result == MAELYS_SYS_ERR_CLOSED) {
         *eof = 1;
         if (made_progress) *made_progress = 1;
         return 1;
     }
-    return errno == EAGAIN || errno == EWOULDBLOCK;
+    return result == MAELYS_SYS_ERR_WOULD_BLOCK;
 }
 
 static unsigned tls_interest(maelys_egress_tls_step_t step) {
@@ -138,7 +138,7 @@ static int write_from(
         if (made_progress && written) *made_progress = 1;
         return 1;
     }
-    return errno == EAGAIN || errno == EWOULDBLOCK;
+    return result == MAELYS_SYS_ERR_WOULD_BLOCK;
 }
 
 static int write_to_client(

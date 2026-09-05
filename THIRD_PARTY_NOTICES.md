@@ -1,9 +1,9 @@
 # Third-party notices
 
-## Maelys System 0.8.0
+## Maelys System 0.9.0
 
-Maelys Egress links and redistributes Maelys System at tag `v0.8.0`, commit
-`93103a1d0297ea3f334cbc84079c93be6e9b0efd`
+Maelys Egress links and redistributes Maelys System at tag `v0.9.0`, commit
+`6bd51950c83eaad9ec16cbac318549ab9bb2e928`
 (https://github.com/maelys-dev/maelys-system), licensed under the Mozilla
 Public License, v. 2.0, the same license as this repository. Its complete,
 unmodified source is available at the repository and commit named above.
