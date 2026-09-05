@@ -156,8 +156,7 @@ struct maelys_egress_server {
     int admin_listener_fd;
     maelys_sys_watch_t admin_listener_watch;
     uint16_t admin_bound_port;
-    dev_t unix_socket_device;
-    ino_t unix_socket_inode;
+    maelys_sys_file_identity_t unix_socket_identity;
     int unix_socket_created;
     egress_connection_t *connections;
     size_t connection_count;
@@ -254,9 +253,13 @@ void egress_server_control_release(maelys_egress_server_t *server);
 int egress_listener_is_loopback_host(const char *host);
 maelys_sys_socket_t *egress_listener_create_tcp(
     const maelys_egress_config_t *config, uint16_t *out_port);
-void egress_listener_unlink_unix_identity(const char *path, dev_t device, ino_t inode);
+/* Retires the socket path only while it still names the identity that was
+ * bound; something that took its place is left alone. */
+void egress_listener_unlink_unix_identity(
+    const char *path, const maelys_sys_file_identity_t *identity);
 maelys_sys_socket_t *egress_listener_create_unix(
-    const maelys_egress_config_t *config, dev_t *out_device, ino_t *out_inode);
+    const maelys_egress_config_t *config,
+    maelys_sys_file_identity_t *out_identity);
 int egress_listener_unix_peer_allowed(const maelys_egress_server_t *server, int client);
 /* Both ends are created through System; the embedder's end is detached and
  * made blocking, the relayed end stays a handle. */

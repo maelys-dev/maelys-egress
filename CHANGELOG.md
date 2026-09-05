@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Pin Maelys System `v0.8.0` (`93103a1d0297ea3f334cbc84079c93be6e9b0efd`)
+  and consume its file primitives. The audit journal is held through
+  `maelys_sys_file_lock_acquire`: owner, single link, owner-only mode and
+  regular file are verified before the exclusive lock and again after it,
+  with the path re-resolved to the locked inode, which the previous
+  `open`, `fstat`, `flock` sequence could not do. The Unix socket path is
+  retired with `maelys_sys_file_unlink_same` against the identity captured
+  at bind, instead of an `lstat` followed by `unlink`; the check and the
+  removal remain two calls, as System's contract states. The boundary audit
+  refuses `lstat`, `flock` and `unlink` in `src/`.
 ## 0.14.0 — 2026-09-04
 
 - Pin Maelys System `v0.5.6` (`31e52fa210d86851b141ecd75e8e2231c0d15ae2`).

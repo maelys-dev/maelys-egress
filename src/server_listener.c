@@ -83,25 +83,23 @@ maelys_sys_socket_t *egress_listener_create_tcp(
     return listener;
 }
 
-void egress_listener_unlink_unix_identity(const char *path, dev_t device, ino_t inode) {
-    struct stat current;
-    if (path && path[0] && lstat(path, &current) == 0 &&
-        S_ISSOCK(current.st_mode) && current.st_dev == device &&
-        current.st_ino == inode) {
-        (void)unlink(path);
+void egress_listener_unlink_unix_identity(
+    const char *path, const maelys_sys_file_identity_t *identity) {
+    if (path && path[0] && identity) {
+        (void)maelys_sys_file_unlink_same(path, identity);
     }
 }
 
 maelys_sys_socket_t *egress_listener_create_unix(
     const maelys_egress_config_t *config,
-    dev_t *out_device,
-    ino_t *out_inode) {
-    struct stat existing;
-    if (lstat(config->unix_path, &existing) == 0) {
+    maelys_sys_file_identity_t *out_identity) {
+    maelys_sys_file_identity_t existing;
+    maelys_sys_result_t present = maelys_sys_file_path_identity(config->unix_path, &existing);
+    if (present == MAELYS_SYS_OK) {
         errno = EEXIST;
         return NULL;
     }
-    if (errno != ENOENT) return NULL;
+    if (present != MAELYS_SYS_ERR_NOT_FOUND) return NULL;
     maelys_sys_socket_t *listener = NULL;
     if (maelys_sys_socket_create(AF_UNIX, SOCK_STREAM, 0, &listener) != MAELYS_SYS_OK) {
         return NULL;
@@ -120,8 +118,9 @@ maelys_sys_socket_t *egress_listener_create_unix(
         errno = saved;
         return NULL;
     }
-    struct stat created;
-    if (lstat(config->unix_path, &created) != 0 || !S_ISSOCK(created.st_mode)) {
+    maelys_sys_file_identity_t created;
+    if (maelys_sys_file_path_identity(config->unix_path, &created) != MAELYS_SYS_OK ||
+        !S_ISSOCK(created.mode)) {
         int saved = errno ? errno : EIO;
         (void)maelys_sys_socket_release(&listener);
         errno = saved;
@@ -131,12 +130,11 @@ maelys_sys_socket_t *egress_listener_create_unix(
         maelys_sys_socket_listen(listener, 128) != MAELYS_SYS_OK) {
         int saved = errno;
         (void)maelys_sys_socket_release(&listener);
-        egress_listener_unlink_unix_identity(config->unix_path, created.st_dev, created.st_ino);
+        egress_listener_unlink_unix_identity(config->unix_path, &created);
         errno = saved;
         return NULL;
     }
-    *out_device = created.st_dev;
-    *out_inode = created.st_ino;
+    *out_identity = created;
     return listener;
 }
 

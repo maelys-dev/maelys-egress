@@ -174,7 +174,7 @@ maelys_egress_result_t maelys_egress_server_create(
             return MAELYS_EGRESS_ERR_DENIED;
         }
         server->listener_socket = egress_listener_create_unix(
-            config, &server->unix_socket_device, &server->unix_socket_inode);
+            config, &server->unix_socket_identity);
         server->unix_socket_created = server->listener_socket != NULL;
     } else {
         server->listener_socket = egress_listener_create_tcp(config, &server->bound_port);
@@ -415,8 +415,7 @@ void maelys_egress_server_destroy(maelys_egress_server_t *server) {
     egress_socket_release(&server->admin_listener_socket, &server->admin_listener_fd);
     if (server->unix_socket_created) {
         egress_listener_unlink_unix_identity(server->config.unix_path,
-                             server->unix_socket_device,
-                             server->unix_socket_inode);
+                                             &server->unix_socket_identity);
         server->unix_socket_created = 0;
     }
     if (server->loop) (void)maelys_sys_loop_destroy(&server->loop);
