@@ -1,5 +1,5 @@
 <!-- maelys-cli:begin -->
-# Maelys CLI framework (maelys-cli 0.5.1)
+# Maelys CLI framework (maelys-cli 0.5.11)
 
 This project builds its command-line interface on `libmaelys_cli`. The
 complete guide is in `docs/maelys-cli-guide.md`; this block is the summary
@@ -24,7 +24,8 @@ that must hold for every change.
   `protocol-stream`; its stdout belongs to the declared protocol. Set
   `MAELYS_CLI_FORMAT=json` in the environment to receive its failure
   envelope as JSON on stderr.
-- `describe COMMAND_ID` is minimal; `describe --summary` lists everything.
+- `describe COMMAND_ID` is minimal; `describe --summary` lists everything;
+  `describe --summary --prefix NAMESPACE` lists one namespace.
   A descriptor with `available: false` names a command this build cannot
   run (`unavailableReason`). Operands may carry `type` and `choices` like
   options; `input.constraints` includes `requires`, `at-most-one` and
@@ -47,8 +48,13 @@ one handler and one JSON Schema file. In the same change, update:
    `_DURATION`, `_CHOICE`, `_HEX`, `_HEX_OR`, `_DIGEST`) plus `.required`,
    `.repeatable`, `.depends_on`, `.depends_on_all`, `.conflicts_with`,
    `.group` (all-or-none) and `.default_text` (validated at startup, returned
-   by the typed accessors: never repeat a default in the handler); a command
-   this build cannot provide declares `.unavailable = "reason"`;
+   by the typed accessors: never repeat a default in the handler;
+   `MAELYS_CLI_DEFAULT_OF(LIB_CONSTANT)` when the library owns the value); a command
+   this build cannot provide declares `.unavailable = "reason"`; a product
+   with build variants composes its catalog at startup with
+   `maelys_cli_catalog_concat()` (a later part may only replace an
+   `.unavailable` declaration of the same identifier; anything else is
+   `EEXIST`);
 2. the output schema: a JSON Schema file under the project's schema
    directory, embedded by `maelys-cli-embed` and referenced with
    `MAELYS_CLI_SCHEMA(symbol)`; never a hand-escaped C string;
@@ -75,7 +81,10 @@ and refuses invalid UTF-8 in what it writes.
 Rules that must not be broken: no second usage string outside the catalog; no
 hand-written argv parsing in `main()`; no product type inside the shared
 framework; validation errors in causal order (command, options, values,
-dependencies, operands, files, syntax, schema, state); explicit
+dependencies, operands, files, syntax, schema, state); configuration,
+manifests and secrets read with `maelys_cli_read_trusted_file` (trust judged
+on the descriptor read, bounded by the bytes read) and failures reported
+with `maelys_cli_fail_file`; explicit
 `MAELYS_CLI_WRITE_REPLACE` / `MAELYS_CLI_WRITE_NO_REPLACE` on every file
 write; external programs started with absolute paths and `execve`, never a
 shell or PATH lookup.

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Pin maelys-cli `v0.5.11` and read the configuration file, the token file
+  and the audit key through the framework's trusted reader
+  (`maelys_cli_open_trusted`, `maelys_cli_read_trusted_file`): the file
+  judged is the descriptor read, the open never blocks on a planted FIFO,
+  and secrets require the caller as owner, a single hard link and no group
+  or world bit, bounded by the bytes actually read. The command carries no
+  `open`, `fstat` or `O_NOFOLLOW` of its own; the boundary audit refuses
+  them in `cli/`. Error codes of `config validate` are unchanged.
 - Pin Maelys System `v0.8.0` (`93103a1d0297ea3f334cbc84079c93be6e9b0efd`)
   and consume its file primitives. The audit journal is held through
   `maelys_sys_file_lock_acquire`: owner, single link, owner-only mode and

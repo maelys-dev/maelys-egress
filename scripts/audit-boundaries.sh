@@ -39,6 +39,13 @@ if grep_tree '(^|[^A-Za-z0-9_])(lstat|flock|unlink)[[:space:]]*\(' src; then
     exit 1
 fi
 
+# The command reads configuration and secrets through the framework's
+# trusted reader, which judges the descriptor it reads; no product open().
+if grep_tree '(^|[^A-Za-z0-9_])(open|fstat|lstat|stat)[[:space:]]*\(|O_NOFOLLOW' cli; then
+    echo "the CLI must read files through maelys_cli_open_trusted or maelys_cli_read_trusted_file" >&2
+    exit 1
+fi
+
 # Sockets are created, connected, accepted, read, written, shut down and
 # handed over through maelys-system handles; the Unix peer identity is the
 # only read on a native descriptor.
