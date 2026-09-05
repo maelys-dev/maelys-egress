@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Adopt maelys-release 0.10.0: the managed texts carry no socle version,
+  the provenance attestation follows the repository's visibility, and CI
+  calls the socle's `check-product.yml` (checkouts, packages, `make check`
+  on the three release targets, drift check) as one job next to the
+  product's own; the hand-written drift step is gone.
+
 ## 0.15.0 — 2026-09-05
 
 - Pin maelys-cli `v0.5.11` and read the configuration file, the token file
