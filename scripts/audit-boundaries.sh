@@ -32,6 +32,13 @@ if grep_tree '(^|[^A-Za-z0-9_])(close|pipe|socketpair)[[:space:]]*\(' src; then
     exit 1
 fi
 
+# File identity, advisory locks and identity-checked removal come from
+# maelys-system's file primitives, never from lstat, flock or unlink here.
+if grep_tree '(^|[^A-Za-z0-9_])(lstat|flock|unlink)[[:space:]]*\(' src; then
+    echo "Egress must consume maelys-system file primitives" >&2
+    exit 1
+fi
+
 # Sockets are created, connected, accepted, read, written, shut down and
 # handed over through maelys-system handles; the Unix peer identity is the
 # only read on a native descriptor.

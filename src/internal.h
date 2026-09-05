@@ -138,6 +138,9 @@ struct maelys_egress_metrics {
 struct maelys_egress_audit {
     atomic_uint references;
     pthread_mutex_t lock;
+    /* The journal is held through System's identity-checked lock; fd is
+     * the borrowed descriptor of that lock, -1 once released. */
+    maelys_sys_file_lock_t *journal_lock;
     int fd;
     unsigned char *key;
     size_t key_length;

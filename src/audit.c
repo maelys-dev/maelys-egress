@@ -9,7 +9,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -159,32 +158,55 @@ maelys_egress_result_t maelys_egress_audit_file_create(
             return MAELYS_EGRESS_ERR_ARGUMENT;
         }
     }
-    int flags = O_RDWR | O_APPEND | O_CREAT | O_CLOEXEC;
-#ifdef O_NOFOLLOW
-    flags |= O_NOFOLLOW;
-#endif
-    int fd = open(path, flags, S_IRUSR | S_IWUSR);
-    struct stat status;
-    if (fd < 0 || fstat(fd, &status) != 0 || !S_ISREG(status.st_mode) ||
-        status.st_nlink != 1u || status.st_uid != geteuid() ||
-        (status.st_mode & (S_IRWXG | S_IRWXO)) != 0u || flock(fd, LOCK_EX | LOCK_NB) != 0) {
-        int saved = fd < 0 ? errno : EPERM;
-        if (fd >= 0) (void)maelys_sys_fd_close(&fd);
-        errno = saved;
+    /* The journal is a regular file with one link, owned by the caller and
+     * closed to group and others; System verifies that before the exclusive
+     * lock and again after it, with the path re-resolved to the locked
+     * inode, so a file swapped between open and lock is refused. */
+    maelys_sys_file_expectations_t expectations = {0};
+    expectations.check_owner = 1;
+    expectations.owner = geteuid();
+    expectations.forbidden_mode_bits = S_IRWXG | S_IRWXO;
+    expectations.require_single_link = 1;
+    maelys_sys_file_lock_options_t options = {0};
+    options.exclusive = 1;
+    options.wait = 0;
+    options.create = 1;
+    options.writable = 1;
+    options.expectations = &expectations;
+    maelys_sys_file_lock_t *journal_lock = NULL;
+    maelys_sys_result_t locked = maelys_sys_file_lock_acquire(path, &options, &journal_lock);
+    if (locked != MAELYS_SYS_OK) {
+        const char *reason = locked == MAELYS_SYS_ERR_BUSY ? "held by another process" :
+            locked == MAELYS_SYS_ERR_IDENTITY ?
+                "not a regular owner-only single-link file, or replaced under the lock" :
+            locked == MAELYS_SYS_ERR_NOT_FOUND ? "missing" : strerror(errno);
         egress_set_error(out_error,
             "audit log must be exclusively held, owner-only, regular and non-symlink: %s",
-            strerror(saved));
+            reason);
+        if (locked != MAELYS_SYS_ERR_OS) errno = EPERM;
         return MAELYS_EGRESS_ERR_DENIED;
     }
+    int fd = maelys_sys_file_lock_fd(journal_lock);
+    /* Records are appended; the descriptor keeps the kernel's end-of-file
+     * positioning so a write never lands inside an earlier record. */
+    int file_flags = fcntl(fd, F_GETFL);
+    if (file_flags < 0 || fcntl(fd, F_SETFL, file_flags | O_APPEND) != 0) {
+        int saved = errno;
+        (void)maelys_sys_file_lock_release(&journal_lock);
+        egress_set_error(out_error, "audit log cannot be opened for appending: %s",
+                         strerror(saved));
+        return MAELYS_EGRESS_ERR_IO;
+    }
     maelys_egress_audit_t *audit = calloc(1, sizeof(*audit));
-    if (!audit) { (void)maelys_sys_fd_close(&fd); return MAELYS_EGRESS_ERR_MEMORY; }
+    if (!audit) { (void)maelys_sys_file_lock_release(&journal_lock); return MAELYS_EGRESS_ERR_MEMORY; }
     audit->key = malloc(key_length);
     if (!audit->key || pthread_mutex_init(&audit->lock, NULL) != 0) {
-        free(audit->key); free(audit); (void)maelys_sys_fd_close(&fd);
+        free(audit->key); free(audit); (void)maelys_sys_file_lock_release(&journal_lock);
         return MAELYS_EGRESS_ERR_MEMORY;
     }
     memcpy(audit->key, key, key_length);
     audit->key_length = key_length;
+    audit->journal_lock = journal_lock;
     audit->fd = fd;
     (void)snprintf(audit->key_id, sizeof(audit->key_id), "%s", key_id);
     memset(audit->chain_hex, '0', 64u);
@@ -209,8 +231,7 @@ void maelys_egress_audit_release(maelys_egress_audit_t *audit) {
     if (!audit || atomic_fetch_sub(&audit->references, 1u) != 1u) return;
     (void)pthread_mutex_lock(&audit->lock);
     (void)fdatasync(audit->fd);
-    (void)flock(audit->fd, LOCK_UN);
-    (void)maelys_sys_fd_close(&audit->fd);
+    (void)maelys_sys_file_lock_release(&audit->journal_lock);
     audit->fd = -1;
     egress_secure_zero(audit->key, audit->key_length);
     free(audit->key);

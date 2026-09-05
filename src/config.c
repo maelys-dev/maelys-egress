@@ -152,13 +152,15 @@ maelys_egress_result_t maelys_egress_config_set_listen_unix(
         return MAELYS_EGRESS_ERR_ARGUMENT;
     }
     if (!egress_unix_parent_is_private(path, out_error)) return MAELYS_EGRESS_ERR_DENIED;
-    struct stat status;
-    if (lstat(path, &status) == 0) {
+    maelys_sys_file_identity_t existing;
+    maelys_sys_result_t present = maelys_sys_file_path_identity(path, &existing);
+    if (present == MAELYS_SYS_OK) {
         egress_set_error(out_error, "Unix listener path already exists");
         return MAELYS_EGRESS_ERR_STATE;
     }
-    if (errno != ENOENT) {
-        egress_set_error(out_error, "cannot inspect Unix listener path: %s", strerror(errno));
+    if (present != MAELYS_SYS_ERR_NOT_FOUND) {
+        egress_set_error(out_error, "cannot inspect Unix listener path: %s",
+                         present == MAELYS_SYS_ERR_OS ? strerror(errno) : "unexpected object");
         return MAELYS_EGRESS_ERR_IO;
     }
     memcpy(config->unix_path, path, path_length + 1u);
