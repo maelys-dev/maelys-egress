@@ -13,13 +13,13 @@ CXX ?= c++
 # Maelys System is either built from the pinned checkout MAELYS_SYSTEM_DIR
 # (the default, used by every gate) or taken already installed under
 # MAELYS_SYSTEM_PREFIX (packaging, for instance the Homebrew formula that
-# depends on libmaelys-sys). adapter/MAELYS_SYSTEM_PIN records the tag and
+# depends on libmaelys-sys). dependencies/maelys-system.pin records the tag and
 # the commit; an installed System must carry the same ABI and at least the
 # pinned version.
 MAELYS_SYSTEM_DIR ?= ../maelys-system
 MAELYS_SYSTEM_PREFIX ?=
-MAELYS_SYSTEM_TAG := $(word 1,$(shell cat adapter/MAELYS_SYSTEM_PIN))
-MAELYS_SYSTEM_PIN := $(word 2,$(shell cat adapter/MAELYS_SYSTEM_PIN))
+MAELYS_SYSTEM_TAG := $(word 1,$(shell cat dependencies/maelys-system.pin))
+MAELYS_SYSTEM_PIN := $(word 2,$(shell cat dependencies/maelys-system.pin))
 MAELYS_SYSTEM_VERSION := $(patsubst v%,%,$(MAELYS_SYSTEM_TAG))
 ifeq ($(MAELYS_SYSTEM_PREFIX),)
 MAELYS_SYSTEM_BUILD := $(abspath $(BUILD)/deps/maelys-system)
@@ -30,8 +30,8 @@ MAELYS_SYSTEM_LIB := $(MAELYS_SYSTEM_PREFIX)/lib/libmaelys_sys.a
 MAELYS_SYSTEM_INCLUDE := $(MAELYS_SYSTEM_PREFIX)/include
 endif
 MAELYS_CLI_DIR ?= ../maelys-cli
-MAELYS_CLI_TAG := $(word 1,$(shell cat adapter/MAELYS_CLI_PIN))
-MAELYS_CLI_PIN := $(word 2,$(shell cat adapter/MAELYS_CLI_PIN))
+MAELYS_CLI_TAG := $(word 1,$(shell cat dependencies/maelys-cli.pin))
+MAELYS_CLI_PIN := $(word 2,$(shell cat dependencies/maelys-cli.pin))
 MAELYS_CLI_BUILD := $(abspath $(BUILD)/deps/maelys-cli)
 MAELYS_CLI_LIB := $(MAELYS_CLI_BUILD)/lib/libmaelys_cli.a
 MAELYS_CLI_EMBED := $(MAELYS_CLI_DIR)/tools/maelys-cli-embed
@@ -259,7 +259,7 @@ $(WOLFSSL_TEST): tests/test_tls_provider.c $(WOLFSSL_LIB) $(STATIC_LIB) $(TLS_TE
 		tests/test_tls_provider.c $(WOLFSSL_LIB) $(STATIC_LIB) \
 		$(LDLIBS) $$(pkg-config --libs wolfssl) -o $@
 
-$(PC): pkgconfig/maelys-egress.pc.in VERSION adapter/MAELYS_SYSTEM_PIN
+$(PC): pkgconfig/maelys-egress.pc.in VERSION dependencies/maelys-system.pin
 	@mkdir -p $(@D)
 	sed -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@VERSION@|$(VERSION)|g' \
 		-e 's|@SYSTEM_VERSION@|$(MAELYS_SYSTEM_VERSION)|g' $< >$@

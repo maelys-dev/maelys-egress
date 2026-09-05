@@ -3,7 +3,7 @@
 # usage: scripts/render-homebrew-formula.sh vX.Y.Z [OUTPUT [FORMULA]]
 # FORMULA defaults to maelys-egress, the only formula of this repository.
 # The source archive of the tag is downloaded to compute its digest, and the
-# maelys-cli pin is read from the tag's own adapter/ file, so the formula
+# maelys-cli pin is read from the tag's own dependencies/ file, so the formula
 # builds the framework the release was verified with. Maelys System comes
 # from the tap's libmaelys-sys formula.
 set -eu
@@ -25,8 +25,8 @@ curl -fsSL --retry 5 --retry-delay 3 -o "$work/source.tar.gz" "$url"
 digest=$(shasum -a 256 "$work/source.tar.gz" | awk '{print $1}')
 mkdir -p "$work/tag"
 tar -xzf "$work/source.tar.gz" -C "$work/tag" --strip-components=1
-cli_tag=$(sed -n '1p' "$work/tag/adapter/MAELYS_CLI_PIN")
-cli_pin=$(sed -n '2p' "$work/tag/adapter/MAELYS_CLI_PIN")
+cli_tag=$(sed -n '1p' "$work/tag/dependencies/maelys-cli.pin")
+cli_pin=$(sed -n '2p' "$work/tag/dependencies/maelys-cli.pin")
 test "$(cat "$work/tag/VERSION")" = "$version" || {
     echo "tag $tag carries VERSION $(cat "$work/tag/VERSION")" >&2
     exit 1

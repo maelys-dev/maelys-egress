@@ -2,11 +2,11 @@
 
 ## Unreleased
 
-- Adopt maelys-release 0.10.0: the managed texts carry no socle version,
-  the provenance attestation follows the repository's visibility, and CI
-  calls the socle's `check-product.yml` (checkouts, packages, `make check`
-  on the three release targets, drift check) as one job next to the
-  product's own; the hand-written drift step is gone.
+- Adopt maelys-release 0.14.0: the declarations move from `adapter/` to
+  `dependencies/` (`maelys-system.pin`, `maelys-cli.pin`, `packages`); the
+  Makefile, the packaging and installed-System scripts, the formula renderer
+  and the documentation read them there. 0.13.0 had only moved the two
+  `uses:` lines.
 
 ## 0.15.0 — 2026-09-05
 

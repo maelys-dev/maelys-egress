@@ -124,8 +124,8 @@ make tls-providers-check tls-binaries # optional development packages required
 ```
 
 The build requires the `maelys-system` tag and commit recorded in
-`adapter/MAELYS_SYSTEM_PIN` and the `maelys-cli` tag recorded in
-`adapter/MAELYS_CLI_PIN`. CI, the release workflow and developers obtain them
+`dependencies/maelys-system.pin` and the `maelys-cli` tag recorded in
+`dependencies/maelys-cli.pin`. CI, the release workflow and developers obtain them
 with the managed `scripts/checkout-dependency.sh maelys-system` and
 `scripts/checkout-dependency.sh maelys-cli`, which clone next to this
 repository at the pinned commit. Packaging may link an installed Maelys System

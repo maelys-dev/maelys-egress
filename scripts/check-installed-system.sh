@@ -7,7 +7,7 @@ set -eu
 
 root=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
 system_dir=${MAELYS_SYSTEM_DIR:-$root/../maelys-system}
-system_version=$(sed -n '1p' "$root/adapter/MAELYS_SYSTEM_PIN")
+system_version=$(sed -n '1p' "$root/dependencies/maelys-system.pin")
 system_version=${system_version#v}
 temp_base=${TMPDIR:-/tmp}
 temp_base=${temp_base%/}
