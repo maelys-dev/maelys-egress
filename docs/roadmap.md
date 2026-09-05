@@ -128,6 +128,15 @@ handled as readability, so no queued byte is lost and no level-triggered
 `HUP` spins. Releases go through maelys-release 0.5.0 with the managed
 dependency checkout and the tag preflight.
 
+## 0.15 — file primitives from the dependencies
+
+Delivered: the audit journal is held through Maelys System's
+identity-checked lock (`file_lock_acquire`, verified before and after the
+lock) and the Unix socket path is retired with `unlink_same`; the command
+reads its configuration and secrets through the maelys-cli trusted reader,
+which judges the descriptor it reads. No `open`, `fstat`, `lstat`, `flock`
+or `unlink` of Egress's own remains, and the boundary audit refuses them.
+
 TLS inspection, transparent interception and content inspection have no
 release number until their PKI and threat-model design is accepted
 adversarially. If accepted, inspection remains an explicit isolated capability,

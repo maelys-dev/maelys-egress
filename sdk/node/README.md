@@ -15,8 +15,8 @@ npm install ./sdk/node
 From the GitHub release source archive:
 
 ```sh
-tar -xzf maelys-egress-node-sdk-0.14.0.tar.gz
-npm install ./maelys-egress-node-sdk-0.14.0
+tar -xzf maelys-egress-node-sdk-0.15.0.tar.gz
+npm install ./maelys-egress-node-sdk-0.15.0
 ```
 
 The `maelys-egress` executable must also be installed or passed as an absolute

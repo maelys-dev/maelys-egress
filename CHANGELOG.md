@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.15.0 — 2026-09-05
 
 - Pin maelys-cli `v0.5.11` and read the configuration file, the token file
   and the audit key through the framework's trusted reader

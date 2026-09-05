@@ -16,8 +16,8 @@ python3 -m pip install ./sdk/python
 From the GitHub release source archive:
 
 ```sh
-tar -xzf maelys-egress-python-sdk-0.14.0.tar.gz
-python3 -m pip install ./maelys-egress-python-sdk-0.14.0
+tar -xzf maelys-egress-python-sdk-0.15.0.tar.gz
+python3 -m pip install ./maelys-egress-python-sdk-0.15.0
 ```
 
 The `maelys-egress` executable must also be installed or supplied with
