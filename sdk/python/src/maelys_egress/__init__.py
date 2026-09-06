@@ -10,6 +10,7 @@ import queue
 import secrets
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -19,7 +20,7 @@ from typing import Callable, Iterable, Mapping, Optional
 from urllib.parse import quote
 from urllib.request import urlopen
 
-__all__ = ["Destination", "EgressConfig", "EgressProcess"]
+__all__ = ["Destination", "EgressConfig", "EgressProcess", "binary_trust_refusal"]
 __version__ = "0.15.0"
 
 _LIFECYCLE_CONTRACT = "maelys-egress-lifecycle/1"
@@ -30,24 +31,76 @@ def _url_host(host: str) -> str:
     return f"[{host}]" if ":" in host else host
 
 
+def _trust_refusal(path: Path, euid: int) -> Optional[str]:
+    """Why PATH (a file or directory) may be replaced by someone other than
+    root or the caller, or None when it may not.
+
+    Trusted: owned by root or by the caller; never world-writable, except a
+    sticky directory, whose entries only their owner may replace; group-
+    writable only when the caller owns it, since the owner chose that group.
+    """
+    status = path.stat()
+    if status.st_uid not in (0, euid):
+        return f"{path} is owned by uid {status.st_uid}, neither root nor the caller"
+    if status.st_mode & stat.S_IWOTH and not (
+        stat.S_ISDIR(status.st_mode) and status.st_mode & stat.S_ISVTX
+    ):
+        return f"{path} is writable by everyone"
+    if status.st_mode & stat.S_IWGRP and status.st_uid != euid:
+        return f"{path} is writable by its group and not owned by the caller"
+    return None
+
+
+def binary_trust_refusal(binary: "str | os.PathLike[str]") -> Optional[str]:
+    """Why BINARY must not run on behalf of the caller, or None when it may.
+
+    The file, the file it resolves to and every directory on both paths
+    must be trusted: a writable ancestor lets its writer replace any entry
+    below it. Automatic discovery applies this rule; an explicit ``binary``
+    is trusted as given, and a caller may apply the rule to it here.
+    """
+    candidate = Path(binary)
+    euid = os.geteuid()
+    resolved = candidate.resolve(strict=True)
+    checked: dict[Path, None] = {}
+    for path in (candidate, resolved):
+        checked.setdefault(path)
+        for ancestor in path.parents:
+            checked.setdefault(ancestor)
+    for path in checked:
+        refusal = _trust_refusal(path, euid)
+        if refusal is not None:
+            return refusal
+    return None
+
+
+def _discovery_candidates() -> tuple[Path, ...]:
+    return (
+        Path(sys.executable).resolve().parent / _BINARY_NAME,
+        Path("/opt/homebrew/bin") / _BINARY_NAME,
+        Path("/usr/local/bin") / _BINARY_NAME,
+        Path("/usr/bin") / _BINARY_NAME,
+    )
+
+
 def _resolve_binary(binary: Optional[str]) -> str:
     if binary is not None:
         path = Path(binary)
         if not path.is_absolute():
             raise ValueError("binary must be an absolute path; PATH lookup is forbidden")
         return str(path.resolve(strict=True))
-    candidates = (
-        Path(sys.executable).resolve().parent / _BINARY_NAME,
-        Path("/opt/homebrew/bin") / _BINARY_NAME,
-        Path("/usr/local/bin") / _BINARY_NAME,
-        Path("/usr/bin") / _BINARY_NAME,
-    )
-    for path in dict.fromkeys(candidates):
-        if path.is_file() and os.access(path, os.X_OK):
+    refusals = []
+    for path in dict.fromkeys(_discovery_candidates()):
+        if not (path.is_file() and os.access(path, os.X_OK)):
+            continue
+        refusal = binary_trust_refusal(path)
+        if refusal is None:
             return str(path.resolve(strict=True))
+        refusals.append(refusal)
+    detail = "; refused: " + "; ".join(refusals) if refusals else ""
     raise FileNotFoundError(
-        "maelys-egress was not found in a trusted installation directory; "
-        "pass binary='/absolute/path/maelys-egress'"
+        "maelys-egress was not found in a trusted installation directory"
+        f"{detail}; pass binary='/absolute/path/maelys-egress'"
     )
 
 

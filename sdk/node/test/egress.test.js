@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
-import { statSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
-import { Destination, EgressConfig, EgressProcess } from "../index.js";
+import {
+  Destination, EgressConfig, EgressProcess, binaryTrustRefusal,
+} from "../index.js";
 
 test("IPv6 proxy URLs are bracketed", () => {
   const egress = new EgressProcess(new EgressConfig({
@@ -61,4 +65,33 @@ test("invalid configuration and failed start clean up", async () => {
   await assert.rejects(egress.start());
   assert.equal(egress.directory, null);
   await egress.close();
+});
+
+test("a replaceable binary is refused by the trust rule", () => {
+  const directory = mkdtempSync(join(tmpdir(), "maelys-egress-trust-"));
+  try {
+    const binDir = join(directory, "bin");
+    mkdirSync(binDir, { mode: 0o755 });
+    const binary = join(binDir, "maelys-egress");
+    writeFileSync(binary, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    assert.throws(() => binaryTrustRefusal("maelys-egress"), /absolute path/);
+    // Owned by the caller, writable by nobody else: trusted.
+    assert.equal(binaryTrustRefusal(binary), null);
+    // The owner's group is the owner's decision.
+    chmodSync(binary, 0o775);
+    assert.equal(binaryTrustRefusal(binary), null);
+    // Anyone may replace the file: refused, and the refusal is named.
+    chmodSync(binary, 0o777);
+    assert.match(binaryTrustRefusal(binary), /writable by everyone/);
+    // Anyone may replace the directory entry: refused as well.
+    chmodSync(binary, 0o755);
+    chmodSync(binDir, 0o777);
+    assert.match(binaryTrustRefusal(binary), new RegExp(binDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    // A sticky world-writable directory only lets owners replace their own
+    // entries: trusted.
+    chmodSync(binDir, 0o1777);
+    assert.equal(binaryTrustRefusal(binary), null);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

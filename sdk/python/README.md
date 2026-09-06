@@ -24,6 +24,18 @@ The SDK never searches the inherited `PATH`. It finds `maelys-egress` beside
 the Python interpreter or in a fixed system installation directory; otherwise,
 pass `binary="/absolute/path/maelys-egress"`.
 
+Automatic discovery runs a candidate only when nobody but root or the
+calling user could have replaced it: the file, the file it resolves to and
+every directory on both paths must be owned by root or by the caller, must
+not be writable by everyone (a sticky directory excepted) and may be
+group-writable only when the caller owns them. A candidate that fails the
+rule is skipped and named in the final `FileNotFoundError`. A process
+running with more privileges than the owner of a Homebrew prefix therefore
+never picks the binary from that prefix; it must pass an explicit `binary`.
+An explicit `binary` is trusted as given; `binary_trust_refusal(path)`
+returns why a path fails the same rule, or `None`, for callers that want to
+apply it themselves.
+
 ## Complete lifecycle example
 
 ```python

@@ -12,6 +12,63 @@ import { dirname, isAbsolute, join } from "node:path";
 const LIFECYCLE_CONTRACT = "maelys-egress-lifecycle/1";
 const BINARY_NAME = "maelys-egress";
 
+// Why PATH (a file or directory) may be replaced by someone other than root
+// or the caller, or null when it may not. Trusted: owned by root or by the
+// caller; never world-writable, except a sticky directory, whose entries
+// only their owner may replace; group-writable only when the caller owns
+// it, since the owner chose that group.
+function trustRefusal(path, euid) {
+  const status = statSync(path);
+  if (status.uid !== 0 && status.uid !== euid) {
+    return `${path} is owned by uid ${status.uid}, neither root nor the caller`;
+  }
+  const sticky = status.isDirectory() && (status.mode & 0o1000) !== 0;
+  if ((status.mode & 0o002) !== 0 && !sticky) {
+    return `${path} is writable by everyone`;
+  }
+  if ((status.mode & 0o020) !== 0 && status.uid !== euid) {
+    return `${path} is writable by its group and not owned by the caller`;
+  }
+  return null;
+}
+
+// Why BINARY must not run on behalf of the caller, or null when it may. The
+// file, the file it resolves to and every directory on both paths must be
+// trusted: a writable ancestor lets its writer replace any entry below it.
+// Automatic discovery applies this rule; an explicit `binary` option is
+// trusted as given, and a caller may apply the rule to it here.
+export function binaryTrustRefusal(binary) {
+  if (typeof binary !== "string" || !isAbsolute(binary)) {
+    throw new TypeError("binary must be an absolute path");
+  }
+  const candidate = binary;
+  const euid = process.geteuid();
+  const checked = new Set();
+  for (const path of [candidate, realpathSync(candidate)]) {
+    let cursor = path;
+    while (!checked.has(cursor)) {
+      checked.add(cursor);
+      const parent = dirname(cursor);
+      if (parent === cursor) break;
+      cursor = parent;
+    }
+  }
+  for (const path of checked) {
+    const refusal = trustRefusal(path, euid);
+    if (refusal !== null) return refusal;
+  }
+  return null;
+}
+
+function discoveryCandidates() {
+  return [
+    join(dirname(realpathSync(process.execPath)), BINARY_NAME),
+    join("/opt/homebrew/bin", BINARY_NAME),
+    join("/usr/local/bin", BINARY_NAME),
+    join("/usr/bin", BINARY_NAME),
+  ];
+}
+
 function resolveBinary(binary) {
   if (binary !== undefined) {
     if (typeof binary !== "string" || !isAbsolute(binary)) {
@@ -19,24 +76,22 @@ function resolveBinary(binary) {
     }
     return realpathSync(binary);
   }
-  const candidates = [
-    join(dirname(realpathSync(process.execPath)), BINARY_NAME),
-    join("/opt/homebrew/bin", BINARY_NAME),
-    join("/usr/local/bin", BINARY_NAME),
-    join("/usr/bin", BINARY_NAME),
-  ];
-  for (const path of new Set(candidates)) {
+  const refusals = [];
+  for (const path of new Set(discoveryCandidates())) {
     try {
       if (!statSync(path).isFile()) continue;
       accessSync(path, constants.X_OK);
-      return realpathSync(path);
     } catch {
-      // Try the next fixed installation directory without consulting PATH.
+      continue; // Try the next fixed installation directory without consulting PATH.
     }
+    const refusal = binaryTrustRefusal(path);
+    if (refusal === null) return realpathSync(path);
+    refusals.push(refusal);
   }
+  const detail = refusals.length ? `; refused: ${refusals.join("; ")}` : "";
   throw new Error(
-    "maelys-egress was not found in a trusted installation directory; " +
-    "pass binary: '/absolute/path/maelys-egress'",
+    "maelys-egress was not found in a trusted installation directory" +
+    `${detail}; pass binary: '/absolute/path/maelys-egress'`,
   );
 }
 
