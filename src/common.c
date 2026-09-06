@@ -123,20 +123,18 @@ int egress_address_is_private(const struct sockaddr *address) {
             memcpy(&v4, b + 12, sizeof(v4));
             return ipv4_private(v4);
         }
-        if ((b[0] & 0xfeu) == 0xfcu ||
-            (b[0] == 0xfeu && (b[1] & 0xc0u) == 0x80u) ||
-            b[0] == 0xffu) return 1;
-        if ((b[0] == 0x01u && b[1] == 0x00u && b[2] == 0u && b[3] == 0u &&
-             b[4] == 0u && b[5] == 0u && b[6] == 0u && b[7] == 0u) ||
-            (b[0] == 0x20u && b[1] == 0x01u && b[2] <= 0x01u) ||
+        static const unsigned char nat64[12] = {
+            0x00, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0};
+        if (memcmp(b, nat64, sizeof(nat64)) == 0) {
+            uint32_t v4;
+            memcpy(&v4, b + 12, sizeof(v4));
+            return ipv4_private(v4);
+        }
+        /* Current global unicast space is 2000::/3. Unknown space fails closed. */
+        if ((b[0] & 0xe0u) != 0x20u) return 1;
+        if ((b[0] == 0x20u && b[1] == 0x01u && b[2] <= 0x01u) ||
             (b[0] == 0x20u && b[1] == 0x02u) ||
-            (b[0] == 0x3fu && (b[1] & 0xf0u) == 0xf0u) ||
-            (b[0] == 0x5fu && b[1] == 0x00u)) return 1;
-        static const unsigned char loopback[16] = {
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
-        static const unsigned char unspecified[16] = {0};
-        if (memcmp(b, loopback, sizeof(loopback)) == 0 ||
-            memcmp(b, unspecified, sizeof(unspecified)) == 0) return 1;
+            (b[0] == 0x3fu && b[1] == 0xffu && (b[2] & 0xf0u) == 0u)) return 1;
         if (b[0] == 0x20u && b[1] == 0x01u && b[2] == 0x0du && b[3] == 0xb8u) {
             return 1;
         }

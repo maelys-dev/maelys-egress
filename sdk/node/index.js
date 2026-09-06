@@ -1,12 +1,44 @@
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { closeSync, mkdtempSync, openSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  accessSync, closeSync, constants, mkdtempSync, openSync, realpathSync,
+  renameSync, rmSync, statSync, writeFileSync,
+} from "node:fs";
 import { get } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 
 const LIFECYCLE_CONTRACT = "maelys-egress-lifecycle/1";
+const BINARY_NAME = "maelys-egress";
+
+function resolveBinary(binary) {
+  if (binary !== undefined) {
+    if (typeof binary !== "string" || !isAbsolute(binary)) {
+      throw new TypeError("binary must be an absolute path; PATH lookup is forbidden");
+    }
+    return realpathSync(binary);
+  }
+  const candidates = [
+    join(dirname(realpathSync(process.execPath)), BINARY_NAME),
+    join("/opt/homebrew/bin", BINARY_NAME),
+    join("/usr/local/bin", BINARY_NAME),
+    join("/usr/bin", BINARY_NAME),
+  ];
+  for (const path of new Set(candidates)) {
+    try {
+      if (!statSync(path).isFile()) continue;
+      accessSync(path, constants.X_OK);
+      return realpathSync(path);
+    } catch {
+      // Try the next fixed installation directory without consulting PATH.
+    }
+  }
+  throw new Error(
+    "maelys-egress was not found in a trusted installation directory; " +
+    "pass binary: '/absolute/path/maelys-egress'",
+  );
+}
 
 export class Destination {
   constructor(host, port, { allowPrivate = false, requireTlsSni = false } = {}) {
@@ -158,12 +190,15 @@ function adminGet(host, port, path) {
 
 export class EgressProcess extends EventEmitter {
   constructor(config, {
-    binary = "maelys-egress",
+    binary = undefined,
     startupTimeoutMs = 10_000,
     stderr = "inherit",
   } = {}) {
     super();
     if (!(config instanceof EgressConfig)) throw new TypeError("EgressConfig required");
+    if (binary !== undefined && (typeof binary !== "string" || !isAbsolute(binary))) {
+      throw new TypeError("binary must be an absolute path; PATH lookup is forbidden");
+    }
     this.config = config;
     this.binary = binary;
     this.startupTimeoutMs = startupTimeoutMs;
@@ -183,6 +218,7 @@ export class EgressProcess extends EventEmitter {
 
   async start() {
     if (this.child) throw new Error("maelys-egress process already started");
+    const binary = resolveBinary(this.binary);
     this.#stdoutBuffer = Buffer.alloc(0);
     this.lifecycleError = null;
     this.directory = mkdtempSync(join(tmpdir(), "maelys-egress-sdk-"));
@@ -192,7 +228,7 @@ export class EgressProcess extends EventEmitter {
     writePrivate(tokenPath, this.secret);
     writePrivate(configPath, this.config.render(tokenPath));
     try {
-      this.child = spawn(this.binary, [
+      this.child = spawn(binary, [
         "serve", "--config", configPath, "--non-interactive",
       ], {
         stdio: ["ignore", "pipe", this.stderr],

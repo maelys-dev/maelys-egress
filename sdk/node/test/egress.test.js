@@ -52,6 +52,9 @@ test("invalid configuration and failed start clean up", async () => {
     allowPrivate: true,
     requireTlsSni: true,
   }));
+  assert.throws(() => new EgressProcess(new EgressConfig({
+    destinations: [new Destination("127.0.0.1", 9, { allowPrivate: true })],
+  }), { binary: "maelys-egress" }), /absolute path/);
   const egress = new EgressProcess(new EgressConfig({
     destinations: [new Destination("127.0.0.1", 9, { allowPrivate: true })],
   }), { binary: "/definitely/missing/maelys-egress" });

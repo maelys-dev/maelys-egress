@@ -241,6 +241,11 @@ int egress_parse_http_request(
             egress_set_error(out_error, "HTTP proxy requires CRLF framing");
             return -1;
         }
+        if (bytes[i] == '\r' &&
+            (i + 1u >= header_length || bytes[i + 1u] != '\n')) {
+            egress_set_error(out_error, "HTTP proxy requires CRLF framing");
+            return -1;
+        }
     }
     char *header = calloc(header_length + 1u, 1u);
     if (!header) return -1;

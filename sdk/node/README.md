@@ -19,8 +19,9 @@ tar -xzf maelys-egress-node-sdk-0.15.0.tar.gz
 npm install ./maelys-egress-node-sdk-0.15.0
 ```
 
-The `maelys-egress` executable must also be installed or passed as an absolute
-`binary` option.
+The SDK never searches the inherited `PATH`. It finds `maelys-egress` beside
+the Node.js executable or in a fixed system installation directory; otherwise,
+pass an absolute `binary` option.
 
 ## Complete lifecycle example
 
@@ -41,7 +42,7 @@ const config = new EgressConfig({
   quotaTotalBytes: 1024 * 1024 * 1024,
 });
 
-const egress = new EgressProcess(config, { binary: "maelys-egress" });
+const egress = new EgressProcess(config);
 try {
   await egress.start();
 

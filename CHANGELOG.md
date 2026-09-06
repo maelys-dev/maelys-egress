@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Harden request and destination parsing: reject every HTTP header containing
+  unpaired CR/LF before forwarding; classify IPv6 from the current global
+  unicast allocation with explicit IPv4-mapped and NAT64 handling; and make
+  the Python and Node.js process SDKs resolve only fixed absolute executable
+  locations. Relative `binary` values and inherited-`PATH` lookup are refused.
 - Pin Maelys System `v0.9.0` (`6bd51950c83eaad9ec16cbac318549ab9bb2e928`).
   A peer's reset is `ERR_RESET` again distinct from an orderly close: it
   fails the connection with an I/O result, as before 0.14.0, instead of

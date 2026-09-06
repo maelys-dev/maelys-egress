@@ -305,8 +305,10 @@ static void test_address_classification(void) {
     CHECK(inet_pton(AF_INET, "8.8.8.8", &public_v4.sin_addr) == 1);
     CHECK(!egress_address_is_private((const struct sockaddr *)&public_v4));
     static const char *private_v6[] = {
-        "::", "::1", "::ffff:127.0.0.1", "100::1", "2001:db8::1",
-        "2002::1", "3fff::1", "5f00::1", "fc00::1", "fe80::1", "ff02::1"
+        "::", "::1", "::ffff:127.0.0.1", "64:ff9b:1::1", "100::1",
+        "64:ff9b::127.0.0.1", "100:0:0:1::1", "2001:db8::1", "2002::1",
+        "3fff::1", "4000::1", "5f00::1", "fc00::1", "fe80::1", "fec0::1",
+        "ff02::1"
     };
     for (size_t i = 0; i < sizeof(private_v6) / sizeof(private_v6[0]); ++i) {
         struct sockaddr_in6 address = {.sin6_family = AF_INET6};
@@ -315,6 +317,10 @@ static void test_address_classification(void) {
     }
     struct sockaddr_in6 public_v6 = {.sin6_family = AF_INET6};
     CHECK(inet_pton(AF_INET6, "2606:4700:4700::1111", &public_v6.sin6_addr) == 1);
+    CHECK(!egress_address_is_private((const struct sockaddr *)&public_v6));
+    CHECK(inet_pton(AF_INET6, "3ff0::1", &public_v6.sin6_addr) == 1);
+    CHECK(!egress_address_is_private((const struct sockaddr *)&public_v6));
+    CHECK(inet_pton(AF_INET6, "64:ff9b::8.8.8.8", &public_v6.sin6_addr) == 1);
     CHECK(!egress_address_is_private((const struct sockaddr *)&public_v6));
 }
 
@@ -377,6 +383,14 @@ static void test_http_parser_adversarial(void) {
         "Transfer-Encoding: chunked\r\n\r\n";
     CHECK(egress_parse_http_request((const unsigned char *)transfer,
         sizeof(transfer) - 1u, config, &request, &error) == -1);
+    maelys_egress_error_free(error); error = NULL;
+    static const char bare_cr[] =
+        "GET http://example.com/x HTTP/1.1\r\nHost: example.com\r\n"
+        "Proxy-Authorization: Bearer 0123456789abcdef\r\n"
+        "X-Ambiguous: one\rInjected: two\r\n\r\n";
+    CHECK(egress_parse_http_request((const unsigned char *)bare_cr,
+        sizeof(bare_cr) - 1u, config, &request, &error) == -1);
+    CHECK(error && strstr(error, "CRLF"));
     maelys_egress_error_free(error); error = NULL;
     static const char wrong_secret[] =
         "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n"
