@@ -28,7 +28,8 @@
   descriptor/slot reuse.
 - Destinations configured with the TLS identity guard forward no tunnel bytes
   until one bounded ClientHello names exactly the sealed destination. Missing,
-  duplicate, malformed and mismatched SNI fail closed.
+  duplicate, malformed and mismatched SNI fail closed, including a name
+  that carries an embedded NUL: the whole length-prefixed field is judged.
 
 ## Residual risks and non-guarantees
 

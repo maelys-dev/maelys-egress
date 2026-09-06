@@ -202,9 +202,9 @@ static void test_policy_fail_closed(void) {
     maelys_egress_policy_destroy(policy);
 }
 
-static size_t make_client_hello(
-    const char *host, unsigned char output[EGRESS_HANDSHAKE_MAX]) {
-    size_t host_length = strlen(host);
+static size_t make_client_hello_bytes(
+    const char *host, size_t host_length,
+    unsigned char output[EGRESS_HANDSHAKE_MAX]) {
     size_t extension_length = 9u + host_length;
     size_t body_length = 43u + extension_length;
     size_t handshake_length = 4u + body_length;
@@ -236,6 +236,56 @@ static size_t make_client_hello(
     output[used++] = (unsigned char)host_length;
     memcpy(output + used, host, host_length); used += host_length;
     return used;
+}
+
+static size_t make_client_hello(
+    const char *host, unsigned char output[EGRESS_HANDSHAKE_MAX]) {
+    return make_client_hello_bytes(host, strlen(host), output);
+}
+
+/* A server_name is a length-prefixed field: every byte of it is judged,
+ * not only the prefix before a first NUL. */
+static void test_tls_client_hello_embedded_nul(void) {
+    static const char nul_name[] = "example.com\0.other.example";
+    unsigned char hello[EGRESS_HANDSHAKE_MAX];
+    size_t length = make_client_hello_bytes(nul_name, sizeof(nul_name) - 1u, hello);
+    char *error = NULL;
+    CHECK(egress_tls_client_hello_matches(hello, length, "example.com", &error) == -1);
+    CHECK(error && strstr(error, "embedded NUL"));
+    maelys_egress_error_free(error); error = NULL;
+    CHECK(egress_tls_client_hello_matches(hello, length, "other.example", &error) == -1);
+    CHECK(error && strstr(error, "embedded NUL"));
+    maelys_egress_error_free(error); error = NULL;
+    length = make_client_hello_bytes(nul_name, 11u, hello);
+    CHECK(egress_tls_client_hello_matches(hello, length, "example.com", &error) == 1);
+    CHECK(error == NULL);
+}
+
+/* The SOCKS5 domain name is length-prefixed too. */
+static void test_socks_domain_embedded_nul(void) {
+    maelys_egress_config_t *config = NULL;
+    char *error = NULL;
+    CHECK(maelys_egress_config_create(&config, &error) == MAELYS_EGRESS_OK);
+    egress_proxy_request_t request;
+    unsigned char response[10] = {0};
+    size_t consumed = 0u, response_length = 0u;
+    char invocation[EGRESS_MAX_INVOCATION_ID + 1u] = "run-1";
+    size_t principal = 0u;
+    unsigned char frame[5u + 11u + 2u] = {5u, 1u, 0u, 3u, 11u};
+    memcpy(frame + 5u, "example.com", 11u);
+    frame[16] = 1u; frame[17] = 0xbbu;
+    int phase = 2;
+    CHECK(egress_parse_socks_frame(frame, sizeof(frame), config, &phase,
+        &consumed, response, &response_length, &request, invocation,
+        &principal) == 2);
+    CHECK(strcmp(request.host, "example.com") == 0 && request.port == 443u);
+    egress_proxy_request_clear(&request);
+    memcpy(frame + 5u, "exam\0le.com", 11u);
+    phase = 2;
+    CHECK(egress_parse_socks_frame(frame, sizeof(frame), config, &phase,
+        &consumed, response, &response_length, &request, invocation,
+        &principal) == -1);
+    maelys_egress_config_destroy(config);
 }
 
 static void test_tls_client_hello_identity(void) {
@@ -1270,6 +1320,8 @@ int main(void) {
     test_http_parser_adversarial();
     test_execution_profile();
     test_tls_client_hello_identity();
+    test_tls_client_hello_embedded_nul();
+    test_socks_domain_embedded_nul();
     test_proxy_end_to_end();
     test_unix_listener();
     test_relay_backpressure_and_half_close();

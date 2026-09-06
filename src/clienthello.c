@@ -111,6 +111,9 @@ int egress_tls_client_hello_matches(
                     if (++dns_names != 1 || name_length > EGRESS_MAX_HOST) {
                         return fail(out_error, "multiple or oversized DNS server names");
                     }
+                    if (memchr(name, '\0', name_length)) {
+                        return fail(out_error, "server_name contains an embedded NUL");
+                    }
                     memcpy(candidate, name, name_length);
                     candidate[name_length] = '\0';
                     if (!egress_canonical_host(candidate, canonical) ||

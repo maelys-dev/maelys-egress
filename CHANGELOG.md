@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- A TLS `server_name` or a SOCKS5 domain name carrying an embedded NUL is
+  refused: the whole length-prefixed field is judged, no longer the prefix
+  before the first NUL. Closes A04 of the audit of 2026-09-06.
 - Harden request and destination parsing: reject every HTTP header containing
   unpaired CR/LF before forwarding; classify IPv6 from the current global
   unicast allocation with explicit IPv4-mapped and NAT64 handling; and make

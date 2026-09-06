@@ -100,6 +100,7 @@ int egress_parse_socks_frame(
         host_offset = 5u;
         if (host_length == 0u || host_length > EGRESS_MAX_HOST) return -1;
         if (length < host_offset + host_length + 2u) return 0;
+        if (memchr(bytes + host_offset, '\0', host_length)) return -1;
         memcpy(raw_host, bytes + host_offset, host_length);
         raw_host[host_length] = '\0';
     } else {
