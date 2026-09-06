@@ -20,8 +20,9 @@ tar -xzf maelys-egress-python-sdk-0.15.0.tar.gz
 python3 -m pip install ./maelys-egress-python-sdk-0.15.0
 ```
 
-The `maelys-egress` executable must also be installed or supplied with
-`binary="/absolute/path/maelys-egress"`.
+The SDK never searches the inherited `PATH`. It finds `maelys-egress` beside
+the Python interpreter or in a fixed system installation directory; otherwise,
+pass `binary="/absolute/path/maelys-egress"`.
 
 ## Complete lifecycle example
 
@@ -38,7 +39,7 @@ config = EgressConfig([
    quota_bytes=100 * 1024 * 1024,
    quota_total_bytes=1024 * 1024 * 1024)
 
-with EgressProcess(config, binary="maelys-egress") as egress:
+with EgressProcess(config) as egress:
     # The SDK operates Egress; curl is the proxy-aware application in this demo.
     client_environment = {
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),

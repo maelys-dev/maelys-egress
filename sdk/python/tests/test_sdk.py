@@ -56,6 +56,11 @@ class ProcessSdkTest(unittest.TestCase):
             Destination(
                 "127.0.0.1", 443, allow_private=True, require_tls_sni=True
             ).directive()
+        with self.assertRaisesRegex(ValueError, "absolute path"):
+            EgressProcess(
+                EgressConfig([Destination("127.0.0.1", 9, allow_private=True)]),
+                binary="maelys-egress",
+            )
         process = EgressProcess(
             EgressConfig([Destination("127.0.0.1", 9, allow_private=True)]),
             binary="/definitely/missing/maelys-egress",

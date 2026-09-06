@@ -204,7 +204,7 @@ second proxy protocol.
 from maelys_egress import Destination, EgressConfig, EgressProcess
 
 config = EgressConfig([Destination("github.com", 443, require_tls_sni=True)])
-with EgressProcess(config, binary="maelys-egress") as egress:
+with EgressProcess(config) as egress:
     print(egress.proxy_url)
     print(egress.health())
 ```

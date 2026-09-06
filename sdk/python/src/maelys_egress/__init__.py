@@ -11,6 +11,7 @@ import secrets
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -22,10 +23,32 @@ __all__ = ["Destination", "EgressConfig", "EgressProcess"]
 __version__ = "0.15.0"
 
 _LIFECYCLE_CONTRACT = "maelys-egress-lifecycle/1"
+_BINARY_NAME = "maelys-egress"
 
 
 def _url_host(host: str) -> str:
     return f"[{host}]" if ":" in host else host
+
+
+def _resolve_binary(binary: Optional[str]) -> str:
+    if binary is not None:
+        path = Path(binary)
+        if not path.is_absolute():
+            raise ValueError("binary must be an absolute path; PATH lookup is forbidden")
+        return str(path.resolve(strict=True))
+    candidates = (
+        Path(sys.executable).resolve().parent / _BINARY_NAME,
+        Path("/opt/homebrew/bin") / _BINARY_NAME,
+        Path("/usr/local/bin") / _BINARY_NAME,
+        Path("/usr/bin") / _BINARY_NAME,
+    )
+    for path in dict.fromkeys(candidates):
+        if path.is_file() and os.access(path, os.X_OK):
+            return str(path.resolve(strict=True))
+    raise FileNotFoundError(
+        "maelys-egress was not found in a trusted installation directory; "
+        "pass binary='/absolute/path/maelys-egress'"
+    )
 
 
 @dataclass(frozen=True)
@@ -126,12 +149,14 @@ class EgressProcess:
         self,
         config: EgressConfig,
         *,
-        binary: str = "maelys-egress",
+        binary: Optional[str] = None,
         startup_timeout: float = 10.0,
         stderr: object = None,
         on_event: Optional[Callable[[Mapping[str, object]], None]] = None,
     ) -> None:
         self.config = config
+        if binary is not None and not Path(binary).is_absolute():
+            raise ValueError("binary must be an absolute path; PATH lookup is forbidden")
         self.binary = binary
         self.startup_timeout = startup_timeout
         self.stderr = stderr
@@ -205,6 +230,7 @@ class EgressProcess:
     def start(self) -> "EgressProcess":
         if self.process is not None:
             raise RuntimeError("maelys-egress process already started")
+        binary = _resolve_binary(self.binary)
         self._events = queue.Queue()
         self._lifecycle_error = None
         self.directory = Path(tempfile.mkdtemp(prefix="maelys-egress-sdk-"))
@@ -216,7 +242,7 @@ class EgressProcess:
         self._write_private(config_path, self.config.render(token_path))
         try:
             self.process = subprocess.Popen(
-                [self.binary, "serve", "--config", str(config_path), "--non-interactive"],
+                [binary, "serve", "--config", str(config_path), "--non-interactive"],
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=self.stderr,

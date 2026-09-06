@@ -36,6 +36,7 @@ principals, a receipt callback, custom TLS provider or HSM attestor.
 - a fresh mode-0700 temporary directory;
 - mode-0600 token and configuration files;
 - no token in the Egress command-line arguments;
+- no executable lookup through the inherited `PATH`;
 - a bounded startup deadline and a 1 MiB bound per lifecycle JSON line;
 - continuous contract/version validation and draining of receipts/reload events;
 - loopback-only proxy and operations listeners;
