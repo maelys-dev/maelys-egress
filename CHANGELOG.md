@@ -1,7 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.16.0 — 2026-09-07
 
+- Pin Maelys System `v0.9.1` (`6663c83a5f6035055b72d3ad0067ac2ad306fc2e`),
+  ABI 1 unchanged: a peer's reset seen from the sending side is `ERR_RESET`
+  on macOS too, `accept` maps an aborted pending connection to
+  `ERR_WOULD_BLOCK` (the listener loop already retries on it), lock and
+  trusted opens carry `O_NOCTTY`.
+- Adopt maelys-release 0.15.3: the tap publication serializes and retries
+  its push, release assets go through a protected draft, a
+  `workflow_dispatch` replays the complete flow for an existing tag, and
+  the socle's checks run on Ubuntu 26.04. Managed texts unchanged.
 - The Python SDK bounds its lifecycle event retention: at most
   `max_pending_events` (default 1024) wait for `next_event()`, the oldest is
   dropped on overflow and `dropped_events` counts it; with `on_event` the

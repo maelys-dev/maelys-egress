@@ -137,6 +137,17 @@ reads its configuration and secrets through the maelys-cli trusted reader,
 which judges the descriptor it reads. No `open`, `fstat`, `lstat`, `flock`
 or `unlink` of Egress's own remains, and the boundary audit refuses them.
 
+## 0.16 — security audit closed
+
+Delivered: the consolidated audit of 2026-09-06 is recorded in the
+repository with its reproducible probes, and its register is closed: bare
+CR, DEL and request-line HTAB refused in HTTP, `/?query` origin-form,
+embedded NUL refused in the TLS `server_name` and the SOCKS5 domain, IPv6
+admitted only inside `2000::/3` with the deliberate refusal of `2001::/23`
+written down, the SDKs run a discovered binary only when nobody but root or
+the caller could replace it, the Python SDK reaches the administration
+listener without the proxy environment and bounds its event retention.
+
 TLS inspection, transparent interception and content inspection have no
 release number until their PKI and threat-model design is accepted
 adversarially. If accepted, inspection remains an explicit isolated capability,
