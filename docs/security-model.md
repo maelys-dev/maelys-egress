@@ -11,6 +11,17 @@
   than only the original DNS names.
 - Any non-global, loopback, link-local, private, documentation, multicast or
   unspecified address causes sealing to fail unless that destination opted in.
+- IPv6 is admitted only inside the current global unicast space `2000::/3`
+  and outside `2001::/23`, `2002::/16`, `3fff::/20` and `2001:db8::/32`;
+  IPv4-mapped and NAT64 (`64:ff9b::/96`) addresses are judged as the IPv4
+  they embed. The whole `2001::/23` protocol-assignment block is refused on
+  purpose, including the sub-allocations the IANA special-purpose registry
+  marks globally reachable (`2001:1::1` PCP anycast, `2001:1::2` TURN
+  anycast, `2001:3::/32` AMT, `2001:4:112::/48` AS112): these are network
+  infrastructure anycast services, not application destinations an agent
+  needs, and a policy that must reach one opts in per destination like for
+  any other refused address. No allocation is admitted automatically because
+  a registry entry changes.
 - Plaintext proxy listeners are loopback-only. A remote listener requires an
   explicitly configured TLS provider and proxy authentication.
 - Credentials are compared without data-dependent early exit, stripped from
