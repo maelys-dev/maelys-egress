@@ -171,4 +171,18 @@ if "$binary" serve --listen-unix "$socket" >/dev/null 2>&1; then
     exit 1
 fi
 
+# A secret file carrying an embedded NUL is refused, not silently truncated
+# to the prefix before that byte.
+nul_token=$root/token-with-nul
+python3 -c 'import sys; sys.stdout.buffer.write(b"A"*20 + b"\x00" + b"B"*19)' >"$nul_token"
+chmod 0600 "$nul_token"
+nul_config=$root/egress-nul.conf
+sed "s|token_file = $token|token_file = $nul_token|" "$config" >"$nul_config"
+chmod 0600 "$nul_config"
+if "$binary" config validate --config "$nul_config" --format json --compact \
+        >/dev/null 2>&1; then
+    echo "a token file with an embedded NUL was accepted" >&2
+    exit 1
+fi
+
 echo "CLI configuration checks passed"
