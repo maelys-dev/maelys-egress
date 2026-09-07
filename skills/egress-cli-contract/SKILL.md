@@ -7,7 +7,7 @@ description: Change Maelys Egress CLI commands, options, configuration keys, lif
 
 Treat the CLI as a protocol consumed simultaneously by humans, shell scripts,
 LLMs and the Python/Node process SDKs. It is built on the pinned
-`libmaelys_cli` framework (`adapter/MAELYS_CLI_PIN`): the envelope, error
+`libmaelys_cli` framework (`dependencies/maelys-cli.pin`): the envelope, error
 codes, exit statuses, `describe` shape and global options are the
 framework's and are not redefined here.
 
@@ -65,5 +65,5 @@ make check
 
 Commit the regenerated `docs/generated/` files with their catalog change. Do
 not patch them by hand. They come from a release-neutral build (version
-`0.0.0`), so a release bump never rewrites them. Advancing `adapter/MAELYS_CLI_PIN` is a product
+`0.0.0`), so a release bump never rewrites them. Advancing `dependencies/maelys-cli.pin` is a product
 decision recorded in the changelog, never a side effect of a command change.

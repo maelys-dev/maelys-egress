@@ -3,8 +3,8 @@
 
 # Rendered by maelys-release from this template: @VERSION@, @URL@ and
 # @SHA256@ are replaced with the released source archive of one tag. The
-# pinned maelys-cli below is copied from adapter/MAELYS_CLI_PIN of that tag
-# by scripts/render-homebrew-formula.sh.
+# pinned maelys-cli below is copied from dependencies/maelys-cli.pin of that
+# tag by scripts/render-homebrew-formula.sh.
 class MaelysEgress < Formula
   desc "Policy-enforced HTTP CONNECT and SOCKS5 network mediator in pure C"
   homepage "https://github.com/maelys-dev/maelys-egress"
@@ -23,8 +23,8 @@ class MaelysEgress < Formula
 
   def install
     # The Makefile verifies the installed Maelys System against the version
-    # recorded in adapter/MAELYS_SYSTEM_PIN and the maelys-cli checkout
-    # against adapter/MAELYS_CLI_PIN, then installs libmaelys_egress, its
+    # recorded in dependencies/maelys-system.pin and the maelys-cli checkout
+    # against dependencies/maelys-cli.pin, then installs libmaelys_egress, its
     # headers, the pkg-config file, the daemon, the documentation and the
     # manifest that registers `maelys egress`.
     ENV.deparallelize
