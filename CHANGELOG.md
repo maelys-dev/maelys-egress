@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.1 — 2026-09-07
 
 - Three checks borrowed from maelys-oci, whose build proves what this one
   asserted. `public-check` stages the real install, rewrites the prefix of
