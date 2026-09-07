@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The security model states the IPv6 admission rule and the deliberate
+  refusal of the whole `2001::/23` block, anycast services included, with
+  per-destination opt-in as the only exception; the classification tests
+  pin `2001:1::1`, `2001:1::2`, `2001:3::1` and `2001:4:112::1` as refused.
+  Closes A07 of the audit of 2026-09-06 as a policy decision.
 - The HTTP proxy parser refuses DEL anywhere in the header and HTAB in the
   request line, while HTAB inside a field value is still forwarded as
   received (RFC 9112 section 3, RFC 9110 section 5.5). An absolute URI with

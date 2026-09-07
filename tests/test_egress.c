@@ -358,7 +358,11 @@ static void test_address_classification(void) {
         "::", "::1", "::ffff:127.0.0.1", "64:ff9b:1::1", "100::1",
         "64:ff9b::127.0.0.1", "100:0:0:1::1", "2001:db8::1", "2002::1",
         "3fff::1", "4000::1", "5f00::1", "fc00::1", "fe80::1", "fec0::1",
-        "ff02::1"
+        "ff02::1",
+        /* Deliberate policy: the whole 2001::/23 protocol-assignment block is
+         * refused, including the anycast services the IANA registry marks
+         * globally reachable (PCP, TURN, AMT, AS112). See security-model.md. */
+        "2001:1::1", "2001:1::2", "2001:3::1", "2001:4:112::1", "2001:2::1"
     };
     for (size_t i = 0; i < sizeof(private_v6) / sizeof(private_v6[0]); ++i) {
         struct sockaddr_in6 address = {.sin6_family = AF_INET6};
