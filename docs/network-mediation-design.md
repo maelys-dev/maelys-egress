@@ -180,7 +180,7 @@ Seatbelt endpoint rule and its behavioural probe for the standard-proxy
 frontend.
 
 On Seatbelt, reachability is solved end-to-end for standard clients: Egress
-ships a loopback TCP listener (`src/server_listener.c`, `AF_INET`/`AF_INET6`), and the
+ships a loopback TCP listener (`src/server/listener.c`, `AF_INET`/`AF_INET6`), and the
 shared stack means the workload needs no relay and no new listener. The
 Executor's behavioural probe proves all three properties together: the
 selected numeric loopback endpoint is reachable, a neighbouring loopback port
@@ -226,7 +226,7 @@ host network namespace              sandbox network namespace
 
 **D2 — on bubblewrap, `--unshare-net` is kept and Egress gains an `AF_UNIX`
 listener.** This is the Egress half of standard-client reachability. Egress today
-listens only on TCP (`src/server_listener.c` uses `getaddrinfo` over
+listens only on TCP (`src/server/listener.c` uses `getaddrinfo` over
 `AF_INET`/`AF_INET6`; there is no `AF_UNIX` path), so this route does not exist
 yet. The work is a Egress **addition** — an `AF_UNIX` listener alongside the
 existing TCP one — plus an Executor-side component. With that listener in
@@ -473,7 +473,7 @@ CONNECT admitted            upstream connect succeeded
                                     RELAY
 ```
 
-What the parser in `src/clienthello.c` requires:
+What the parser in `src/core/clienthello.c` requires:
 
 - The first flight must be a handshake record (`0x16`) of a TLS major version,
   and the first handshake message must be a ClientHello. So the guard doubles
@@ -634,7 +634,7 @@ mode supplies a fourth, narrower posture: terminate ECH only, prove the inner
 name, and leave the rest of TLS opaque.
 
 The shipped guard therefore refuses any ClientHello carrying the ECH extension
-on guarded destinations (`src/clienthello.c`, extension `0xfe0d` and the older
+on guarded destinations (`src/core/clienthello.c`, extension `0xfe0d` and the older
 `0xffce`; [docs/security-model.md](security-model.md): "ECH is refused by
 guarded destinations because inner SNI cannot be observed").
 

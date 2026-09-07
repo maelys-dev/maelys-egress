@@ -48,11 +48,18 @@ override CFLAGS += -std=c11 -Wall -Wextra -Wpedantic -Werror -Wconversion \
 LDFLAGS += $(SANITIZE_FLAGS)
 LDLIBS += $(MAELYS_SYSTEM_LIB) -pthread
 
-SOURCES := src/common.c src/sha256.c src/receipt.c src/audit.c src/attestor.c src/policy.c src/config.c src/profile.c src/tls.c src/connector.c \
-	src/clienthello.c \
-	src/http.c src/socks.c \
-	src/server.c src/server_listener.c src/server_connection.c src/server_relay.c \
-	src/server_quota.c src/server_receipt.c src/server_connector.c src/server_admin.c
+# src/core holds the decisions taken on bytes alone: it never names
+# maelys_sys, a boundary scripts/audit-boundaries.sh enforces. src/server owns
+# the descriptors and the reactor. The three files between them touch the host
+# without being the server.
+CORE_SOURCES := src/core/common.c src/core/sha256.c src/core/receipt.c \
+	src/core/attestor.c src/core/policy.c src/core/profile.c src/core/tls.c \
+	src/core/clienthello.c src/core/http.c src/core/socks.c
+HOST_SOURCES := src/audit.c src/config.c src/connector.c
+SERVER_SOURCES := src/server/server.c src/server/listener.c \
+	src/server/connection.c src/server/relay.c src/server/quota.c \
+	src/server/receipt.c src/server/connector.c src/server/admin.c
+SOURCES := $(CORE_SOURCES) $(HOST_SOURCES) $(SERVER_SOURCES)
 OBJECTS := $(SOURCES:%.c=$(OBJ)/%.o)
 CLI_COMMON_SOURCES := cli/main.c cli/commands.c cli/config_catalog.c cli/config_file.c \
 	cli/secrets.c cli/serve.c cli/reload.c cli/output.c
@@ -91,7 +98,8 @@ EXAMPLE_BINS := $(EXAMPLE_NAMES:%=$(BIN)/example-%)
 	system-integration-check mutation-check \
 	cli-reference contract-check lifecycle-contract-check schema-check package-homebrew \
 	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-binaries \
-	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check dist
+	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check \
+	public-check reproducible-check dist
 
 all: $(STATIC_LIB) $(CLI) $(TEST) $(PC) $(MANIFEST)
 
@@ -101,8 +109,10 @@ check-system-contract:
 		{ echo "MAELYS_SYSTEM_DIR must name maelys-system" >&2; exit 1; }
 	@test "$$(git -C "$(MAELYS_SYSTEM_DIR)" rev-parse HEAD)" = "$(MAELYS_SYSTEM_PIN)" || \
 		{ echo "maelys-system must be pinned to $(MAELYS_SYSTEM_PIN)" >&2; exit 1; }
-	@git -C "$(MAELYS_SYSTEM_DIR)" diff --quiet "$(MAELYS_SYSTEM_PIN)" -- include src || \
-		{ echo "pinned maelys-system contract is modified" >&2; exit 1; }
+	@git -C "$(MAELYS_SYSTEM_DIR)" diff --quiet "$(MAELYS_SYSTEM_PIN)" -- || \
+		{ echo "pinned maelys-system checkout is modified" >&2; exit 1; }
+	@test -z "$$(git -C "$(MAELYS_SYSTEM_DIR)" ls-files --others --exclude-standard)" || \
+		{ echo "pinned maelys-system checkout carries untracked files" >&2; exit 1; }
 	@test "$$(cat "$(MAELYS_SYSTEM_DIR)/VERSION")" = "$(MAELYS_SYSTEM_VERSION)" || \
 		{ echo "pinned maelys-system must be version $(MAELYS_SYSTEM_VERSION)" >&2; exit 1; }
 	@grep -Fq '#define MAELYS_SYS_ABI_VERSION 1u' \
@@ -134,8 +144,10 @@ check-cli-contract:
 		{ echo "MAELYS_CLI_DIR must name maelys-cli" >&2; exit 1; }
 	@test "$$(git -C "$(MAELYS_CLI_DIR)" rev-parse HEAD)" = "$(MAELYS_CLI_PIN)" || \
 		{ echo "maelys-cli must be pinned to $(MAELYS_CLI_TAG) ($(MAELYS_CLI_PIN))" >&2; exit 1; }
-	@git -C "$(MAELYS_CLI_DIR)" diff --quiet "$(MAELYS_CLI_PIN)" -- include src tools || \
-		{ echo "pinned maelys-cli contract is modified" >&2; exit 1; }
+	@git -C "$(MAELYS_CLI_DIR)" diff --quiet "$(MAELYS_CLI_PIN)" -- || \
+		{ echo "pinned maelys-cli checkout is modified" >&2; exit 1; }
+	@test -z "$$(git -C "$(MAELYS_CLI_DIR)" ls-files --others --exclude-standard)" || \
+		{ echo "pinned maelys-cli checkout carries untracked files" >&2; exit 1; }
 	@grep -Fq '#define MAELYS_CLI_ABI 1' "$(MAELYS_CLI_DIR)/include/maelys/cli/version.h"
 	@grep -Fq '#define MAELYS_CLI_VERSION "$(MAELYS_CLI_TAG:v%=%)"' \
 		"$(MAELYS_CLI_DIR)/include/maelys/cli/version.h"
@@ -170,9 +182,13 @@ $(OBJ)/%.o: %.c
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
+# rm -f so the archive is exactly its objects rather than an accumulation
+# across builds, and ZERO_AR_DATE so the same objects always give the same
+# bytes; reproducible-check holds both to their word.
 $(STATIC_LIB): $(OBJECTS)
 	@mkdir -p $(@D)
-	ar rcs $@ $^
+	rm -f $@
+	ZERO_AR_DATE=1 $(AR) rcs $@ $^
 
 $(OBJ)/providers/tls_mbedtls.o: providers/tls_mbedtls.c
 	@mkdir -p $(@D)
@@ -356,7 +372,8 @@ system-integration-check: $(STATIC_LIB) $(MAELYS_SYSTEM_LIB)
 	done
 	@echo "maelys-system reactor and socket dependency is real"
 
-check: test examples-check sdk-check audit system-integration-check contract-check schema-check
+check: test examples-check sdk-check audit system-integration-check contract-check schema-check \
+	public-check reproducible-check
 	$(CXX) -Iinclude -std=c++17 -Wall -Wextra -Wpedantic -Werror \
 		tests/header_cpp.cpp -c -o $(BUILD)/header-cpp.o
 
@@ -378,8 +395,12 @@ tsan:
 	done
 	@echo "TSan lifecycle/policy-replacement repetition: 10/10 passed"
 
+# Text diagnostics keep the analyzer from writing one .plist per source into
+# the working directory; -analyzer-werror is what actually fails the gate, as
+# plain --analyze and even -Werror report findings and still exit 0.
 analyze: | $(MAELYS_SYSTEM_LIB)
-	$(CC) --analyze $(CPPFLAGS) -std=c11 -D_POSIX_C_SOURCE=200809L \
+	$(CC) --analyze -Xclang -analyzer-output=text -Xclang -analyzer-werror \
+		$(CPPFLAGS) -std=c11 -D_POSIX_C_SOURCE=200809L \
 		-D_XOPEN_SOURCE=700 $(SOURCES)
 
 $(BIN)/fuzz-http: fuzz/fuzz_http.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
@@ -476,6 +497,33 @@ install-tls-modules: tls-binaries
 		$(DESTDIR)$(PREFIX)/include/maelys/
 	install -m 0644 $(MBEDTLS_LIB) $(WOLFSSL_LIB) $(DESTDIR)$(PREFIX)/lib/
 	install -m 0755 $(MBEDTLS_CLI) $(WOLFSSL_CLI) $(DESTDIR)$(PREFIX)/bin/
+
+# An embedder builds against the installed headers and archive, found through
+# pkg-config alone. Staging the real install and linking a real consumer there
+# proves the published artifact stands on its own; the repository's own build
+# cannot supply what the install forgot, nor hide a dependency the library
+# must not carry.
+public-check: all
+	@set -e; stage="$$(mktemp -d)"; trap 'rm -rf "$$stage"' EXIT; \
+	$(MAKE) DESTDIR="$$stage" install >/dev/null; \
+	for pc in "$$stage$(PREFIX)"/lib/pkgconfig/*.pc; do \
+		sed "s|^prefix=.*|prefix=$$stage$(PREFIX)|" "$$pc" >"$$pc.staged"; \
+		mv "$$pc.staged" "$$pc"; \
+	done; \
+	flags="$$(PKG_CONFIG_PATH="$$stage$(PREFIX)/lib/pkgconfig" \
+		pkg-config --static --cflags --libs maelys-egress)"; \
+	$(CC) $(CFLAGS) tests/public/consumer.c $$flags $(LDFLAGS) \
+		-o "$$stage/consumer"; \
+	"$$stage/consumer"
+
+# The published archive must be a function of its objects alone, so that the
+# same sources give the same bytes to anyone who rebuilds them.
+reproducible-check: $(STATIC_LIB)
+	@mkdir -p $(BUILD)/reproducible
+	@rm -f $(BUILD)/reproducible/libmaelys_egress.a
+	ZERO_AR_DATE=1 $(AR) rcs $(BUILD)/reproducible/libmaelys_egress.a $(OBJECTS)
+	cmp $(STATIC_LIB) $(BUILD)/reproducible/libmaelys_egress.a
+	@echo "reproducible-check: identical archive from the same objects"
 
 install-check: all
 	@set -e; stage="$$(mktemp -d)"; trap 'rm -rf "$$stage"' EXIT; \

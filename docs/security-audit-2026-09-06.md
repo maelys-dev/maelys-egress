@@ -7,7 +7,9 @@
 > le checkout audité ont été publiés par la #30. La version 0.16.0 les
 > porte tous. Le corps ci-dessous n'est pas récrit : il reste le compte
 > rendu daté de l'état audité, et ses références de lignes valent pour le
-> checkout de l'époque, pas pour le code actuel.
+> checkout de l'époque, pas pour le code actuel. Seuls les liens ont été
+> repointés quand la bibliothèque a été découpée en couches, pour qu'ils
+> résolvent encore.
 >
 > Un défaut de la même classe qu'A04, hors des sources qu'il cite, a été
 > trouvé ensuite en généralisant son raisonnement à tous les champs à
@@ -112,9 +114,9 @@ Tester une configuration avec proxy actif et sans exemption loopback.
 
 ### A04 — NUL incorporé dans le SNI
 
-Sources : [parseur ClientHello](../src/clienthello.c), lignes 114–117 ;
-[egress_canonical_host](../src/common.c), lignes 44–46 ;
-[passage en relais](../src/server_connection.c), lignes 195–205.
+Sources : [parseur ClientHello](../src/core/clienthello.c), lignes 114–117 ;
+[egress_canonical_host](../src/core/common.c), lignes 44–46 ;
+[passage en relais](../src/server/connection.c), lignes 195–205.
 
 Le champ TLS a une longueur explicite. Après copie vers une chaîne C,
 `strlen()` arrête toutefois la validation au premier NUL. Un ClientHello
@@ -132,7 +134,7 @@ un nom différent et un suffixe après NUL.
 
 ### A05 — Caractères de contrôle HTTP encore transmis
 
-Source : [parseur HTTP](../src/http.c), lignes 235–247 et 256–263.
+Source : [parseur HTTP](../src/core/http.c), lignes 235–247 et 256–263.
 
 La validation autorise HTAB partout dans l'en-tête et ne refuse pas DEL
 (`0x7f`). Les cas suivants sont acceptés et conservés dans les octets transmis :
@@ -153,7 +155,7 @@ une attaque request smuggling complète n'est pas établie par ces deux tests.
 
 ### A06 — Query sans chemin
 
-Source : [parseur HTTP](../src/http.c), lignes 292–308 et 329–330.
+Source : [parseur HTTP](../src/core/http.c), lignes 292–308 et 329–330.
 
 `GET http://example.com?x=1 HTTP/1.1` est réécrit en
 `GET ?x=1 HTTP/1.1`, sans le `/` obligatoire pour un chemin vide en
@@ -166,7 +168,7 @@ une URI sans chemin ni query ainsi qu'une URI avec chemin.
 
 ### A07 — Exceptions globales IPv6 rejetées
 
-Source : [classification d'adresses](../src/common.c), ligne 135.
+Source : [classification d'adresses](../src/core/common.c), ligne 135.
 
 Le rejet global de `2001::/23` couvre aussi `2001:1::1`, `2001:3::1` et
 `2001:4:112::1` : le test renvoie `blocked=1` pour les trois. Leurs allocations

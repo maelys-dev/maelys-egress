@@ -15,25 +15,40 @@ documented cross-thread control operations. Stop maps to the loop's idempotent
 wakeup. Every connection slot carries a generation in its event token, so a
 stale readiness event cannot be attributed to a reused slot or descriptor.
 
-## Source map
+## Source layers
+
+The library is three layers, and the directory says which one a file is in.
+
+`src/core/` decides on bytes alone: parsers, policy, receipts, profiles,
+attestation, hashing and the TLS seam. It reaches no descriptor, no clock and
+no system call, which is why the three fuzz targets drive it directly and its
+tests need no reactor. `scripts/audit-boundaries.sh` refuses any mention of
+`maelys_sys` there, so the property cannot erode.
+
+`src/server/` owns the descriptors, the listeners and the reactor loop.
+`src/server/internal.h` is its private contract; nothing in it is public ABI.
+
+The three files between them touch the host without being the server: the
+durable audit journal, the standalone configuration reader and the native
+connector session.
 
 Each file owns one feature so that an audit can be scoped to one concern at
-a time. `src/server_internal.h` is the private contract between the server
-files; nothing in it is public ABI.
+a time.
 
 | Feature | Files |
 | --- | --- |
-| protocol parsers | `src/http.c`, `src/socks.c`, `src/clienthello.c` |
-| policy, configuration, principals | `src/policy.c`, `src/config.c`, `src/profile.c` |
-| server lifecycle and reactor loop | `src/server.c` |
-| listeners and private connector pair | `src/server_listener.c` |
-| admission, handshake, connect, close | `src/server_connection.c` |
-| relay data plane and TLS steps | `src/server_relay.c` |
-| byte quotas | `src/server_quota.c` |
-| receipts, canonical evidence, attestation, durable audit | `src/receipt.c`, `src/server_receipt.c`, `src/audit.c`, `src/attestor.c` |
-| native connector sessions | `src/connector.c`, `src/server_connector.c` |
-| health and metrics listener | `src/server_admin.c` |
-| TLS provider seam | `src/tls.c`, `providers/` |
+| protocol parsers | `src/core/http.c`, `src/core/socks.c`, `src/core/clienthello.c` |
+| policy and principals | `src/core/policy.c`, `src/core/profile.c` |
+| configuration reader | `src/config.c` |
+| server lifecycle and reactor loop | `src/server/server.c` |
+| listeners and private connector pair | `src/server/listener.c` |
+| admission, handshake, connect, close | `src/server/connection.c` |
+| relay data plane and TLS steps | `src/server/relay.c` |
+| byte quotas | `src/server/quota.c` |
+| receipts, canonical evidence, attestation, durable audit | `src/core/receipt.c`, `src/server/receipt.c`, `src/audit.c`, `src/core/attestor.c` |
+| native connector sessions | `src/connector.c`, `src/server/connector.c` |
+| health and metrics listener | `src/server/admin.c` |
+| TLS provider seam | `src/core/tls.c`, `providers/` |
 | CLI catalog and handlers (on `libmaelys_cli`) | `cli/main.c`, `cli/commands.c`, `cli/schemas/` |
 | CLI configuration keys, file and secrets | `cli/config_catalog.c`, `cli/config_file.c`, `cli/secrets.c` |
 | CLI serve, reload and lifecycle stream | `cli/serve.c`, `cli/reload.c`, `cli/output.c`, `cli/tls_listener.c` |
