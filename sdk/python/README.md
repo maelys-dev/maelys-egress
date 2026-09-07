@@ -77,7 +77,8 @@ with EgressProcess(config) as egress:
 `maelys-egress serve`, and waits for the structured `ready` lifecycle event.
 Its background reader continues draining receipts and reload events for the
 whole process lifetime. `proxy_url` includes the generated `maelys` credential and can be
-given to a compatible client. `health()` returns decoded `/healthz` JSON;
+given to a compatible client. `health()` returns decoded `/healthz` JSON over a direct loopback connection
+that ignores the proxy environment and follows no redirect;
 `metrics()` returns metric names mapped to numbers. `replace_destinations()`
 rewrites only the destination policy, sends `SIGHUP`, and returns after the
 generation advances. The context manager always calls `close()`.
