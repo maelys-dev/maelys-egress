@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Three checks borrowed from maelys-oci, whose build proves what this one
+  asserted. `public-check` stages the real install, rewrites the prefix of
+  every published pkg-config file, then compiles and runs a consumer that
+  sees the library only through those files. A dependency the library must
+  not carry, or an install that forgets a piece, now fails a link instead of
+  passing a grep. `reproducible-check` rebuilds the archive from the same
+  objects and compares the bytes, which required making the archive
+  deterministic: it is now removed before it is written, so it holds exactly
+  its objects, and `ZERO_AR_DATE` keeps timestamps out. The pinned
+  dependency checks widen from the contract directories to the whole
+  checkout and refuse untracked files, so a stray edit or leftover in a
+  dependency can no longer pass unnoticed.
 - The library is three layers named by directory. `src/core/` decides on
   bytes alone: parsers, policy, receipts, profiles, attestation, hashing and
   the TLS seam, reaching no descriptor, no clock and no system call. The
