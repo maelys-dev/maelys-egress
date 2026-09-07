@@ -28,7 +28,10 @@ int egress_cli_read_secret(const char *path, char secret[256]) {
     while (length > 0u && (bytes[length - 1u] == '\n' || bytes[length - 1u] == '\r')) {
         --length;
     }
-    int ok = length >= 16u;
+    /* The secret becomes a C string: an embedded NUL would silently reduce it
+     * to the prefix before that byte, so the file is refused instead, as the
+     * configuration file itself refuses embedded NULs. */
+    int ok = length >= 16u && memchr(bytes, 0, length) == NULL;
     if (ok) {
         memcpy(secret, bytes, length);
         secret[length] = '\0';

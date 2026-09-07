@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- A `token_file` carrying an embedded NUL is refused instead of yielding the
+  bytes before it. The file is read as a bounded byte buffer and then held
+  as a C string, so a NUL cut the credential silently: a token of 40 bytes
+  whose 21st byte was NUL authenticated on its first 20 bytes, and the
+  credential the operator provisioned did not. The minimum length was still
+  enforced on the truncated value, so a short prefix failed closed; the
+  defect reduced the entropy actually enforced. `audit_key_file` is read as
+  raw bytes with its length and was never affected. Found by applying A04's
+  reasoning of the audit of 2026-09-06 to the length-prefixed fields its
+  sources did not cover.
 - Pin maelys-cli `v0.5.19` (`6868bd13cfdccc0cdf59f40174f2bdc76f57bd04`),
   agent-cli/v2 at v2.3.1: the trunk options `--progress`, `--verbose` and
   `--pager` exist on every command and in `globalOptions`, text records in

@@ -1,5 +1,20 @@
 # Audit consolidé — 6 septembre 2026
 
+> **Clôture au 7 septembre 2026.** Les sept points ouverts de ce document
+> sont corrigés et fusionnés : A04 par la PR #31, A05 et A06 par la #36,
+> A07 tranché comme décision de politique par la #37, A01 par la #33, A03
+> par la #34, A02 par la #35. Les correctifs C01 à C03 déjà présents dans
+> le checkout audité ont été publiés par la #30. La version 0.16.0 les
+> porte tous. Le corps ci-dessous n'est pas récrit : il reste le compte
+> rendu daté de l'état audité, et ses références de lignes valent pour le
+> checkout de l'époque, pas pour le code actuel.
+>
+> Un défaut de la même classe qu'A04, hors des sources qu'il cite, a été
+> trouvé ensuite en généralisant son raisonnement à tous les champs à
+> longueur explicite convertis en chaîne C : un `token_file` contenant un
+> NUL était tronqué en silence aux octets précédents. Voir le journal des
+> modifications.
+
 ## Périmètre et statut
 
 Cette synthèse regroupe les audits successifs, sans nouvelle correction du

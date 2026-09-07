@@ -59,7 +59,10 @@ it is not exposed as a standalone unauthenticated-listener switch.
 
 The token file remains separate, owner-only mode 0600 and at least 16 bytes.
 This makes the main configuration safe to distribute without embedding its
-credential.
+credential. Trailing newlines are stripped; an embedded NUL is refused rather
+than truncating the credential to the bytes before it, the rule the
+configuration file itself already follows. `audit_key_file` is read as raw
+bytes with its length and is never held as a string, so it carries any byte.
 
 `quota_connections` limits concurrent admitted streams for the `maelys`
 principal configured by the standalone CLI. `quota_bytes` limits the sum of
