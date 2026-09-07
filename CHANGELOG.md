@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The Python SDK reaches the administration listener over a dedicated
+  loopback connection: the proxy environment (`HTTP_PROXY` and variants) is
+  never consulted and a redirect is an error, so `health()`, `metrics()`
+  and the reload follow-up only ever read the process the SDK started.
+  Closes A03 of the audit of 2026-09-06.
 - The Python and Node.js SDKs run an automatically discovered binary only
   when nobody but root or the caller could have replaced it: the file, its
   resolution and every directory on both paths are owned by root or the

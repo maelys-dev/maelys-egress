@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from http.client import HTTPConnection
 import json
 import os
 from pathlib import Path
@@ -18,7 +19,6 @@ import threading
 import time
 from typing import Callable, Iterable, Mapping, Optional
 from urllib.parse import quote
-from urllib.request import urlopen
 
 __all__ = ["Destination", "EgressConfig", "EgressProcess", "binary_trust_refusal"]
 __version__ = "0.15.0"
@@ -339,11 +339,25 @@ class EgressProcess:
         )
 
     def _admin_get(self, path: str) -> bytes:
+        """One direct request to the loopback administration listener.
+
+        A dedicated connection, never the proxy environment (``HTTP_PROXY``
+        and its variants), and no redirect is followed: the reply comes from
+        the process this object started or is an error.
+        """
         if not self.admin_port:
             raise RuntimeError("maelys-egress process is not ready")
-        host = _url_host(self.config.admin_host)
-        with urlopen(f"http://{host}:{self.admin_port}{path}", timeout=2.0) as reply:
+        connection = HTTPConnection(self.config.admin_host, self.admin_port, timeout=2.0)
+        try:
+            connection.request("GET", path, headers={"Connection": "close"})
+            reply = connection.getresponse()
+            if reply.status != 200:
+                raise RuntimeError(
+                    f"maelys-egress administration replied {reply.status} to {path}"
+                )
             return reply.read(1 << 20)
+        finally:
+            connection.close()
 
     def health(self) -> Mapping[str, object]:
         return json.loads(self._admin_get("/healthz"))

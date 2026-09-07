@@ -1,6 +1,9 @@
 import os
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import json
 from pathlib import Path
 import stat
+import threading
 import sys
 import tempfile
 import unittest
@@ -113,6 +116,54 @@ class ProcessSdkTest(unittest.TestCase):
                 self.assertIn("writable by everyone", binary_trust_refusal(binary))
                 binary.chmod(0o755)
                 bin_dir.chmod(0o755)
+    def test_administration_ignores_the_proxy_environment(self) -> None:
+        class Handler(BaseHTTPRequestHandler):
+            body = b""
+            status = 200
+
+            def do_GET(self) -> None:  # noqa: N802 - http.server contract
+                self.send_response(self.status)
+                self.send_header("Content-Type", "application/json")
+                if self.status != 200:
+                    self.send_header("Location", "http://127.0.0.1:9/healthz")
+                self.end_headers()
+                self.wfile.write(self.body)
+
+            def log_message(self, *args: object) -> None:
+                del args
+
+        class Proxy(Handler):
+            body = json.dumps({"status": "forged-by-proxy"}).encode()
+
+        class Admin(Handler):
+            body = json.dumps({"status": "ok", "policy_generation": 1}).encode()
+
+        servers = [HTTPServer(("127.0.0.1", 0), Proxy), HTTPServer(("127.0.0.1", 0), Admin)]
+        threads = [threading.Thread(target=s.serve_forever, daemon=True) for s in servers]
+        for thread in threads:
+            thread.start()
+        proxy_url = f"http://127.0.0.1:{servers[0].server_port}"
+        environment = {
+            "HTTP_PROXY": proxy_url, "http_proxy": proxy_url,
+            "ALL_PROXY": proxy_url, "all_proxy": proxy_url,
+        }
+        try:
+            process = EgressProcess(
+                EgressConfig([Destination("127.0.0.1", 9, allow_private=True)])
+            )
+            process.admin_port = servers[1].server_port
+            with mock.patch.dict(os.environ, environment):
+                for name in ("NO_PROXY", "no_proxy"):
+                    os.environ.pop(name, None)
+                self.assertEqual(process.health()["status"], "ok")
+                # A redirect is an error, never followed.
+                Admin.status = 302
+                with self.assertRaisesRegex(RuntimeError, "replied 302"):
+                    process.health()
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
 
 
 if __name__ == "__main__":
