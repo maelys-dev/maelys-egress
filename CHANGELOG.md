@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.0 — 2026-09-07
 
 - A `token_file` carrying an embedded NUL is refused instead of yielding the
   bytes before it. The file is read as a bounded byte buffer and then held
