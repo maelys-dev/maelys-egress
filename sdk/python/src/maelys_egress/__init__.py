@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import collections
 from dataclasses import dataclass
 from http.client import HTTPConnection
 import json
@@ -207,7 +208,17 @@ class EgressProcess:
         startup_timeout: float = 10.0,
         stderr: object = None,
         on_event: Optional[Callable[[Mapping[str, object]], None]] = None,
+        max_pending_events: int = 1024,
     ) -> None:
+        """Operate one ``maelys-egress serve`` process.
+
+        Lifecycle events (``ready``, receipts, reloads) are read from the
+        daemon's stdout on a background thread, which is never blocked by a
+        consumer. With ``on_event``, the callback is the consumer and nothing
+        is retained. Without it, at most ``max_pending_events`` events wait
+        for ``next_event()``; when a new event arrives on a full queue the
+        oldest waiting event is dropped and ``dropped_events`` counts it.
+        """
         self.config = config
         if binary is not None and not Path(binary).is_absolute():
             raise ValueError("binary must be an absolute path; PATH lookup is forbidden")
@@ -215,6 +226,10 @@ class EgressProcess:
         self.startup_timeout = startup_timeout
         self.stderr = stderr
         self.on_event = on_event
+        if not isinstance(max_pending_events, int) or max_pending_events < 1:
+            raise ValueError("max_pending_events must be a positive integer")
+        self.max_pending_events = max_pending_events
+        self.dropped_events = 0
         self.process: Optional[subprocess.Popen[bytes]] = None
         self.directory: Optional[Path] = None
         self.secret: Optional[str] = None
@@ -222,7 +237,10 @@ class EgressProcess:
         self.admin_port = 0
         self.policy_digest = ""
         self.listen_identity = ""
-        self._events: queue.Queue[Mapping[str, object]] = queue.Queue()
+        self._events: collections.deque[Mapping[str, object]] = collections.deque(
+            maxlen=max_pending_events
+        )
+        self._events_available = threading.Condition()
         self._ready_signal = threading.Event()
         self._lifecycle_error: Optional[BaseException] = None
         self._stdout_thread: Optional[threading.Thread] = None
@@ -244,7 +262,7 @@ class EgressProcess:
                         event.get("contract") != _LIFECYCLE_CONTRACT or \
                         not isinstance(event.get("event"), str):
                     raise RuntimeError("invalid maelys-egress lifecycle event")
-                self._events.put(event)
+                self._retain(event)
                 if event["event"] == "ready":
                     proxy = event.get("proxy")
                     admin = event.get("admin")
@@ -277,15 +295,40 @@ class EgressProcess:
             self._lifecycle_error = error
             self._ready_signal.set()
 
+    def _retain(self, event: Mapping[str, object]) -> None:
+        if self.on_event is not None:
+            return
+        with self._events_available:
+            if len(self._events) == self.max_pending_events:
+                self.dropped_events += 1
+            self._events.append(event)
+            self._events_available.notify()
+
+    @property
+    def pending_events(self) -> int:
+        """Events retained for ``next_event()``; always 0 with ``on_event``."""
+        return len(self._events)
+
     def next_event(self, timeout: Optional[float] = None) -> Mapping[str, object]:
-        """Return the next validated lifecycle event, including receipts."""
-        return self._events.get(timeout=timeout)
+        """Return the oldest retained lifecycle event, including receipts.
+
+        Raises ``queue.Empty`` when none arrives before ``timeout`` and
+        ``RuntimeError`` when ``on_event`` consumes the events instead.
+        """
+        if self.on_event is not None:
+            raise RuntimeError("on_event consumes the lifecycle events; nothing is retained")
+        with self._events_available:
+            if not self._events_available.wait_for(lambda: bool(self._events), timeout):
+                raise queue.Empty
+            return self._events.popleft()
 
     def start(self) -> "EgressProcess":
         if self.process is not None:
             raise RuntimeError("maelys-egress process already started")
         binary = _resolve_binary(self.binary)
-        self._events = queue.Queue()
+        with self._events_available:
+            self._events.clear()
+        self.dropped_events = 0
         self._lifecycle_error = None
         self.directory = Path(tempfile.mkdtemp(prefix="maelys-egress-sdk-"))
         os.chmod(self.directory, 0o700)

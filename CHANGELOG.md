@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The Python SDK bounds its lifecycle event retention: at most
+  `max_pending_events` (default 1024) wait for `next_event()`, the oldest is
+  dropped on overflow and `dropped_events` counts it; with `on_event` the
+  callback is the consumer and nothing is retained. The stdout reader is
+  never blocked. Closes A02 of the audit of 2026-09-06.
 - The Python SDK reaches the administration listener over a dedicated
   loopback connection: the proxy environment (`HTTP_PROXY` and variants) is
   never consulted and a redirect is an error, so `health()`, `metrics()`
