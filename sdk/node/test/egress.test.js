@@ -91,6 +91,9 @@ test("a replaceable binary is refused by the trust rule", () => {
     // entries: trusted.
     chmodSync(binDir, 0o1777);
     assert.equal(binaryTrustRefusal(binary), null);
+    // A sticky file gets no exemption.
+    chmodSync(binary, 0o1777);
+    assert.match(binaryTrustRefusal(binary), /writable by everyone/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

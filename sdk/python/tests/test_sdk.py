@@ -108,6 +108,10 @@ class ProcessSdkTest(unittest.TestCase):
                 # their own entries: trusted.
                 bin_dir.chmod(0o1777)
                 self.assertIsNone(binary_trust_refusal(binary))
+                # A sticky file gets no exemption.
+                binary.chmod(0o1777)
+                self.assertIn("writable by everyone", binary_trust_refusal(binary))
+                binary.chmod(0o755)
                 bin_dir.chmod(0o755)
 
 

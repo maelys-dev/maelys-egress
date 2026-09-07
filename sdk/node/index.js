@@ -14,16 +14,17 @@ const BINARY_NAME = "maelys-egress";
 
 // Why PATH (a file or directory) may be replaced by someone other than root
 // or the caller, or null when it may not. Trusted: owned by root or by the
-// caller; never world-writable, except a sticky directory, whose entries
-// only their owner may replace; group-writable only when the caller owns
-// it, since the owner chose that group.
+// caller; never world-writable; group-writable only when the caller owns
+// it, since the owner chose that group. A sticky directory is exempt from
+// both write checks: only an entry's owner may replace it there, which the
+// entry's own check covers.
 function trustRefusal(path, euid) {
   const status = statSync(path);
   if (status.uid !== 0 && status.uid !== euid) {
     return `${path} is owned by uid ${status.uid}, neither root nor the caller`;
   }
-  const sticky = status.isDirectory() && (status.mode & 0o1000) !== 0;
-  if ((status.mode & 0o002) !== 0 && !sticky) {
+  if (status.isDirectory() && (status.mode & 0o1000) !== 0) return null;
+  if ((status.mode & 0o002) !== 0) {
     return `${path} is writable by everyone`;
   }
   if ((status.mode & 0o020) !== 0 && status.uid !== euid) {

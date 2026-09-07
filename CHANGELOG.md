@@ -5,8 +5,8 @@
 - The Python and Node.js SDKs run an automatically discovered binary only
   when nobody but root or the caller could have replaced it: the file, its
   resolution and every directory on both paths are owned by root or the
-  caller, never writable by everyone (sticky directories excepted), and
-  group-writable only under the caller's ownership. A refused candidate is
+  caller, never writable by everyone, and group-writable only under the
+  caller's ownership; sticky directories are exempt from the write checks. A refused candidate is
   skipped and named in the final error; a privileged process no longer picks
   a binary from a user-owned Homebrew prefix. `binary_trust_refusal()` /
   `binaryTrustRefusal()` expose the rule for explicit paths, which stay

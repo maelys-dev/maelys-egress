@@ -35,16 +35,17 @@ def _trust_refusal(path: Path, euid: int) -> Optional[str]:
     """Why PATH (a file or directory) may be replaced by someone other than
     root or the caller, or None when it may not.
 
-    Trusted: owned by root or by the caller; never world-writable, except a
-    sticky directory, whose entries only their owner may replace; group-
-    writable only when the caller owns it, since the owner chose that group.
+    Trusted: owned by root or by the caller; never world-writable;
+    group-writable only when the caller owns it, since the owner chose that
+    group. A sticky directory is exempt from both write checks: only an
+    entry's owner may replace it there, which the entry's own check covers.
     """
     status = path.stat()
     if status.st_uid not in (0, euid):
         return f"{path} is owned by uid {status.st_uid}, neither root nor the caller"
-    if status.st_mode & stat.S_IWOTH and not (
-        stat.S_ISDIR(status.st_mode) and status.st_mode & stat.S_ISVTX
-    ):
+    if stat.S_ISDIR(status.st_mode) and status.st_mode & stat.S_ISVTX:
+        return None
+    if status.st_mode & stat.S_IWOTH:
         return f"{path} is writable by everyone"
     if status.st_mode & stat.S_IWGRP and status.st_uid != euid:
         return f"{path} is writable by its group and not owned by the caller"
