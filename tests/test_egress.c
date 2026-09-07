@@ -442,6 +442,54 @@ static void test_http_parser_adversarial(void) {
         sizeof(bare_cr) - 1u, config, &request, &error) == -1);
     CHECK(error && strstr(error, "CRLF"));
     maelys_egress_error_free(error); error = NULL;
+    static const char tab_in_target[] =
+        "GET http://example.com/a\tb HTTP/1.1\r\nHost: example.com\r\n"
+        "Proxy-Authorization: Bearer 0123456789abcdef\r\n\r\n";
+    CHECK(egress_parse_http_request((const unsigned char *)tab_in_target,
+        sizeof(tab_in_target) - 1u, config, &request, &error) == -1);
+    CHECK(error && strstr(error, "tab"));
+    maelys_egress_error_free(error); error = NULL;
+    static const char del_in_value[] =
+        "GET http://example.com/x HTTP/1.1\r\nHost: example.com\r\n"
+        "Proxy-Authorization: Bearer 0123456789abcdef\r\n"
+        "X-Note: a\x7f" "b\r\n\r\n";
+    CHECK(egress_parse_http_request((const unsigned char *)del_in_value,
+        sizeof(del_in_value) - 1u, config, &request, &error) == -1);
+    CHECK(error && strstr(error, "control byte"));
+    maelys_egress_error_free(error); error = NULL;
+    static const char tab_in_value[] =
+        "GET http://example.com/x HTTP/1.1\r\nHost: example.com\r\n"
+        "Proxy-Authorization: Bearer 0123456789abcdef\r\n"
+        "X-Note: a\tb\r\n\r\n";
+    CHECK(egress_parse_http_request((const unsigned char *)tab_in_value,
+        sizeof(tab_in_value) - 1u, config, &request, &error) == 1);
+    CHECK(request.forward_bytes &&
+          strstr((char *)request.forward_bytes, "X-Note: a\tb\r\n") != NULL);
+    egress_proxy_request_clear(&request);
+    static const char query_only[] =
+        "GET http://example.com?x=1 HTTP/1.1\r\nHost: example.com\r\n"
+        "Proxy-Authorization: Bearer 0123456789abcdef\r\n\r\n";
+    CHECK(egress_parse_http_request((const unsigned char *)query_only,
+        sizeof(query_only) - 1u, config, &request, &error) == 1);
+    CHECK(request.forward_bytes &&
+          strncmp((char *)request.forward_bytes, "GET /?x=1 HTTP/1.1\r\n", 20u) == 0);
+    egress_proxy_request_clear(&request);
+    static const char no_path[] =
+        "GET http://example.com HTTP/1.1\r\nHost: example.com\r\n"
+        "Proxy-Authorization: Bearer 0123456789abcdef\r\n\r\n";
+    CHECK(egress_parse_http_request((const unsigned char *)no_path,
+        sizeof(no_path) - 1u, config, &request, &error) == 1);
+    CHECK(request.forward_bytes &&
+          strncmp((char *)request.forward_bytes, "GET / HTTP/1.1\r\n", 16u) == 0);
+    egress_proxy_request_clear(&request);
+    static const char path_and_query[] =
+        "GET http://example.com/p?x=1 HTTP/1.1\r\nHost: example.com\r\n"
+        "Proxy-Authorization: Bearer 0123456789abcdef\r\n\r\n";
+    CHECK(egress_parse_http_request((const unsigned char *)path_and_query,
+        sizeof(path_and_query) - 1u, config, &request, &error) == 1);
+    CHECK(request.forward_bytes &&
+          strncmp((char *)request.forward_bytes, "GET /p?x=1 HTTP/1.1\r\n", 21u) == 0);
+    egress_proxy_request_clear(&request);
     static const char wrong_secret[] =
         "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n"
         "Proxy-Authorization: Bearer 0000000000000000\r\n\r\n";

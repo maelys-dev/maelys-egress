@@ -232,11 +232,20 @@ int egress_parse_http_request(
         return 0;
     }
     size_t header_length = (size_t)(header_end - bytes) + 4u;
+    /* The request line admits no whitespace but SP (RFC 9112 section 3);
+     * field values admit HTAB but never DEL (RFC 9110 section 5.5). */
+    int request_line = 1;
     for (size_t i = 0; i < header_length; ++i) {
-        if (bytes[i] == 0u || (bytes[i] < 0x20u && bytes[i] != '\r' && bytes[i] != '\n' && bytes[i] != '\t')) {
+        if (bytes[i] == 0u || bytes[i] == 0x7fu ||
+            (bytes[i] < 0x20u && bytes[i] != '\r' && bytes[i] != '\n' && bytes[i] != '\t')) {
             egress_set_error(out_error, "HTTP proxy header contains a control byte");
             return -1;
         }
+        if (bytes[i] == '\t' && request_line) {
+            egress_set_error(out_error, "HTTP proxy request line contains a tab");
+            return -1;
+        }
+        if (bytes[i] == '\n') request_line = 0;
         if (bytes[i] == '\n' && (i == 0u || bytes[i - 1u] != '\r')) {
             egress_set_error(out_error, "HTTP proxy requires CRLF framing");
             return -1;
@@ -326,8 +335,9 @@ int egress_parse_http_request(
         /* One extra byte is reserved for diagnostics/tests; wire length stays explicit. */
         rewritten = malloc(rewritten_capacity + 1u);
         if (!rewritten) { free(header); return -1; }
-        int prefix = snprintf((char *)rewritten, rewritten_capacity, "%s %s HTTP/1.1\r\n",
-                              method, origin_target);
+        /* origin-form: an empty path before a query is written "/" (RFC 9112 3.2.1). */
+        int prefix = snprintf((char *)rewritten, rewritten_capacity, "%s %s%s HTTP/1.1\r\n",
+                              method, origin_target[0] == '?' ? "/" : "", origin_target);
         if (prefix < 0 || (size_t)prefix >= rewritten_capacity) {
             free(rewritten); free(header); return -1;
         }

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The HTTP proxy parser refuses DEL anywhere in the header and HTAB in the
+  request line, while HTAB inside a field value is still forwarded as
+  received (RFC 9112 section 3, RFC 9110 section 5.5). An absolute URI with
+  a query but no path is rewritten to origin-form as `/?query`, no longer
+  `?query` (RFC 9112 section 3.2.1). Closes A05 and A06 of the audit of
+  2026-09-06.
 - A TLS `server_name` or a SOCKS5 domain name carrying an embedded NUL is
   refused: the whole length-prefixed field is judged, no longer the prefix
   before the first NUL. Closes A04 of the audit of 2026-09-06.
