@@ -47,18 +47,18 @@ PY
     fi
 }
 
-run_mutant sni-host-mismatch src/clienthello.c \
+run_mutant sni-host-mismatch src/core/clienthello.c \
     'strcmp(canonical, expected_host) != 0' \
     'strcmp(canonical, expected_host) == 0' &
-run_mutant authority-mismatch src/http.c \
+run_mutant authority-mismatch src/core/http.c \
     'strcmp(header_host, out_request->host) != 0' \
     'strcmp(header_host, out_request->host) == 0' &
-run_mutant credential-compare src/common.c \
+run_mutant credential-compare src/core/common.c \
     'return difference == 0u;' 'return difference != 0u;' &
-run_mutant destination-port src/policy.c \
+run_mutant destination-port src/core/policy.c \
     'comparison == 0 && port == destination->port' \
     'comparison == 0 && port != destination->port' &
-run_mutant relay-half-close src/server_relay.c \
+run_mutant relay-half-close src/server/relay.c \
     'maelys_sys_socket_shutdown(connection->upstream_socket, SHUT_WR)' \
     'maelys_sys_socket_shutdown(connection->upstream_socket, SHUT_RD)' &
 wait

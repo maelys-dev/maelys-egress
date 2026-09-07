@@ -48,11 +48,18 @@ override CFLAGS += -std=c11 -Wall -Wextra -Wpedantic -Werror -Wconversion \
 LDFLAGS += $(SANITIZE_FLAGS)
 LDLIBS += $(MAELYS_SYSTEM_LIB) -pthread
 
-SOURCES := src/common.c src/sha256.c src/receipt.c src/audit.c src/attestor.c src/policy.c src/config.c src/profile.c src/tls.c src/connector.c \
-	src/clienthello.c \
-	src/http.c src/socks.c \
-	src/server.c src/server_listener.c src/server_connection.c src/server_relay.c \
-	src/server_quota.c src/server_receipt.c src/server_connector.c src/server_admin.c
+# src/core holds the decisions taken on bytes alone: it never names
+# maelys_sys, a boundary scripts/audit-boundaries.sh enforces. src/server owns
+# the descriptors and the reactor. The three files between them touch the host
+# without being the server.
+CORE_SOURCES := src/core/common.c src/core/sha256.c src/core/receipt.c \
+	src/core/attestor.c src/core/policy.c src/core/profile.c src/core/tls.c \
+	src/core/clienthello.c src/core/http.c src/core/socks.c
+HOST_SOURCES := src/audit.c src/config.c src/connector.c
+SERVER_SOURCES := src/server/server.c src/server/listener.c \
+	src/server/connection.c src/server/relay.c src/server/quota.c \
+	src/server/receipt.c src/server/connector.c src/server/admin.c
+SOURCES := $(CORE_SOURCES) $(HOST_SOURCES) $(SERVER_SOURCES)
 OBJECTS := $(SOURCES:%.c=$(OBJ)/%.o)
 CLI_COMMON_SOURCES := cli/main.c cli/commands.c cli/config_catalog.c cli/config_file.c \
 	cli/secrets.c cli/serve.c cli/reload.c cli/output.c

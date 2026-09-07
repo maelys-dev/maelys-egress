@@ -32,6 +32,15 @@ if grep_tree '(^|[^A-Za-z0-9_])(close|pipe|socketpair)[[:space:]]*\(' src; then
     exit 1
 fi
 
+# src/core decides on bytes alone: parsers, policy, receipts, profiles,
+# attestation, hashing and the TLS seam. It reaches no descriptor, no clock and
+# no system call, so it fuzzes and tests without a reactor. The property holds
+# today; this rule keeps it.
+if grep_tree '(^|[^A-Za-z0-9_])maelys_sys' src/core; then
+    echo "src/core decides on bytes alone and must not name maelys_sys" >&2
+    exit 1
+fi
+
 # File identity, advisory locks and identity-checked removal come from
 # maelys-system's file primitives, never from lstat, flock or unlink here.
 if grep_tree '(^|[^A-Za-z0-9_])(lstat|flock|unlink)[[:space:]]*\(' src; then

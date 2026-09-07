@@ -5,7 +5,7 @@
 #define _DARWIN_C_SOURCE
 #endif
 
-#include "src/server_internal.h"
+#include "src/server/internal.h"
 
 #include <stdint.h>
 

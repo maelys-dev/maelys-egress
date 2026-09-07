@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- The library is three layers named by directory. `src/core/` decides on
+  bytes alone: parsers, policy, receipts, profiles, attestation, hashing and
+  the TLS seam, reaching no descriptor, no clock and no system call. The
+  boundary audit refuses any mention of `maelys_sys` there, making permanent
+  a property the sources already had. `src/server/` owns the descriptors and
+  the reactor behind its own `internal.h`, so membership of that module is
+  structural instead of a filename prefix. The durable audit journal, the
+  configuration reader and the native connector session stay between them.
+  No code changed, only where it lives.
+- The static analyzer gate actually fails on a finding. Plain `--analyze`
+  reports and exits 0, and `-Werror` does not change that, so the gate was
+  passing whatever the analyzer found; `-analyzer-werror` is what fails it.
+  Text diagnostics replace the one `.plist` per source that the analyzer was
+  writing into the working directory, so the ignore rule for those files and
+  its exception both go away.
+
 ## 0.17.0 — 2026-09-07
 
 - A `token_file` carrying an embedded NUL is refused instead of yielding the
