@@ -28,6 +28,7 @@ jobs:
       product: maelys-egress
       tag: ${{ inputs.tag || github.ref_name }}
       dependency_checkout: |
+        sh scripts/checkout-dependency.sh agent-cli-spec
         sh scripts/checkout-dependency.sh maelys-cli
         sh scripts/checkout-dependency.sh maelys-system
 

@@ -91,12 +91,19 @@ port will still be free later.
   shared by `serve`, `config validate` and SIGHUP reload;
 - `cli/schemas/*.json` define `data` of every finite command and are
   embedded at build time by `maelys-cli-embed`;
-- `protocol/agent-cli-v2.schema.json` defines the finite envelope and
-  `protocol/egress-lifecycle-v1.schema.json` the daemon events;
+- `protocol/egress-lifecycle-v1.schema.json` defines the daemon events, the
+  one wire contract this product owns; the envelope around a command's data
+  belongs to agent-cli/v2 and is not restated here;
 - `docs/generated/cli-reference.md`, `docs/generated/cli-contract.json` and
   `docs/generated/config-reference.md` are generated from `describe` of a
   release-neutral build (version `0.0.0`) by `make cli-reference`;
   `make contract-check`, part of `make check`, rejects a stale copy;
-- `make schema-check`, also part of `make check`, validates the envelopes,
-  `data` objects and a complete lifecycle run of the built binary against
-  those schemas.
+- `make schema-check`, also part of `make check`, validates the `data`
+  objects and a complete lifecycle run of the built binary against those
+  schemas, and refuses a schema whose keywords its validator does not
+  implement rather than leaving an assertion unverified;
+- `make conformance-check`, also part of `make check`, runs the conformance
+  kit of the pinned `agent-cli-spec` on the built binary. It drives the
+  command from the outside with read-only invocations and checks the
+  envelope, the exit codes, the stream each answer uses and every declared
+  output schema.

@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Validate what the binary actually emits against the committed schemas.
+"""Validate what the binary actually emits against the schemas this product owns.
 
-Finite envelopes are checked against protocol/agent-cli-v2.schema.json and
-their `data` against cli/schemas/*.json; every line of a real `serve` run
-(ready, receipt, reload, rejected reload, stopping, stopped) is checked
-against protocol/egress-lifecycle-v1.schema.json. No third-party package:
-the validator below covers the JSON Schema subset these files use.
+The `data` of each finite command is checked against cli/schemas/*.json, and
+every line of a real `serve` run (ready, receipt, reload, rejected reload,
+stopping, stopped) against protocol/egress-lifecycle-v1.schema.json. The
+envelope around the data belongs to agent-cli/v2 and is checked by the
+specification's own conformance kit, which `make conformance-check` runs on
+this binary; it is not restated here.
+
+No third-party package: the validator below covers a subset of JSON Schema,
+and refuses any schema using a keyword outside that subset rather than
+passing an unverified assertion in silence.
 """
 
 from __future__ import annotations
@@ -86,8 +91,42 @@ def validate(value: object, schema: dict, path: str = "$") -> list[str]:
     return errors
 
 
+# Everything `validate` below implements, plus the annotations it may ignore
+# without weakening a check. A schema using anything else would have that
+# assertion silently skipped, so `load` refuses it instead.
+SUPPORTED = {
+    "type", "const", "enum", "required", "properties", "additionalProperties",
+    "items", "minLength", "minimum", "maximum", "pattern", "oneOf", "allOf",
+    "not", "if", "then", "else",
+}
+ANNOTATIONS = {"$schema", "$id", "title", "description", "$comment", "examples", "default"}
+
+
+def unsupported_keywords(schema: object, path: str = "$") -> list[str]:
+    if not isinstance(schema, dict):
+        return []
+    unknown = [f"{path}.{key}" for key in schema if key not in SUPPORTED | ANNOTATIONS]
+    for key, value in schema.items():
+        if key == "properties":
+            for name, sub in (value or {}).items():
+                unknown += unsupported_keywords(sub, f"{path}.properties.{name}")
+        elif key in ("oneOf", "allOf"):
+            for index, sub in enumerate(value or []):
+                unknown += unsupported_keywords(sub, f"{path}.{key}[{index}]")
+        elif key in ("items", "not", "if", "then", "else", "additionalProperties"):
+            unknown += unsupported_keywords(value, f"{path}.{key}")
+    return unknown
+
+
 def load(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    unknown = unsupported_keywords(schema)
+    if unknown:
+        raise SystemExit(
+            f"schema-check: {path.name} uses keywords this validator does not "
+            f"implement, so they would go unverified: {', '.join(sorted(unknown))}"
+        )
+    return schema
 
 
 def fail(message: str) -> None:
@@ -108,7 +147,7 @@ def run(binary: Path, *arguments: str) -> tuple[int, str, str]:
     return completed.returncode, completed.stdout, completed.stderr
 
 
-def check_finite(binary: Path, envelope_schema: dict, data_schemas: dict, config: Path,
+def check_finite(binary: Path, data_schemas: dict, config: Path,
                  broken: Path, missing: Path) -> None:
     cases = [
         ("describe --summary", ("describe", "--summary"), 0, None),
@@ -132,12 +171,11 @@ def check_finite(binary: Path, envelope_schema: dict, data_schemas: dict, config
             if err:
                 fail(f"{label}: stderr must be empty on success")
             envelope = json.loads(out)
-        check(f"{label} envelope", envelope, envelope_schema)
         if envelope.get("exitCode") != status:
             fail(f"{label}: exitCode {envelope.get('exitCode')} differs from {status}")
         if data_schema and status != 1:
             check(f"{label} data", envelope["data"], data_schemas[data_schema])
-    print("schema-check: finite envelopes and data conform")
+    print("schema-check: command data conforms to the product schemas")
 
 
 def check_lifecycle(binary: Path, schema: dict, config: Path) -> None:
@@ -214,7 +252,6 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", type=Path, required=True)
     arguments = parser.parse_args()
-    envelope_schema = load(ROOT / "protocol" / "agent-cli-v2.schema.json")
     lifecycle_schema = load(ROOT / "protocol" / "egress-lifecycle-v1.schema.json")
     data_schemas = {path.stem: load(path) for path in (ROOT / "cli" / "schemas").glob("*.json")}
     with tempfile.TemporaryDirectory(prefix="maelys-egress-schema-") as directory:
@@ -231,7 +268,7 @@ def main() -> int:
         broken.write_text(config.read_text(encoding="utf-8") + "max_connections = 0\n",
                           encoding="utf-8")
         os.chmod(broken, 0o600)
-        check_finite(arguments.binary, envelope_schema, data_schemas, config, broken,
+        check_finite(arguments.binary, data_schemas, config, broken,
                      root / "missing.conf")
         check_lifecycle(arguments.binary, lifecycle_schema, config)
     return 0
