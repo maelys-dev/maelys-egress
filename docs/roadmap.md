@@ -148,6 +148,14 @@ written down, the SDKs run a discovered binary only when nobody but root or
 the caller could replace it, the Python SDK reaches the administration
 listener without the proxy environment and bounds its event retention.
 
+## 0.17 — the audit's defect classes swept
+
+Delivered: the reasoning of each audit finding is applied to every carrier
+of its class, not only to the sources the report cited. Sweeping the
+length-prefixed fields converted to C strings found a `token_file` whose
+embedded NUL silently cut the credential to the bytes before it; the trunk
+options of the pinned command framework follow with it.
+
 TLS inspection, transparent interception and content inspection have no
 release number until their PKI and threat-model design is accepted
 adversarially. If accepted, inspection remains an explicit isolated capability,
