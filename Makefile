@@ -378,8 +378,12 @@ tsan:
 	done
 	@echo "TSan lifecycle/policy-replacement repetition: 10/10 passed"
 
+# Text diagnostics keep the analyzer from writing one .plist per source into
+# the working directory; -analyzer-werror is what actually fails the gate, as
+# plain --analyze and even -Werror report findings and still exit 0.
 analyze: | $(MAELYS_SYSTEM_LIB)
-	$(CC) --analyze $(CPPFLAGS) -std=c11 -D_POSIX_C_SOURCE=200809L \
+	$(CC) --analyze -Xclang -analyzer-output=text -Xclang -analyzer-werror \
+		$(CPPFLAGS) -std=c11 -D_POSIX_C_SOURCE=200809L \
 		-D_XOPEN_SOURCE=700 $(SOURCES)
 
 $(BIN)/fuzz-http: fuzz/fuzz_http.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
