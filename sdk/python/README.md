@@ -93,6 +93,15 @@ print(event["event"])
 Alternatively pass `on_event=lambda event: ...` to `EgressProcess`. The callback
 runs on the lifecycle-reader thread and should return quickly.
 
+Retention is bounded and never blocks the reader of daemon stdout. With
+`on_event`, the callback is the consumer and nothing is retained
+(`next_event()` raises `RuntimeError`). Without it, at most
+`max_pending_events` events (default 1024) wait for `next_event()`; when a
+new event arrives on a full queue the oldest waiting event is dropped and
+`dropped_events` counts the losses, `pending_events` the backlog. Size the
+bound for the receipts a run can produce between two reads, or consume
+through the callback.
+
 For a child tool that honors proxy environment variables:
 
 ```python

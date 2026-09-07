@@ -1,11 +1,14 @@
+import io
+import json
 import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
-import json
 from pathlib import Path
+import queue
 import stat
 import threading
 import sys
 import tempfile
+import types
 import unittest
 from unittest import mock
 
@@ -164,6 +167,54 @@ class ProcessSdkTest(unittest.TestCase):
             for server in servers:
                 server.shutdown()
                 server.server_close()
+    @staticmethod
+    def _feed(process: EgressProcess, count: int) -> None:
+        lines = b"".join(
+            json.dumps({
+                "schemaVersion": 1, "contract": "maelys-egress-lifecycle/1",
+                "event": "receipt", "sequence": index,
+            }).encode() + b"\n"
+            for index in range(count)
+        )
+        process.process = types.SimpleNamespace(stdout=io.BytesIO(lines))  # type: ignore[assignment]
+        process._consume_lifecycle()
+        process.process = None
+
+    def test_event_retention_is_bounded(self) -> None:
+        config = EgressConfig([Destination("127.0.0.1", 9, allow_private=True)])
+        with self.assertRaises(ValueError):
+            EgressProcess(config, max_pending_events=0)
+
+        # No consumer: the oldest events are dropped, the newest kept, counted.
+        process = EgressProcess(config, max_pending_events=4)
+        self._feed(process, 10)
+        self.assertEqual(process.pending_events, 4)
+        self.assertEqual(process.dropped_events, 6)
+        self.assertEqual(
+            [process.next_event(timeout=0.0)["sequence"] for _ in range(4)], [6, 7, 8, 9]
+        )
+        with self.assertRaises(queue.Empty):
+            process.next_event(timeout=0.01)
+
+        # Slow consumer: a partial read keeps the bound and the order.
+        self._feed(process, 3)
+        self.assertEqual(process.next_event(timeout=0.0)["sequence"], 0)
+        self._feed(process, 4)
+        self.assertEqual(process.pending_events, 4)
+        self.assertEqual(process.dropped_events, 6 + 2)
+        self.assertEqual(
+            [process.next_event(timeout=0.0)["sequence"] for _ in range(4)], [0, 1, 2, 3]
+        )
+
+        # Callback only: the callback is the consumer, nothing is retained.
+        seen = []
+        process = EgressProcess(config, on_event=seen.append, max_pending_events=4)
+        self._feed(process, 10)
+        self.assertEqual(len(seen), 10)
+        self.assertEqual(process.pending_events, 0)
+        self.assertEqual(process.dropped_events, 0)
+        with self.assertRaisesRegex(RuntimeError, "on_event consumes"):
+            process.next_event(timeout=0.0)
 
 
 if __name__ == "__main__":
