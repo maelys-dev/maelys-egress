@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Pin maelys-cli `v0.5.19` (`6868bd13cfdccc0cdf59f40174f2bdc76f57bd04`),
+  agent-cli/v2 at v2.3.1: the trunk options `--progress`, `--verbose` and
+  `--pager` exist on every command and in `globalOptions`, text records in
+  a pipe are tab-separated rows, `describe --summary` no longer carries
+  `globalOptions`, `invariants` and `output`. The generated CLI reference,
+  the framework guide and the agent texts follow. The formula template and
+  the contract skill name `dependencies/maelys-cli.pin`, no longer the
+  `adapter/` file retired by the 0.14.0 socle adoption.
+
 ## 0.16.0 — 2026-09-07
 
 - Pin Maelys System `v0.9.1` (`6663c83a5f6035055b72d3ad0067ac2ad306fc2e`),

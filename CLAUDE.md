@@ -1,5 +1,5 @@
 <!-- maelys-cli:begin -->
-# Maelys CLI framework (maelys-cli 0.5.11)
+# Maelys CLI framework (maelys-cli 0.5.19)
 
 This project builds its command-line interface on `libmaelys_cli`. The
 complete guide is in `docs/maelys-cli-guide.md`; this block is the summary
@@ -70,6 +70,13 @@ one handler and one JSON Schema file. In the same change, update:
    exact contract;
 5. the generated CLI reference when the project keeps one.
 
+A product written in Python builds on `python/maelys_cli.py` of the same
+pinned maelys-cli (one file, standard library only): the same declarations
+(`cli.read`, `cli.records`, `cli.transaction`, `cli.stream`, `cli.external`;
+`cli.operand`, `cli.option`, `cli.flag`, `cli.argument`), the same built-ins,
+envelopes and exit codes; `docs/python.md` is its guide and the conformance
+kit of agent-cli-spec runs on the product's program in its CI.
+
 Linking: a product CLI links `libmaelys_cli.a` only (no dependency). A
 dispatcher that runs external commands from manifests adds
 `libmaelys_cli_extension.a` and one `libmaelys-json.a` (pkg-config
@@ -87,7 +94,9 @@ on the descriptor read, bounded by the bytes read) and failures reported
 with `maelys_cli_fail_file`; explicit
 `MAELYS_CLI_WRITE_REPLACE` / `MAELYS_CLI_WRITE_NO_REPLACE` on every file
 write; external programs started with absolute paths and `execve`, never a
-shell or PATH lookup.
+shell or PATH lookup, with a trusted immediate parent held open through exec;
+delegate scripts use a direct absolute interpreter never named `env`; relative
+and `env` shebangs are refused.
 <!-- maelys-cli:end -->
 
 <!-- maelys-release:begin -->

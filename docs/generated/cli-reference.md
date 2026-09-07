@@ -25,4 +25,7 @@ Global options:
 - `--pretty`: --pretty=false selects compact JSON.
 - `--non-interactive`: Never prompt; fail instead of asking a question.
 - `--color auto|always|never`: Control ANSI colors on terminals.
+- `--progress auto|always|never`: Show the progress of a long run on stderr in text mode: auto only when stderr is a terminal.
+- `--verbose`: Add the details of the run on stderr in text mode; silent in JSON.
+- `--pager auto|always|never`: Page the text rendering when stdout is a terminal; never in a pipe, in JSON or under --non-interactive.
 - `--help`: Show the help of the selected command.
