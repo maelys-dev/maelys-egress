@@ -36,6 +36,12 @@ MAELYS_CLI_BUILD := $(abspath $(BUILD)/deps/maelys-cli)
 MAELYS_CLI_LIB := $(MAELYS_CLI_BUILD)/lib/libmaelys_cli.a
 MAELYS_CLI_EMBED := $(MAELYS_CLI_DIR)/tools/maelys-cli-embed
 MAELYS_CLI_REFERENCE := $(MAELYS_CLI_DIR)/tools/generate_cli_reference.py
+# agent-cli-spec owns the contract the command implements. Its conformance kit
+# drives the built binary from the outside, so the pin must be the one the
+# pinned framework targets; check-spec-contract holds the two together.
+MAELYS_SPEC_DIR ?= ../agent-cli-spec
+MAELYS_SPEC_TAG := $(word 1,$(shell cat dependencies/agent-cli-spec.pin))
+MAELYS_SPEC_PIN := $(word 2,$(shell cat dependencies/agent-cli-spec.pin))
 GENERATED := $(BUILD)/generated
 SANITIZE_FLAGS ?=
 
@@ -95,7 +101,7 @@ EXAMPLE_BINS := $(EXAMPLE_NAMES:%=$(BIN)/example-%)
 -include $(DEPENDENCIES)
 
 .PHONY: all clean check test examples-check sdk-check audit check-system-contract check-cli-contract \
-	system-integration-check mutation-check \
+	system-integration-check mutation-check check-spec-contract conformance-check \
 	cli-reference contract-check lifecycle-contract-check schema-check package-homebrew \
 	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-binaries \
 	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check \
@@ -153,6 +159,18 @@ check-cli-contract:
 		"$(MAELYS_CLI_DIR)/include/maelys/cli/version.h"
 	@grep -Fq '#define MAELYS_CLI_CONTRACT "agent-cli/v2"' \
 		"$(MAELYS_CLI_DIR)/include/maelys/cli/version.h"
+
+check-spec-contract:
+	@test -f "$(MAELYS_SPEC_DIR)/conformance/run.py" || \
+		{ echo "MAELYS_SPEC_DIR must name agent-cli-spec" >&2; exit 1; }
+	@test "$$(git -C "$(MAELYS_SPEC_DIR)" rev-parse HEAD)" = "$(MAELYS_SPEC_PIN)" || \
+		{ echo "agent-cli-spec must be pinned to $(MAELYS_SPEC_TAG) ($(MAELYS_SPEC_PIN))" >&2; exit 1; }
+	@git -C "$(MAELYS_SPEC_DIR)" diff --quiet "$(MAELYS_SPEC_PIN)" -- || \
+		{ echo "pinned agent-cli-spec checkout is modified" >&2; exit 1; }
+	@test -z "$$(git -C "$(MAELYS_SPEC_DIR)" ls-files --others --exclude-standard)" || \
+		{ echo "pinned agent-cli-spec checkout carries untracked files" >&2; exit 1; }
+	@test "$$(sed -n 1p "$(MAELYS_CLI_DIR)/dependencies/agent-cli-spec.pin")" = "$(MAELYS_SPEC_TAG)" || \
+		{ echo "agent-cli-spec $(MAELYS_SPEC_TAG) is not the version maelys-cli $(MAELYS_CLI_TAG) targets" >&2; exit 1; }
 
 $(MAELYS_CLI_LIB): check-cli-contract
 	$(MAKE) -C $(MAELYS_CLI_DIR) BUILD=$(MAELYS_CLI_BUILD) CC=$(CC) CPPFLAGS= \
@@ -372,8 +390,14 @@ system-integration-check: $(STATIC_LIB) $(MAELYS_SYSTEM_LIB)
 	done
 	@echo "maelys-system reactor and socket dependency is real"
 
+# The specification drives the built binary from the outside and validates
+# every answer, the envelope and each command's declared output schema
+# included. It only reads: no command that writes is invoked.
+conformance-check: $(CLI) check-spec-contract
+	python3 $(MAELYS_SPEC_DIR)/conformance/run.py $(abspath $(CLI))
+
 check: test examples-check sdk-check audit system-integration-check contract-check schema-check \
-	public-check reproducible-check
+	conformance-check public-check reproducible-check
 	$(CXX) -Iinclude -std=c++17 -Wall -Wextra -Wpedantic -Werror \
 		tests/header_cpp.cpp -c -o $(BUILD)/header-cpp.o
 

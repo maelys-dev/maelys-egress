@@ -42,6 +42,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - run: sh scripts/checkout-dependency.sh maelys-system
       - run: sh scripts/checkout-dependency.sh maelys-cli
+      - run: sh scripts/checkout-dependency.sh agent-cli-spec
       - name: Install tools
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang gcc g++
@@ -59,6 +60,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - run: sh scripts/checkout-dependency.sh maelys-system
       - run: sh scripts/checkout-dependency.sh maelys-cli
+      - run: sh scripts/checkout-dependency.sh agent-cli-spec
       - run: sudo apt-get update && sudo apt-get install -y clang g++ libclang-rt-18-dev
       - run: make asan-ubsan
       - run: make tsan
@@ -70,6 +72,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - run: sh scripts/checkout-dependency.sh maelys-system
       - run: sh scripts/checkout-dependency.sh maelys-cli
+      - run: sh scripts/checkout-dependency.sh agent-cli-spec
       - run: sudo apt-get update && sudo apt-get install -y build-essential clang g++
       - run: make mutation-check
 
@@ -83,6 +86,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - run: sh scripts/checkout-dependency.sh maelys-system
       - run: sh scripts/checkout-dependency.sh maelys-cli
+      - run: sh scripts/checkout-dependency.sh agent-cli-spec
       - name: Install TLS development packages
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang g++ pkg-config libmbedtls-dev libwolfssl-dev
@@ -127,6 +131,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - run: sh scripts/checkout-dependency.sh maelys-system
       - run: sh scripts/checkout-dependency.sh maelys-cli
+      - run: sh scripts/checkout-dependency.sh agent-cli-spec
       - name: Install packaging tools
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y build-essential dpkg-dev file rpm

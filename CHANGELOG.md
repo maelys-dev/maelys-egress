@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- `make check` runs the conformance kit of `agent-cli-spec` on the built
+  binary. The kit drives the command from the outside with read-only
+  invocations and checks what the framework owns: the envelope, the exit
+  codes, the stream each answer uses and every declared output schema. The
+  specification is now a pinned dependency, and `check-spec-contract` refuses
+  a pin that is not the version the pinned framework targets, so the two can
+  never disagree.
+- The local restatement of the agent-cli/v2 envelope schema is gone with the
+  check that used it. The envelope is the framework's contract, verified by
+  the specification's own kit; `schema-check` now covers only what this
+  product owns, the `data` of each command and the daemon's lifecycle lines.
+- That validator refuses a schema using a keyword it does not implement,
+  instead of skipping the assertion and reporting conformance. Nothing in
+  the repository used such a keyword, so the hole was latent.
+
 ## 0.17.1 — 2026-09-07
 
 - Three checks borrowed from maelys-oci, whose build proves what this one
