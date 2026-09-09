@@ -21,8 +21,8 @@ The library is three layers, and the directory says which one a file is in.
 
 `src/core/` decides on bytes alone: parsers, policy, receipts, profiles,
 attestation, hashing and the TLS seam. It reaches no descriptor, no clock and
-no system call, which is why the three fuzz targets drive it directly and its
-tests need no reactor. `scripts/audit-boundaries.sh` refuses any mention of
+no system call, which is why the three fuzz targets of `tests/fuzz/` drive it
+directly and its tests need no reactor. `scripts/audit-boundaries.sh` refuses any mention of
 `maelys_sys` there, so the property cannot erode.
 
 `src/server/` owns the descriptors, the listeners and the reactor loop.

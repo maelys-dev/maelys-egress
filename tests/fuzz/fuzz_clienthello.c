@@ -13,7 +13,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 }
 
 #ifdef MAELYS_FUZZ_STANDALONE
-#include "fuzz/standalone.h"
+#include "tests/fuzz/standalone.h"
 
 int main(int argc, char **argv) {
     if (fuzz_feed_arguments(argc, argv) != 0) return 1;
