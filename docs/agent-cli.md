@@ -45,4 +45,4 @@ process SDKs implement this supervision.
   accepted only by a binary built with a TLS module.
 
 For repository changes, agents must follow
-[`skills/egress-cli-contract/SKILL.md`](../skills/egress-cli-contract/SKILL.md).
+[`.claude/skills/egress-cli-contract/SKILL.md`](../.claude/skills/egress-cli-contract/SKILL.md).
