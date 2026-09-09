@@ -486,14 +486,11 @@ endif
 		THIRD_PARTY_NOTICES.md docs/*.md \
 		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/
 	install -d $(DESTDIR)$(PREFIX)/share/doc/maelys-egress/generated \
-		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/protocol \
-		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/skills/egress-cli-contract
+		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/protocol
 	install -m 0644 docs/generated/*.md docs/generated/*.json \
 		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/generated/
 	install -m 0644 protocol/*.json \
 		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/protocol/
-	install -m 0644 skills/egress-cli-contract/SKILL.md \
-		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/skills/egress-cli-contract/
 	install -d $(DESTDIR)$(PREFIX)/share/doc/maelys-egress/examples
 	install -m 0644 packaging/maelys-egress.conf.example \
 		packaging/homebrew/maelys-egress.rb.in \
