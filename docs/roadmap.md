@@ -156,6 +156,17 @@ length-prefixed fields converted to C strings found a `token_file` whose
 embedded NUL silently cut the credential to the bytes before it; the trunk
 options of the pinned command framework follow with it.
 
+## 0.18 — each contract verified by the party that owns it
+
+Delivered: the command's envelope is checked by the conformance kit of
+`agent-cli-spec`, run on the built binary, instead of by a local restatement
+of that contract; the product's own schema check keeps what belongs to the
+product, the data of each command and the daemon's lifecycle lines, and
+refuses a schema whose keywords its validator does not implement rather than
+reporting conformance on an unverified assertion. The published archive, its
+bytes and its dependency pins gained the same treatment: proved by linking a
+consumer, by a byte comparison and across the whole checkout.
+
 TLS inspection, transparent interception and content inspection have no
 release number until their PKI and threat-model design is accepted
 adversarially. If accepted, inspection remains an explicit isolated capability,
