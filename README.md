@@ -5,7 +5,6 @@ It accepts HTTP `CONNECT`, single-exchange HTTP/1.1 forward requests and SOCKS5,
 then connects only to exact TCP destinations in a sealed allowlist.
 
 Version 0.9 establishes the Egress product and ABI namespace. Consumers of
-earlier versions must follow [the explicit migration map](docs/migration-to-egress.md);
 the release does not ship duplicate compatibility symbols or binaries.
 
 ```text
@@ -96,7 +95,6 @@ neither Mbed TLS nor wolfSSL.
 `include/maelys/egress_tls.h` defines a provider seam with opaque sessions and the
 states `COMPLETE`, `WANT_READ`, `WANT_WRITE`, `CLOSED` and `FAILED`. The
 optional Mbed TLS and wolfSSL modules implement that same contract without
-changing the Egress core. See [docs/tls.md](docs/tls.md).
 
 ## Install
 
@@ -166,34 +164,22 @@ maelys-egress config validate --config /etc/maelys-egress.conf
 maelys-egress serve --config /etc/maelys-egress.conf
 ```
 
-See [docs/configuration.md](docs/configuration.md) and the packaged systemd,
 launchd and container examples.
 
 Operational semantics, quota accounting, generation replacement and the exact
 limits of HMAC receipt evidence are documented in
-[docs/operations.md](docs/operations.md).
 
 ## Documentation map
 
-- [getting started](docs/getting-started.md): first allowed and denied request;
-- [standalone operation](docs/standalone-guide.md): configuration, reload,
   health, metrics and durable audit;
-- [embedding the C library](docs/embedding-c.md): ownership, threading and
   complete examples;
-- [native connector API](docs/native-connector.md): principal authentication,
   relayed stream semantics, descriptor ownership, deadlines and fd-4 boundary;
-- [TLS deployment](docs/tls.md): Mbed TLS/wolfSSL builds, verified listener
   example, mutual TLS and C provider selection;
-- [architecture](docs/architecture.md): request and control-plane data flow;
-- [Sandbox–Executor–Egress integration](docs/maelys-integration.md): portable
   decision, backend differences, confinement and network boundaries;
 - [Python and Node.js process SDKs](sdk/README.md): what they automate and what
   remains the application's proxy-client responsibility;
-- [troubleshooting](docs/troubleshooting.md): common fail-closed diagnostics.
-- [CLI conventions](docs/command-conventions.md), [agent discovery](docs/agent-cli.md),
   the generated [CLI reference](docs/generated/cli-reference.md) and
   [machine-readable contract](docs/generated/cli-contract.json);
-- [lifecycle JSONL protocol](docs/lifecycle-protocol.md) and the generated
   [configuration-key reference](docs/generated/config-reference.md).
 
 Compileable consumers live in `examples/`. Pure Python and Node.js helpers in
@@ -270,3 +256,7 @@ explicitly authorized PKI and threat-model design.
 
 MPL-2.0; see [LICENSING.md](LICENSING.md) and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Documentation
+
+The documentation of maelys-egress is in `maelys-dev/maelys-docs`, directory `maelys-egress/`.
