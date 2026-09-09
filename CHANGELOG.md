@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.18.3 — 2026-09-09
 
 - The `egress-cli-contract` skill joins the two others under
   `.claude/skills/`, and the root loses its second skills directory. All
