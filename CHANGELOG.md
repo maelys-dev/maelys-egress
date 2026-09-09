@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- `public-check` builds every example against the staged install, through
+  pkg-config alone, next to the consumer it already ran. The examples ship
+  for embedders to copy, and `examples-check` only ever compiled them
+  against this tree, which says nothing about whether the installed library
+  is enough for them. Verified by making one reach a private header, which
+  fails the check.
+
 ## 0.18.0 — 2026-09-09
 
 - `make check` runs the conformance kit of `agent-cli-spec` on the built
