@@ -45,7 +45,11 @@ jobs:
       - run: sh scripts/checkout-dependency.sh agent-cli-spec
       - name: Install tools
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y clang gcc g++
+        run: |
+          # A broken third-party apt source of the runner image must not fail an
+          # install of Ubuntu archive packages: the update reports, the install decides.
+          sudo apt-get update || echo "::warning::apt-get update reported errors; the install decides"
+          sudo apt-get install -y clang gcc g++
       - name: Require Apple Silicon
         if: runner.os == 'macOS'
         run: test "$(uname -m)" = arm64
@@ -61,7 +65,11 @@ jobs:
       - run: sh scripts/checkout-dependency.sh maelys-system
       - run: sh scripts/checkout-dependency.sh maelys-cli
       - run: sh scripts/checkout-dependency.sh agent-cli-spec
-      - run: sudo apt-get update && sudo apt-get install -y clang g++ libclang-rt-18-dev
+      - run: |
+          # A broken third-party apt source of the runner image must not fail an
+          # install of Ubuntu archive packages: the update reports, the install decides.
+          sudo apt-get update || echo "::warning::apt-get update reported errors; the install decides"
+          sudo apt-get install -y clang g++ libclang-rt-18-dev
       - run: make asan-ubsan
       - run: make tsan
       - run: make fuzz
@@ -73,7 +81,11 @@ jobs:
       - run: sh scripts/checkout-dependency.sh maelys-system
       - run: sh scripts/checkout-dependency.sh maelys-cli
       - run: sh scripts/checkout-dependency.sh agent-cli-spec
-      - run: sudo apt-get update && sudo apt-get install -y build-essential clang g++
+      - run: |
+          # A broken third-party apt source of the runner image must not fail an
+          # install of Ubuntu archive packages: the update reports, the install decides.
+          sudo apt-get update || echo "::warning::apt-get update reported errors; the install decides"
+          sudo apt-get install -y build-essential clang g++
       - run: make mutation-check
 
   tls-providers:
@@ -89,7 +101,11 @@ jobs:
       - run: sh scripts/checkout-dependency.sh agent-cli-spec
       - name: Install TLS development packages
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y clang g++ pkg-config libmbedtls-dev libwolfssl-dev
+        run: |
+          # A broken third-party apt source of the runner image must not fail an
+          # install of Ubuntu archive packages: the update reports, the install decides.
+          sudo apt-get update || echo "::warning::apt-get update reported errors; the install decides"
+          sudo apt-get install -y clang g++ pkg-config libmbedtls-dev libwolfssl-dev
       - name: Install TLS development packages
         if: runner.os == 'macOS'
         run: brew install mbedtls wolfssl
@@ -134,7 +150,11 @@ jobs:
       - run: sh scripts/checkout-dependency.sh agent-cli-spec
       - name: Install packaging tools
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y build-essential dpkg-dev file rpm
+        run: |
+          # A broken third-party apt source of the runner image must not fail an
+          # install of Ubuntu archive packages: the update reports, the install decides.
+          sudo apt-get update || echo "::warning::apt-get update reported errors; the install decides"
+          sudo apt-get install -y build-essential dpkg-dev file rpm
       - run: PACKAGE_VERSION_OVERRIDE=0.0.0 bash scripts/package-release.sh ${{ matrix.target }}
       - run: sh scripts/check-installed-system.sh
       - name: Inspect Linux packages
