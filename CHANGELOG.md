@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.18.1 — 2026-09-09
 
 - The fuzz targets start from a committed seed corpus, 23 inputs under
   `fuzz/corpus/` written by a generator committed beside them so binary
