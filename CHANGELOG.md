@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- The fuzz targets and their corpus move from `fuzz/` to `tests/fuzz/`, where
+  the other things that verify the product already live. What separates a
+  top-level directory here is whether it ships: the library, the command, the
+  providers, the headers, the SDKs and the protocol do, the tests and the fuzz
+  targets do not. Nothing published changes and no code changes.
+
 ## 0.18.1 — 2026-09-09
 
 - The fuzz targets start from a committed seed corpus, 23 inputs under

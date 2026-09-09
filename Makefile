@@ -427,22 +427,22 @@ analyze: | $(MAELYS_SYSTEM_LIB)
 		$(CPPFLAGS) -std=c11 -D_POSIX_C_SOURCE=200809L \
 		-D_XOPEN_SOURCE=700 $(SOURCES)
 
-$(BIN)/fuzz-http: fuzz/fuzz_http.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
+$(BIN)/fuzz-http: tests/fuzz/fuzz_http.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/fuzz-socks: fuzz/fuzz_socks.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
+$(BIN)/fuzz-socks: tests/fuzz/fuzz_socks.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/fuzz-clienthello: fuzz/fuzz_clienthello.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
+$(BIN)/fuzz-clienthello: tests/fuzz/fuzz_clienthello.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 # The committed seeds carry the structure each parser looks for, so a run
 # spends its budget on the boundaries instead of rediscovering that a request
 # starts with a method. libFuzzer writes what it finds into the build tree and
-# reads fuzz/corpus/ without touching it.
+# reads tests/fuzz/corpus/ without touching it.
 fuzz-smoke:
 	$(MAKE) clean
 	$(MAKE) BUILD_PROFILE=fuzz-smoke CC=clang CXX=clang++ \
@@ -450,9 +450,9 @@ fuzz-smoke:
 		SANITIZE_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' \
 		build/fuzz-smoke/bin/fuzz-http build/fuzz-smoke/bin/fuzz-socks \
 		build/fuzz-smoke/bin/fuzz-clienthello
-	build/fuzz-smoke/bin/fuzz-http fuzz/corpus/http
-	build/fuzz-smoke/bin/fuzz-socks fuzz/corpus/socks
-	build/fuzz-smoke/bin/fuzz-clienthello fuzz/corpus/clienthello
+	build/fuzz-smoke/bin/fuzz-http tests/fuzz/corpus/http
+	build/fuzz-smoke/bin/fuzz-socks tests/fuzz/corpus/socks
+	build/fuzz-smoke/bin/fuzz-clienthello tests/fuzz/corpus/clienthello
 
 fuzz:
 	$(MAKE) clean
@@ -462,9 +462,9 @@ fuzz:
 		build/fuzz/bin/fuzz-http build/fuzz/bin/fuzz-socks \
 		build/fuzz/bin/fuzz-clienthello
 	@mkdir -p build/fuzz/corpus/http build/fuzz/corpus/socks build/fuzz/corpus/clienthello
-	build/fuzz/bin/fuzz-http build/fuzz/corpus/http fuzz/corpus/http -runs=10000
-	build/fuzz/bin/fuzz-socks build/fuzz/corpus/socks fuzz/corpus/socks -runs=10000
-	build/fuzz/bin/fuzz-clienthello build/fuzz/corpus/clienthello fuzz/corpus/clienthello -runs=10000
+	build/fuzz/bin/fuzz-http build/fuzz/corpus/http tests/fuzz/corpus/http -runs=10000
+	build/fuzz/bin/fuzz-socks build/fuzz/corpus/socks tests/fuzz/corpus/socks -runs=10000
+	build/fuzz/bin/fuzz-clienthello build/fuzz/corpus/clienthello tests/fuzz/corpus/clienthello -runs=10000
 
 install: $(STATIC_LIB) $(CLI) $(PC) $(MANIFEST) $(MAELYS_SYSTEM_LIB)
 ifeq ($(MAELYS_SYSTEM_PREFIX),)
