@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.18.2 — 2026-09-09
 
 - The fuzz targets and their corpus move from `fuzz/` to `tests/fuzz/`, where
   the other things that verify the product already live. What separates a
