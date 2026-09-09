@@ -5,7 +5,7 @@
 - `native_connector.c` opens a policy-checked, Egress-relayed TCP stream without
   making the embedding application speak HTTP proxy or SOCKS5. The complete
   ownership, authentication and deadline contract is in
-  `docs/native-connector.md`.
+  `maelys-egress/native-connector.md` of `maelys-dev/maelys-docs`.
 - `policy_reload.c` replaces a sealed policy from a control thread while the
   owner thread runs the reactor.
 - `metrics_snapshot.c` reads the immutable aggregate snapshot API.
