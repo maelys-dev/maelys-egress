@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.18.0 — 2026-09-09
 
 - `make check` runs the conformance kit of `agent-cli-spec` on the built
   binary. The kit drives the command from the outside with read-only
