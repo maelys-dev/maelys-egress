@@ -526,7 +526,9 @@ install-tls-modules: tls-binaries
 # pkg-config alone. Staging the real install and linking a real consumer there
 # proves the published artifact stands on its own; the repository's own build
 # cannot supply what the install forgot, nor hide a dependency the library
-# must not carry.
+# must not carry. The examples are shipped for embedders to copy, so they are
+# built the same way: examples-check compiles them against this tree, which
+# says nothing about whether the installed library is enough for them.
 public-check: all
 	@set -e; stage="$$(mktemp -d)"; trap 'rm -rf "$$stage"' EXIT; \
 	$(MAKE) DESTDIR="$$stage" install >/dev/null; \
@@ -538,7 +540,13 @@ public-check: all
 		pkg-config --static --cflags --libs maelys-egress)"; \
 	$(CC) $(CFLAGS) tests/public/consumer.c $$flags $(LDFLAGS) \
 		-o "$$stage/consumer"; \
-	"$$stage/consumer"
+	"$$stage/consumer"; \
+	for example in examples/*.c; do \
+		$(CC) $(CFLAGS) "$$example" $$flags $(LDFLAGS) -o "$$stage/example" || \
+			{ echo "public-check: $$example does not build against the installed library" >&2; \
+			  exit 1; }; \
+	done; \
+	echo "public-check: the consumer ran and every example builds through pkg-config"
 
 # The published archive must be a function of its objects alone, so that the
 # same sources give the same bytes to anyone who rebuilds them.
