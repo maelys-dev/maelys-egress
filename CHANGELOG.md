@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.18.4 — 2026-09-09
+
+- The prose documentation moves to `maelys-dev/maelys-docs`, directory
+  `maelys-egress/`, with its history: the getting-started guide, the
+  configuration and operations references, troubleshooting, the security
+  model, the standalone and embedding guides, the lifecycle protocol, the
+  TLS notes and the design documents are read there now, and `README.md`
+  points at them. The installed package keeps what is generated from this
+  repository, the CLI and configuration references and the command
+  framework guide, next to the schemas under `protocol/` and the examples.
+  Moved by `maelys-release migrate` from the list of
+  `maelys-platform docs --prose`, so a document keeps the commits made here.
+- CI: a broken third-party apt source of the runner image no longer fails a
+  Linux job. The index refresh is best-effort and warns; the install that
+  follows decides and still fails loudly when a package is missing. Every
+  package this repository installs comes from the Ubuntu archive.
+
 ## 0.18.3 — 2026-09-09
 
 - The `egress-cli-contract` skill joins the two others under
