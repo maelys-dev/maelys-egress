@@ -15,8 +15,8 @@ npm install ./sdk/node
 From the GitHub release source archive:
 
 ```sh
-tar -xzf maelys-egress-node-sdk-0.18.2.tar.gz
-npm install ./maelys-egress-node-sdk-0.18.2
+tar -xzf maelys-egress-node-sdk-0.18.3.tar.gz
+npm install ./maelys-egress-node-sdk-0.18.3
 ```
 
 The SDK never searches the inherited `PATH`. It finds `maelys-egress` beside
