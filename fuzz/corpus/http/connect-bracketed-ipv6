@@ -1,0 +1,4 @@
+CONNECT [2001:db8::1]:443 HTTP/1.1
+Host: [2001:db8::1]:443
+Proxy-Authorization: Bearer 0123456789abcdef
+

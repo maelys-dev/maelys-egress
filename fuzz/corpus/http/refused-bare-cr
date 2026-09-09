@@ -1,0 +1,5 @@
+GET http://example.com/x HTTP/1.1
+Host: example.com
+Proxy-Authorization: Bearer 0123456789abcdef
+X-Ambiguous: oneInjected: two
+

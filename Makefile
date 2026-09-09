@@ -439,6 +439,10 @@ $(BIN)/fuzz-clienthello: fuzz/fuzz_clienthello.c $(STATIC_LIB) | $(MAELYS_SYSTEM
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
+# The committed seeds carry the structure each parser looks for, so a run
+# spends its budget on the boundaries instead of rediscovering that a request
+# starts with a method. libFuzzer writes what it finds into the build tree and
+# reads fuzz/corpus/ without touching it.
 fuzz-smoke:
 	$(MAKE) clean
 	$(MAKE) BUILD_PROFILE=fuzz-smoke CC=clang CXX=clang++ \
@@ -446,9 +450,9 @@ fuzz-smoke:
 		SANITIZE_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' \
 		build/fuzz-smoke/bin/fuzz-http build/fuzz-smoke/bin/fuzz-socks \
 		build/fuzz-smoke/bin/fuzz-clienthello
-	build/fuzz-smoke/bin/fuzz-http
-	build/fuzz-smoke/bin/fuzz-socks
-	build/fuzz-smoke/bin/fuzz-clienthello
+	build/fuzz-smoke/bin/fuzz-http fuzz/corpus/http
+	build/fuzz-smoke/bin/fuzz-socks fuzz/corpus/socks
+	build/fuzz-smoke/bin/fuzz-clienthello fuzz/corpus/clienthello
 
 fuzz:
 	$(MAKE) clean
@@ -457,9 +461,10 @@ fuzz:
 		SANITIZE_FLAGS='-fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer' \
 		build/fuzz/bin/fuzz-http build/fuzz/bin/fuzz-socks \
 		build/fuzz/bin/fuzz-clienthello
-	build/fuzz/bin/fuzz-http -runs=10000
-	build/fuzz/bin/fuzz-socks -runs=10000
-	build/fuzz/bin/fuzz-clienthello -runs=10000
+	@mkdir -p build/fuzz/corpus/http build/fuzz/corpus/socks build/fuzz/corpus/clienthello
+	build/fuzz/bin/fuzz-http build/fuzz/corpus/http fuzz/corpus/http -runs=10000
+	build/fuzz/bin/fuzz-socks build/fuzz/corpus/socks fuzz/corpus/socks -runs=10000
+	build/fuzz/bin/fuzz-clienthello build/fuzz/corpus/clienthello fuzz/corpus/clienthello -runs=10000
 
 install: $(STATIC_LIB) $(CLI) $(PC) $(MANIFEST) $(MAELYS_SYSTEM_LIB)
 ifeq ($(MAELYS_SYSTEM_PREFIX),)

@@ -13,7 +13,10 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 }
 
 #ifdef MAELYS_FUZZ_STANDALONE
-int main(void) {
+#include "fuzz/standalone.h"
+
+int main(int argc, char **argv) {
+    if (fuzz_feed_arguments(argc, argv) != 0) return 1;
     static const uint8_t corpus[][12] = {
         {0},
         {22u, 3u, 3u, 0u, 4u, 1u, 0u, 0u, 0u},

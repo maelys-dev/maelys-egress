@@ -27,7 +27,10 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 }
 
 #ifdef MAELYS_FUZZ_STANDALONE
-int main(void) {
+#include "fuzz/standalone.h"
+
+int main(int argc, char **argv) {
+    if (fuzz_feed_arguments(argc, argv) != 0) return 1;
     static const unsigned char empty[] = "";
     static const unsigned char connect[] = "CONNECT x:443 HTTP/1.1\r\n\r\n";
     static const unsigned char get[] = "GET http://x/ HTTP/1.1\r\nHost: x\r\n\r\n";

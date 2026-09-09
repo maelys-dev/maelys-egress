@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- The fuzz targets start from a committed seed corpus, 23 inputs under
+  `fuzz/corpus/` written by a generator committed beside them so binary
+  seeds stay reviewable. Each seed carries the structure its parser looks
+  for, valid shapes and the refused ones that sit a byte away, so a campaign
+  spends its budget on the boundaries instead of rediscovering that a request
+  starts with a method or a TLS record with a handshake byte. libFuzzer reads
+  them without writing to the tree; the standalone driver used where
+  libFuzzer is absent feeds the same files, and refuses a corpus that is
+  missing or empty rather than reporting a run that exercised nothing.
 - `public-check` builds every example against the staged install, through
   pkg-config alone, next to the consumer it already ran. The examples ship
   for embedders to copy, and `examples-check` only ever compiled them

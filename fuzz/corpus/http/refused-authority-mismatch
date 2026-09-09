@@ -1,0 +1,4 @@
+CONNECT example.com:443 HTTP/1.1
+Host: attacker.example:443
+Proxy-Authorization: Bearer 0123456789abcdef
+
