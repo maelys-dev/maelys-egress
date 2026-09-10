@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.19.1 — 2026-09-10
+
+- Adopt maelys-release 0.23.0, whose `migrate` now rewrites every Markdown
+  file it reports rather than the README alone, and names a rule matching
+  `docs/` as a whole before a migration changes what it matches. Both were
+  reported from this repository.
+- The socle's fuzz job replays the committed corpus, declared as
+  `make fuzz-smoke`. CI ran no smoke replay until now: the corpus was
+  exercised only by the libFuzzer campaign, which stays in this
+  repository's own job because the socle's installs no compiler runtime for
+  it. The two are complementary, not a duplicate.
+
 ## 0.19.0 — 2026-09-10
 
 - Adopt maelys-release 0.22.1. The generated CLI reference belongs to the
