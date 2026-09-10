@@ -116,6 +116,13 @@ and `env` shebangs are refused.
 <!-- maelys-cli:end -->
 
 <!-- maelys-release:begin -->
+<!-- SPDX-License-Identifier: CC-BY-4.0
+Copyright 2026 David Bromberg.
+Source: https://github.com/maelys-dev/maelys-release/blob/main/share/agents/instructions-block.md
+License: https://creativecommons.org/licenses/by/4.0/
+When sharing adaptations, retain attribution and indicate your changes.
+-->
+
 # Maelys release socle (maelys-release)
 
 This repository publishes through the shared maelys-release workflows. The
@@ -158,6 +165,14 @@ are in `docs/conventions.md` of maelys-release.
   GitHub-hosted runners only. A self-hosted runner is reserved for hardware
   gates, on signed tags or `workflow_dispatch`, behind the `release`
   environment.
+- The prose of this repository lives in `maelys-dev/maelys-docs`, directory
+  `maelys-egress/`, with a neighbouring checkout at `../maelys-docs`.
+  Documenting means opening a pull request there, not writing in `docs/`
+  here, which carries what a machine writes and what this repository engages
+  publicly. An agent that finds prose in `docs/` moves it rather than
+  enriching it, and `maelys-release migrate` moves it with its history.
+  **That repository is private: never name it from a public README.** The
+  reader of this block has access to it; the reader of a README may not.
 - A tag whose release or formula failed is replayed in full with
   `gh workflow run release.yml -f tag=vX.Y.Z` after adopting a corrected
   socle; a tag is never moved or recreated.
