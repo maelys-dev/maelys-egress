@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.19.3 — 2026-09-10
+
+- Adopt maelys-release 0.26.0 and hand both fuzz targets to its job:
+  `make fuzz-smoke fuzz`, the corpus replay then the bounded run. This
+  repository stops fuzzing in a job of its own. It became possible in two
+  steps: 0.25.1 gave that job the compiler runtime a libFuzzer harness needs,
+  and 0.26.0 rewrote the fuzzing conventions against a survey of the fleet,
+  which found that a bounded run belongs in CI and that this product's
+  `-runs=10000` is one.
+
 ## 0.19.2 — 2026-09-10
 
 - Adopt maelys-release 0.25.1. Its fuzz job installs the compiler runtime the
