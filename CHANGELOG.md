@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- `README.md` names nothing in place of the documentation it no longer
+  carries. `maelys-release migrate` wrote a pointer to `maelys-dev/maelys-docs`
+  in 0.18.4, which is private and leads nowhere for a reader outside the
+  organisation; maelys-platform's own documentation policy says a README
+  points at the product's own site and never names `maelys-docs`. No public
+  site is declared for this product, so the section goes rather than pointing
+  at what cannot be opened. Reported by the maelys-oci session, which made
+  the same correction.
+
 ## 0.19.3 — 2026-09-10
 
 - Adopt maelys-release 0.26.0 and hand both fuzz targets to its job:

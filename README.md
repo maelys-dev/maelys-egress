@@ -256,7 +256,3 @@ explicitly authorized PKI and threat-model design.
 
 MPL-2.0; see [LICENSING.md](LICENSING.md) and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-## Documentation
-
-The documentation of maelys-egress is in `maelys-dev/maelys-docs`, directory `maelys-egress/`.
