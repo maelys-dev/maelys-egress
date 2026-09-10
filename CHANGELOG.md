@@ -17,11 +17,15 @@
   linker flags change them without any source moving. Unchanged bytes keep
   their mtime. `install-metadata-check` installs under two prefixes without
   cleaning and reads back what the dispatcher would read.
-- Every object depends on `VERSION`, which `CPPFLAGS` embeds as
-  `MAELYS_EGRESS_BUILD_VERSION`. A version bump left the binary reporting the
-  previous version until something else forced a rebuild; a release built from
-  a clean tree was never affected, a local build always was, and the manifest
-  would have declared a version its binary contradicted.
+- Every object follows the version it embeds. `CPPFLAGS` writes it into each
+  object as `MAELYS_EGRESS_BUILD_VERSION`, but no object depended on it, so a
+  bump left the binary reporting the previous version until something else
+  forced a rebuild. The objects now follow a stamp file holding the value in
+  use, rewritten only when that value differs: a prerequisite on `VERSION`
+  alone would have missed `make VERSION=x`, which changes neither that file nor
+  its timestamp. A release built from a clean tree was never affected; a local
+  build always was, and the manifest would have declared a version its binary
+  contradicted.
 - `all` is declared before `-include $(DEPENDENCIES)`. A rule read from an
   included makefile becomes the default goal, so once the dependency files
   existed, plain `make` built a single object and stopped: touching a source

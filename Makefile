@@ -95,6 +95,7 @@ TLS_TEST_CERT := $(BUILD)/tls-fixtures/tls-cert.pem
 TLS_TEST_KEY := $(BUILD)/tls-fixtures/tls-key.pem
 PC := $(LIB)/pkgconfig/maelys-egress.pc
 MANIFEST := $(BUILD)/share/maelys/commands/egress.json
+VERSION_STAMP := $(GENERATED)/version
 EXAMPLE_NAMES := basic_proxy native_connector policy_reload metrics_snapshot durable_audit custom_attestor
 EXAMPLE_BINS := $(EXAMPLE_NAMES:%=$(BIN)/example-%)
 
@@ -203,16 +204,25 @@ $(CLI_SCHEMA_OBJECT): $(GENERATED)/egress_schemas.c
 
 $(OBJECTS): | $(MAELYS_SYSTEM_LIB)
 
+# Every object embeds the version through CPPFLAGS, so every object follows
+# $(VERSION_STAMP), which holds the value in use. A prerequisite on the VERSION
+# file would miss `make VERSION=x`, which changes neither that file nor its
+# timestamp; the stamp is rewritten only when the value differs, so an
+# unchanged version rebuilds nothing.
+.PHONY: force-version
+force-version:
+
+$(VERSION_STAMP): force-version
+	@mkdir -p $(@D)
+	@printf '%s\n' '$(VERSION)' | cmp -s - $@ || printf '%s\n' '$(VERSION)' >$@
+
 # The CLI rule precedes the generic one: make 3.81 picks the first matching
 # pattern rule, newer versions the shortest stem, and both must choose it.
-# VERSION is a prerequisite because CPPFLAGS embeds it in every object as
-# MAELYS_EGRESS_BUILD_VERSION: without it, a version bump left the binary
-# reporting the previous version until something else forced a rebuild.
-$(OBJ)/cli/%.o: cli/%.c VERSION
+$(OBJ)/cli/%.o: cli/%.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CLI_CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
-$(OBJ)/%.o: %.c VERSION
+$(OBJ)/%.o: %.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
@@ -224,7 +234,7 @@ $(STATIC_LIB): $(OBJECTS)
 	rm -f $@
 	ZERO_AR_DATE=1 $(AR) rcs $@ $^
 
-$(OBJ)/providers/tls_mbedtls.o: providers/tls_mbedtls.c VERSION
+$(OBJ)/providers/tls_mbedtls.o: providers/tls_mbedtls.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $$(pkg-config --cflags mbedtls) -MMD -MP -c $< -o $@
 
@@ -232,7 +242,7 @@ $(MBEDTLS_LIB): $(OBJ)/providers/tls_mbedtls.o
 	@mkdir -p $(@D)
 	ar rcs $@ $^
 
-$(OBJ)/providers/tls_wolfssl.o: providers/tls_wolfssl.c VERSION
+$(OBJ)/providers/tls_wolfssl.o: providers/tls_wolfssl.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $$(pkg-config --cflags wolfssl) -MMD -MP -c $< -o $@
 
@@ -246,7 +256,7 @@ $(CLI): $(CLI_OBJECTS) $(CLI_SCHEMA_OBJECT) $(STATIC_LIB) $(MAELYS_CLI_LIB) | $(
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
-$(OBJ)/cli/tls_listener-mbedtls.o: cli/tls_listener.c VERSION | $(MAELYS_CLI_LIB) $(GENERATED)/egress_schemas.h
+$(OBJ)/cli/tls_listener-mbedtls.o: cli/tls_listener.c $(VERSION_STAMP) | $(MAELYS_CLI_LIB) $(GENERATED)/egress_schemas.h
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CLI_CPPFLAGS) $(CFLAGS) \
 		-DMAELYS_EGRESS_TLS_FACTORY=maelys_egress_tls_mbedtls_create \
@@ -257,7 +267,7 @@ $(MBEDTLS_CLI): $(OBJ)/cli/tls_listener-mbedtls.o $(CLI_COMMON_OBJECTS) $(CLI_SC
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) \
 		$$(pkg-config --libs mbedtls mbedx509 mbedcrypto) -o $@
 
-$(OBJ)/cli/tls_listener-wolfssl.o: cli/tls_listener.c VERSION | $(MAELYS_CLI_LIB) $(GENERATED)/egress_schemas.h
+$(OBJ)/cli/tls_listener-wolfssl.o: cli/tls_listener.c $(VERSION_STAMP) | $(MAELYS_CLI_LIB) $(GENERATED)/egress_schemas.h
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CLI_CPPFLAGS) $(CFLAGS) \
 		-DMAELYS_EGRESS_TLS_FACTORY=maelys_egress_tls_wolfssl_create \
@@ -267,7 +277,7 @@ $(WOLFSSL_CLI): $(OBJ)/cli/tls_listener-wolfssl.o $(CLI_COMMON_OBJECTS) $(CLI_SC
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) $$(pkg-config --libs wolfssl) -o $@
 
-$(OBJ)/tests/test_egress.o: tests/test_egress.c VERSION | $(MAELYS_SYSTEM_LIB)
+$(OBJ)/tests/test_egress.o: tests/test_egress.c $(VERSION_STAMP) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
@@ -275,7 +285,7 @@ $(TEST): $(OBJ)/tests/test_egress.o $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
-$(OBJ)/tests/test_operations.o: tests/test_operations.c VERSION | $(MAELYS_SYSTEM_LIB)
+$(OBJ)/tests/test_operations.o: tests/test_operations.c $(VERSION_STAMP) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
@@ -593,6 +603,7 @@ reproducible-check: $(STATIC_LIB)
 # what the dispatcher would read.
 install-metadata-check: all
 	python3 tests/test_install.py $(BUILD) PREFIX="$(PREFIX)" \
+		VERSION="$(VERSION)" \
 		MAELYS_SYSTEM_DIR="$(MAELYS_SYSTEM_DIR)" \
 		MAELYS_SYSTEM_PREFIX="$(MAELYS_SYSTEM_PREFIX)" \
 		MAELYS_CLI_DIR="$(MAELYS_CLI_DIR)"
