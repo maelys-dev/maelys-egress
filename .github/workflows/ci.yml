@@ -12,14 +12,14 @@ jobs:
   # `make check` on the three release targets and the socle drift check.
   # Sanitizers, mutation, TLS providers, Docker and packaging stay below.
   socle:
-    uses: maelys-dev/maelys-release/.github/workflows/check-product.yml@d9b2c40ec997543d6729181ca60d00e5d6f65400 # v0.25.1
+    uses: maelys-dev/maelys-release/.github/workflows/check-product.yml@704b6414565f0e952e51275640d71180a5123862 # v0.26.0
     with:
       product: maelys-egress
       sanitizer_command: ""
-      # The socle's job replays the committed corpus, which is what it says it
-      # is for; the libFuzzer campaign stays below because that job installs no
-      # compiler runtime for it.
-      fuzz_command: make fuzz-smoke
+      # Both targets run there since 0.25.1 gave that job the compiler
+      # runtime: the corpus replay, then the bounded run the conventions
+      # place in CI. Nothing fuzzes below any more.
+      fuzz_command: make fuzz-smoke fuzz
 
   native:
     strategy:
@@ -76,7 +76,6 @@ jobs:
           sudo apt-get install -y clang g++ libclang-rt-18-dev
       - run: make asan-ubsan
       - run: make tsan
-      - run: make fuzz
 
   mutation:
     runs-on: ubuntu-24.04
