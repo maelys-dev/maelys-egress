@@ -1,8 +1,0 @@
-{
-  "schema": "maelys.cli-extension/v1",
-  "command": "egress",
-  "executable": "@PREFIX@/bin/maelys-egress",
-  "cliApi": 1,
-  "version": "@VERSION@",
-  "summary": "Policy-enforced HTTP CONNECT and SOCKS5 network mediator"
-}

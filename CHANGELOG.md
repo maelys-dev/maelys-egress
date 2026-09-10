@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- `maelys egress` is bound to the binary it registers. The dispatcher manifest
+  now carries the `sha256` of the executable, and the dispatcher of the pinned
+  maelys-cli refuses to run an executable whose digest does not match. Without
+  it the manifest was an alias: a different program left at the declared path
+  ran under our name, which a live check confirmed before the change by
+  substituting one and watching `maelys egress --version` answer for it. The
+  template moves from `packaging/maelys/egress.json.in` to
+  `cli/command.json.in`, with the terminal it describes, as maelys-platform's
+  layout policy asks.
+- The manifest and the pkg-config file are rendered by
+  `scripts/render-install-metadata.py` on every `make all` and `make install`
+  rather than from timestamps: both name the installation, and `PREFIX` or the
+  linker flags change them without any source moving. Unchanged bytes keep
+  their mtime. `install-metadata-check` installs under two prefixes without
+  cleaning and reads back what the dispatcher would read.
+- Every object depends on `VERSION`, which `CPPFLAGS` embeds as
+  `MAELYS_EGRESS_BUILD_VERSION`. A version bump left the binary reporting the
+  previous version until something else forced a rebuild; a release built from
+  a clean tree was never affected, a local build always was, and the manifest
+  would have declared a version its binary contradicted.
+- `all` is declared before `-include $(DEPENDENCIES)`. A rule read from an
+  included makefile becomes the default goal, so once the dependency files
+  existed, plain `make` built a single object and stopped: touching a source
+  changed nothing, and the tree drifted from its sources without saying so.
+  Clean builds, which is what CI and every release do, were never affected,
+  which is why nothing caught it. Found while trying to observe the version
+  staleness above.
+
 - `sdk-check` compares the two SDK `README.md` to `VERSION`, and says which
   file is wrong when a comparison fails. It already held the three files that
   declare the version, but not the READMEs, whose install commands name the
