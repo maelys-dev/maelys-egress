@@ -95,8 +95,14 @@ TLS_TEST_CERT := $(BUILD)/tls-fixtures/tls-cert.pem
 TLS_TEST_KEY := $(BUILD)/tls-fixtures/tls-key.pem
 PC := $(LIB)/pkgconfig/maelys-egress.pc
 MANIFEST := $(BUILD)/share/maelys/commands/egress.json
+VERSION_STAMP := $(GENERATED)/version
 EXAMPLE_NAMES := basic_proxy native_connector policy_reload metrics_snapshot durable_audit custom_attestor
 EXAMPLE_BINS := $(EXAMPLE_NAMES:%=$(BIN)/example-%)
+
+# `all` is declared before the dependency files are included: a rule read
+# from an included makefile would otherwise become the default goal, and
+# plain `make` would build one stale object instead of the product.
+all: $(STATIC_LIB) $(CLI) $(TEST) $(PC) $(MANIFEST)
 
 -include $(DEPENDENCIES)
 
@@ -105,9 +111,7 @@ EXAMPLE_BINS := $(EXAMPLE_NAMES:%=$(BIN)/example-%)
 	config-reference contract-check lifecycle-contract-check schema-check package-homebrew \
 	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-binaries \
 	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check \
-	public-check reproducible-check dist
-
-all: $(STATIC_LIB) $(CLI) $(TEST) $(PC) $(MANIFEST)
+	public-check reproducible-check install-metadata-check dist
 
 ifeq ($(MAELYS_SYSTEM_PREFIX),)
 check-system-contract:
@@ -200,13 +204,25 @@ $(CLI_SCHEMA_OBJECT): $(GENERATED)/egress_schemas.c
 
 $(OBJECTS): | $(MAELYS_SYSTEM_LIB)
 
+# Every object embeds the version through CPPFLAGS, so every object follows
+# $(VERSION_STAMP), which holds the value in use. A prerequisite on the VERSION
+# file would miss `make VERSION=x`, which changes neither that file nor its
+# timestamp; the stamp is rewritten only when the value differs, so an
+# unchanged version rebuilds nothing.
+.PHONY: force-version
+force-version:
+
+$(VERSION_STAMP): force-version
+	@mkdir -p $(@D)
+	@printf '%s\n' '$(VERSION)' | cmp -s - $@ || printf '%s\n' '$(VERSION)' >$@
+
 # The CLI rule precedes the generic one: make 3.81 picks the first matching
 # pattern rule, newer versions the shortest stem, and both must choose it.
-$(OBJ)/cli/%.o: cli/%.c
+$(OBJ)/cli/%.o: cli/%.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CLI_CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
-$(OBJ)/%.o: %.c
+$(OBJ)/%.o: %.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
@@ -218,7 +234,7 @@ $(STATIC_LIB): $(OBJECTS)
 	rm -f $@
 	ZERO_AR_DATE=1 $(AR) rcs $@ $^
 
-$(OBJ)/providers/tls_mbedtls.o: providers/tls_mbedtls.c
+$(OBJ)/providers/tls_mbedtls.o: providers/tls_mbedtls.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $$(pkg-config --cflags mbedtls) -MMD -MP -c $< -o $@
 
@@ -226,7 +242,7 @@ $(MBEDTLS_LIB): $(OBJ)/providers/tls_mbedtls.o
 	@mkdir -p $(@D)
 	ar rcs $@ $^
 
-$(OBJ)/providers/tls_wolfssl.o: providers/tls_wolfssl.c
+$(OBJ)/providers/tls_wolfssl.o: providers/tls_wolfssl.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $$(pkg-config --cflags wolfssl) -MMD -MP -c $< -o $@
 
@@ -240,7 +256,7 @@ $(CLI): $(CLI_OBJECTS) $(CLI_SCHEMA_OBJECT) $(STATIC_LIB) $(MAELYS_CLI_LIB) | $(
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
-$(OBJ)/cli/tls_listener-mbedtls.o: cli/tls_listener.c | $(MAELYS_CLI_LIB) $(GENERATED)/egress_schemas.h
+$(OBJ)/cli/tls_listener-mbedtls.o: cli/tls_listener.c $(VERSION_STAMP) | $(MAELYS_CLI_LIB) $(GENERATED)/egress_schemas.h
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CLI_CPPFLAGS) $(CFLAGS) \
 		-DMAELYS_EGRESS_TLS_FACTORY=maelys_egress_tls_mbedtls_create \
@@ -251,7 +267,7 @@ $(MBEDTLS_CLI): $(OBJ)/cli/tls_listener-mbedtls.o $(CLI_COMMON_OBJECTS) $(CLI_SC
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) \
 		$$(pkg-config --libs mbedtls mbedx509 mbedcrypto) -o $@
 
-$(OBJ)/cli/tls_listener-wolfssl.o: cli/tls_listener.c | $(MAELYS_CLI_LIB) $(GENERATED)/egress_schemas.h
+$(OBJ)/cli/tls_listener-wolfssl.o: cli/tls_listener.c $(VERSION_STAMP) | $(MAELYS_CLI_LIB) $(GENERATED)/egress_schemas.h
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CLI_CPPFLAGS) $(CFLAGS) \
 		-DMAELYS_EGRESS_TLS_FACTORY=maelys_egress_tls_wolfssl_create \
@@ -261,7 +277,7 @@ $(WOLFSSL_CLI): $(OBJ)/cli/tls_listener-wolfssl.o $(CLI_COMMON_OBJECTS) $(CLI_SC
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) $$(pkg-config --libs wolfssl) -o $@
 
-$(OBJ)/tests/test_egress.o: tests/test_egress.c | $(MAELYS_SYSTEM_LIB)
+$(OBJ)/tests/test_egress.o: tests/test_egress.c $(VERSION_STAMP) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
@@ -269,7 +285,7 @@ $(TEST): $(OBJ)/tests/test_egress.o $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
-$(OBJ)/tests/test_operations.o: tests/test_operations.c | $(MAELYS_SYSTEM_LIB)
+$(OBJ)/tests/test_operations.o: tests/test_operations.c $(VERSION_STAMP) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
@@ -303,16 +319,21 @@ $(WOLFSSL_TEST): tests/test_tls_provider.c $(WOLFSSL_LIB) $(STATIC_LIB) $(TLS_TE
 		tests/test_tls_provider.c $(WOLFSSL_LIB) $(STATIC_LIB) \
 		$(LDLIBS) $$(pkg-config --libs wolfssl) -o $@
 
-$(PC): pkgconfig/maelys-egress.pc.in VERSION dependencies/maelys-system.pin
-	@mkdir -p $(@D)
-	sed -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@VERSION@|$(VERSION)|g' \
-		-e 's|@SYSTEM_VERSION@|$(MAELYS_SYSTEM_VERSION)|g' $< >$@
+# The pkg-config file and the manifest read by the `maelys` dispatcher both
+# describe the installation: the manifest binds `maelys egress` to the
+# installed binary by absolute path and by digest, so the dispatcher refuses
+# another binary left at that path. Render on every invocation, because PREFIX
+# and the linker flags change the result without any source timestamp moving;
+# identical bytes keep their mtime.
+.PHONY: install-metadata
+install-metadata: $(CLI)
+	python3 scripts/render-install-metadata.py --prefix="$(PREFIX)" \
+		--version="$(VERSION)" \
+		--system-version="$(MAELYS_SYSTEM_VERSION)" \
+		--binary="$(CLI)" --pkgconfig="$(PC)" --manifest="$(MANIFEST)"
 
-# Manifest read by the `maelys` dispatcher of maelys-cli: it registers the
-# installed daemon as `maelys egress`.
-$(MANIFEST): packaging/maelys/egress.json.in VERSION
-	@mkdir -p $(@D)
-	sed -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@VERSION@|$(VERSION)|g' $< >$@
+$(PC) $(MANIFEST): | install-metadata
+	@test -f $@
 
 test: all $(OPERATIONS_TEST)
 	$(TEST)
@@ -415,7 +436,7 @@ conformance-check: $(CLI) check-spec-contract
 	python3 $(MAELYS_SPEC_DIR)/conformance/run.py $(abspath $(CLI))
 
 check: test examples-check sdk-check audit system-integration-check contract-check schema-check \
-	conformance-check public-check reproducible-check
+	conformance-check public-check reproducible-check install-metadata-check
 	$(CXX) -Iinclude -std=c++17 -Wall -Wextra -Wpedantic -Werror \
 		tests/header_cpp.cpp -c -o $(BUILD)/header-cpp.o
 
@@ -576,6 +597,16 @@ reproducible-check: $(STATIC_LIB)
 	ZERO_AR_DATE=1 $(AR) rcs $(BUILD)/reproducible/libmaelys_egress.a $(OBJECTS)
 	cmp $(STATIC_LIB) $(BUILD)/reproducible/libmaelys_egress.a
 	@echo "reproducible-check: identical archive from the same objects"
+
+# The manifest and the pkg-config file are the two installed files that name
+# the installation itself; this stages one under two prefixes and reads back
+# what the dispatcher would read.
+install-metadata-check: all
+	python3 tests/test_install.py $(BUILD) PREFIX="$(PREFIX)" \
+		VERSION="$(VERSION)" \
+		MAELYS_SYSTEM_DIR="$(MAELYS_SYSTEM_DIR)" \
+		MAELYS_SYSTEM_PREFIX="$(MAELYS_SYSTEM_PREFIX)" \
+		MAELYS_CLI_DIR="$(MAELYS_CLI_DIR)"
 
 install-check: all
 	@set -e; stage="$$(mktemp -d)"; trap 'rm -rf "$$stage"' EXIT; \
