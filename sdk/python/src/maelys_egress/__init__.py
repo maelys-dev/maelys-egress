@@ -22,7 +22,7 @@ from typing import Callable, Iterable, Mapping, Optional
 from urllib.parse import quote
 
 __all__ = ["Destination", "EgressConfig", "EgressProcess", "binary_trust_refusal"]
-__version__ = "0.19.5"
+__version__ = "0.19.6"
 
 _LIFECYCLE_CONTRACT = "maelys-egress-lifecycle/1"
 _BINARY_NAME = "maelys-egress"
