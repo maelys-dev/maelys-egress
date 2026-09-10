@@ -12,7 +12,7 @@ jobs:
   # `make check` on the three release targets and the socle drift check.
   # Sanitizers, mutation, TLS providers, Docker and packaging stay below.
   socle:
-    uses: maelys-dev/maelys-release/.github/workflows/check-product.yml@042c996c5f1268c77c0f391cbab87b621182140a # untagged
+    uses: maelys-dev/maelys-release/.github/workflows/check-product.yml@1d2d174b50bc1dea723d81c4cf8d192d46e189ca # untagged
     with:
       product: maelys-egress
       sanitizer_command: ""
