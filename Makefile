@@ -354,10 +354,21 @@ examples-check: $(EXAMPLE_BINS)
 	$(BIN)/example-custom_attestor
 
 sdk-check: $(CLI)
-	@grep -Fq 'version = "$(SOURCE_VERSION)"' sdk/python/pyproject.toml
+	@grep -Fq 'version = "$(SOURCE_VERSION)"' sdk/python/pyproject.toml || \
+		{ echo "sdk/python/pyproject.toml does not declare $(SOURCE_VERSION)" >&2; exit 1; }
 	@grep -Fq '__version__ = "$(SOURCE_VERSION)"' \
-		sdk/python/src/maelys_egress/__init__.py
-	@node -e 'const p=require("./sdk/node/package.json"); if (p.version !== "$(SOURCE_VERSION)") process.exit(1)'
+		sdk/python/src/maelys_egress/__init__.py || \
+		{ echo "sdk/python/src/maelys_egress/__init__.py does not declare $(SOURCE_VERSION)" >&2; exit 1; }
+	@node -e 'const p=require("./sdk/node/package.json"); if (p.version !== "$(SOURCE_VERSION)") process.exit(1)' || \
+		{ echo "sdk/node/package.json does not declare $(SOURCE_VERSION)" >&2; exit 1; }
+	@for sdk in python node; do \
+		named="$$(grep -o "maelys-egress-$$sdk-sdk-[0-9][0-9.]*[0-9]" \
+			sdk/$$sdk/README.md | sort -u)"; \
+		test -n "$$named" || \
+			{ echo "sdk/$$sdk/README.md names no SDK archive to install" >&2; exit 1; }; \
+		test "$$named" = "maelys-egress-$$sdk-sdk-$(SOURCE_VERSION)" || \
+			{ echo "sdk/$$sdk/README.md installs $$(echo "$$named" | paste -sd, -), not maelys-egress-$$sdk-sdk-$(SOURCE_VERSION)" >&2; exit 1; }; \
+	done
 	PYTHONDONTWRITEBYTECODE=1 MAELYS_EGRESS_BINARY=$(abspath $(CLI)) \
 		python3 -m unittest discover -s sdk/python/tests -p 'test_*.py'
 	MAELYS_EGRESS_BINARY=$(abspath $(CLI)) node --test sdk/node/test/egress.test.js
