@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- `scripts/package-release.sh` reads each artifact back and checks that the
+  manifest it contains describes the binary beside it: same digest, same
+  declared path, same version. `make check` proves the rules produce a matching
+  pair, but it proves it of a staging the test builds and throws away; what
+  ships comes from a second `make install`, and the packages from a third. The
+  archive is unpacked and read rather than the tree it came from, because a tar
+  that dropped or truncated one of the two files would leave the tree correct
+  and the artifact refused by the dispatcher. The Debian package is read back
+  the same way; the RPM is built from the staging that is checked before it.
+
 ## 0.19.6 — 2026-09-11
 
 - `.claude/skills/egress-cli-contract/SKILL.md` is CC-BY-4.0, attributed to
