@@ -12,10 +12,14 @@ jobs:
   # `make check` on the three release targets and the socle drift check.
   # Sanitizers, mutation, TLS providers, Docker and packaging stay below.
   socle:
-    uses: maelys-dev/maelys-release/.github/workflows/check-product.yml@70086702ab554b64677708ab5423555ca2ea5c3d # v0.22.1
+    uses: maelys-dev/maelys-release/.github/workflows/check-product.yml@6b4700b2b50c9475b2ca5d67398c0f3278ecbcbe # v0.23.0
     with:
       product: maelys-egress
       sanitizer_command: ""
+      # The socle's job replays the committed corpus, which is what it says it
+      # is for; the libFuzzer campaign stays below because that job installs no
+      # compiler runtime for it.
+      fuzz_command: make fuzz-smoke
 
   native:
     strategy:
