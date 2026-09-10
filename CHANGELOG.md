@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- `sdk-check` compares the two SDK `README.md` to `VERSION`, and says which
+  file is wrong when a comparison fails. It already held the three files that
+  declare the version, but not the READMEs, whose install commands name the
+  released archive by version and ship inside the SDK archives themselves; a
+  release could have told a reader to install the previous version. The three
+  existing comparisons were silent `grep`s, so a stale file failed the build
+  with `Error 1` and nothing else.
+
 ## 0.19.4 — 2026-09-10
 
 - The copyright holder is David Bromberg, in `LICENSING.md` and in the
