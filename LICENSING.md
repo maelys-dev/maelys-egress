@@ -19,7 +19,9 @@ covered software.
 ## Installed agent texts: CC-BY-4.0
 
 The managed `maelys-cli` and `maelys-release` blocks of `AGENTS.md` and
-`CLAUDE.md`, `docs/maelys-cli-guide.md` and the skills under `.claude/`,
+`CLAUDE.md`, `docs/maelys-cli-guide.md`,
+`.claude/skills/maelys-cli-command/SKILL.md` and
+`.claude/skills/maelys-release/SKILL.md`
 are installed by `maelys agents install` and `maelys-release adopt` from
 the Maelys CLI and maelys-release distributions. Their `share/agents/`
 texts are licensed under CC-BY-4.0 with attribution to David Bromberg.
