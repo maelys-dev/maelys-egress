@@ -159,6 +159,16 @@ check-cli-contract:
 		"$(MAELYS_CLI_DIR)/include/maelys/cli/version.h"
 	@grep -Fq '#define MAELYS_CLI_CONTRACT "agent-cli/v2"' \
 		"$(MAELYS_CLI_DIR)/include/maelys/cli/version.h"
+	@# The framework writes four texts into this repository through
+	@# 'maelys agents install', which nothing here regenerates. Each one names
+	@# the version it came from, so a pin moved without that command leaves a
+	@# text behind; the composed guide cannot be derived from the checkout
+	@# without the dispatcher and its own dependencies, but its stamp can.
+	@for text in docs/maelys-cli-guide.md .claude/skills/maelys-cli-command/SKILL.md \
+			AGENTS.md CLAUDE.md; do \
+		grep -Fq 'maelys-cli $(MAELYS_CLI_TAG:v%=%)' "$$text" || \
+			{ echo "$$text was written by another maelys-cli than $(MAELYS_CLI_TAG); run 'maelys agents install . --apply' from the pinned checkout" >&2; exit 1; }; \
+	done
 
 check-spec-contract:
 	@test -f "$(MAELYS_SPEC_DIR)/conformance/run.py" || \

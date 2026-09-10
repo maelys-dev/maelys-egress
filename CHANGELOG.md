@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- `check-cli-contract` refuses a managed text written by another maelys-cli
+  than the pinned one. The framework writes four files here through
+  `maelys agents install`, which nothing in this repository regenerates, so a
+  pin moved without that command left them behind and no gate noticed. The
+  generated CLI and configuration references were already compared; these
+  four were not.
+
 ## 0.18.4 — 2026-09-09
 
 - The prose documentation moves to `maelys-dev/maelys-docs`, directory
