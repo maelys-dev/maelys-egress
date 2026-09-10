@@ -1,7 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.19.4 — 2026-09-10
 
+- The copyright holder is David Bromberg, in `LICENSING.md` and in the
+  `Maintainer` field of the Debian package. 0.19.3 and every release before it
+  installed `share/doc/maelys-egress/LICENSING.md` naming "Maelys Developers",
+  an entity that does not exist, and the `.deb` control file carried the same
+  name. The rest of the fleet still does; only this product is corrected.
 - `LICENSING.md` says which license covers each agent text. The CC-BY-4.0
   section lists the two skills a Maelys distribution installs,
   `maelys-cli-command` and `maelys-release`, rather than the `.claude/`

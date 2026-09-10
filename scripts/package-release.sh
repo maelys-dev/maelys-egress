@@ -81,7 +81,7 @@ Section: net
 Priority: optional
 Architecture: ${deb_arch}
 Installed-Size: ${installed_size}
-Maintainer: Maelys Developers <noreply@maelys.dev>
+Maintainer: David Bromberg <noreply@maelys.dev>
 Depends: libc6
 Description: policy-enforced HTTP and SOCKS network mediator
  Includes the daemon, public static C SDK and pinned Maelys System foundation.
