@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.19.0 — 2026-09-10
+
+- Adopt maelys-release 0.22.1. The generated CLI reference belongs to the
+  socle now: it runs maelys-cli's generator at this product's pinned commit
+  and reads the new `docs/cli.reference` for the build holding the programs,
+  so `docs/generated/cli-reference.md` becomes `docs/cli.md` and the contract
+  `docs/cli-contract.json`, the path every product uses. Both are installed
+  beside the other documents rather than under `generated/`, which keeps the
+  configuration reference this product still generates itself with
+  `make config-reference`. The local `cli-reference` target is gone and
+  `contract-check` compares what remains ours.
+- A broken third-party apt source of the runner image no longer fails the
+  shared CI job either: 0.18.4 fixed the five workflows this repository owns,
+  and the socle carries the same tolerance in the workflow it owns.
+- `scripts/checkout-dependency.sh`, regenerated, understands a dependency
+  hosted outside `maelys-dev` and one needing its submodules. This product
+  declares neither.
+
 ## 0.18.5 — 2026-09-10
 
 - The two reproduction probes of the audit of 2026-09-06 join their report in

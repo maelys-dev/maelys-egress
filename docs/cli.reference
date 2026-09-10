@@ -1,0 +1,9 @@
+# What the release socle needs to regenerate docs/cli.md and docs/cli-contract.json.
+# The programs are built by `make all`; this repository puts them under a
+# profile directory rather than build/bin, so the build holding them is named.
+
+[build]
+build/release/bin
+
+[programs]
+maelys-egress

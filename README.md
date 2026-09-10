@@ -178,8 +178,8 @@ limits of HMAC receipt evidence are documented in
   decision, backend differences, confinement and network boundaries;
 - [Python and Node.js process SDKs](sdk/README.md): what they automate and what
   remains the application's proxy-client responsibility;
-  the generated [CLI reference](docs/generated/cli-reference.md) and
-  [machine-readable contract](docs/generated/cli-contract.json);
+  the generated [CLI reference](docs/cli.md) and
+  [machine-readable contract](docs/cli-contract.json);
   [configuration-key reference](docs/generated/config-reference.md).
 
 Compileable consumers live in `examples/`. Pure Python and Node.js helpers in

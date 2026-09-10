@@ -6,7 +6,9 @@ status or lifecycle event, read and follow
 [`.claude/skills/egress-cli-contract/SKILL.md`](.claude/skills/egress-cli-contract/SKILL.md).
 
 Do not hand-edit files under `docs/generated/`. Update the central catalog or
-protocol schema, run `make cli-reference`, and commit the generated result.
+protocol schema, then regenerate: `maelys-release adopt . --apply` writes
+docs/cli.md and docs/cli-contract.json, `make config-reference` the
+configuration one. Commit the generated result.
 
 No backward-compatibility alias should be introduced without an explicit
 product decision. The 0.x series prefers one clear contract over parallel old

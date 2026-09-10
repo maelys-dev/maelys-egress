@@ -55,7 +55,7 @@ Update the handlers in `cli/commands.c`, the shell test
 configuration rendering changes. Run:
 
 ```sh
-make cli-reference
+make config-reference
 make contract-check
 make lifecycle-contract-check
 make schema-check
@@ -63,7 +63,10 @@ make sdk-check
 make check
 ```
 
-Commit the regenerated `docs/generated/` files with their catalog change. Do
-not patch them by hand. They come from a release-neutral build (version
+Commit the regenerated files with their catalog change: `docs/cli.md` and
+`docs/cli-contract.json` come from the release socle, which runs maelys-cli's
+generator at the pinned commit and reads `docs/cli.reference` for the build
+holding the programs; `docs/generated/config-reference.md` comes from this
+product's own tool. Do not patch any of them by hand. They come from a release-neutral build (version
 `0.0.0`), so a release bump never rewrites them. Advancing `dependencies/maelys-cli.pin` is a product
 decision recorded in the changelog, never a side effect of a command change.
