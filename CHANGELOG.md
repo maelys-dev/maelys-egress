@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.19.6 — 2026-09-11
+
+- `.claude/skills/egress-cli-contract/SKILL.md` is CC-BY-4.0, attributed to
+  David Bromberg, and carries its own notice: SPDX identifier, copyright,
+  source and license link. It was MPL-2.0 through this repository's blanket
+  clause. maelys-platform's licensing policy licenses every agent text of a
+  Maelys repository under CC-BY-4.0, whether a socle installed it or the
+  product wrote it, on the ground that what decides is the nature of the text
+  rather than who shipped it, and that an attribution which does not travel
+  with the copy is not one. 0.19.4 had drawn the line the other way, naming
+  the two installed skills and leaving ours under the MPL; `LICENSING.md`
+  states the new rule for both sides. The two installed skills receive their
+  notice at the next adoption of the distributions that write them, never
+  through a pull request of this repository.
+
 ## 0.19.5 — 2026-09-10
 
 - `maelys egress` is bound to the binary it registers. The dispatcher manifest

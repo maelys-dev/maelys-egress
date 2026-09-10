@@ -3,6 +3,13 @@ name: egress-cli-contract
 description: Change Maelys Egress CLI commands, options, configuration keys, lifecycle events, generated references, or process SDK consumers while preserving their shared executable contract.
 ---
 
+<!-- SPDX-License-Identifier: CC-BY-4.0
+Copyright 2026 David Bromberg.
+Source: https://github.com/maelys-dev/maelys-egress/blob/main/.claude/skills/egress-cli-contract/SKILL.md
+License: https://creativecommons.org/licenses/by/4.0/
+When sharing adaptations, retain attribution and indicate your changes.
+-->
+
 # Maelys Egress CLI contract
 
 Treat the CLI as a protocol consumed simultaneously by humans, shell scripts,

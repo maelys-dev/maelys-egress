@@ -10,9 +10,7 @@ examples and documentation of this repository is available under the Mozilla
 Public License 2.0. The complete terms are in [`LICENSE`](LICENSE); the SDK
 packages carry their own copy.
 
-Agent skills written in this repository, such as
-`.claude/skills/egress-cli-contract/SKILL.md`, are part of that documentation.
-The skills a Maelys distribution installs are covered by the next section.
+The agent texts of the next section are excluded.
 
 The MPL applies file by file. A program that links `libmaelys_egress.a`,
 statically or otherwise, or embeds the daemon, keeps its own license
@@ -20,20 +18,23 @@ statically or otherwise, or embeds the daemon, keeps its own license
 in Source Code Form under MPL-2.0. Workloads mediated by the proxy are not
 covered software.
 
-## Installed agent texts: CC-BY-4.0
+## Agent texts: CC-BY-4.0
 
-The managed `maelys-cli` and `maelys-release` blocks of `AGENTS.md` and
-`CLAUDE.md`, `docs/maelys-cli-guide.md`,
-`.claude/skills/maelys-cli-command/SKILL.md` and
-`.claude/skills/maelys-release/SKILL.md`
-are installed by `maelys agents install` and `maelys-release adopt` from
-the Maelys CLI and maelys-release distributions. Their `share/agents/`
-texts are licensed under CC-BY-4.0 with attribution to David Bromberg.
-Blocks installed before that change were copied under CC0-1.0 and that
-grant stands for those copies; the notices identifying copyright, source
-and license arrive with the next adoption. Retain them, and indicate your
-changes when sharing an adaptation. This applies to the installed blocks,
-not to what this repository writes outside them.
+Every `.claude/skills/*/SKILL.md` of this repository, and the managed
+`maelys-cli` and `maelys-release` blocks of `AGENTS.md` and `CLAUDE.md`
+together with `docs/maelys-cli-guide.md`, are licensed under CC-BY-4.0 with
+attribution to David Bromberg. This holds whether a socle installed the text
+or this repository wrote it: what decides is that the text instructs an agent,
+not who shipped it. Retain the attribution, and indicate your changes when
+sharing an adaptation.
+
+Each text carries its own notice — SPDX identifier, copyright, source and
+license link — because an attribution that does not travel with the copy is
+not one. `.claude/skills/egress-cli-contract/SKILL.md` is written here and
+carries its notice now; the installed texts receive theirs at the next
+adoption of the distribution that writes them, never through a pull request
+of this repository. Blocks installed before the change were copied under
+CC0-1.0 and that grant stands for those copies.
 
 ## Redistributed material
 
