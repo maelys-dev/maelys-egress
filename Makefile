@@ -102,7 +102,7 @@ EXAMPLE_BINS := $(EXAMPLE_NAMES:%=$(BIN)/example-%)
 
 .PHONY: all clean check test examples-check sdk-check audit check-system-contract check-cli-contract \
 	system-integration-check mutation-check check-spec-contract conformance-check \
-	cli-reference contract-check lifecycle-contract-check schema-check package-homebrew \
+	config-reference contract-check lifecycle-contract-check schema-check package-homebrew \
 	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-binaries \
 	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check \
 	public-check reproducible-check dist
@@ -322,25 +322,22 @@ test: all $(OPERATIONS_TEST)
 # The command reference and contract come from the maelys-cli generator; the
 # configuration-key reference is Egress specific. Both read `describe`; the
 # generator omits versions by default, so a release never rewrites them.
-cli-reference: $(CLI)
-	python3 $(MAELYS_CLI_REFERENCE) --build $(abspath $(BIN)) \
-		--markdown docs/generated/cli-reference.md \
-		--json docs/generated/cli-contract.json maelys-egress
+# docs/cli.md and docs/cli-contract.json belong to the release socle, which
+# runs maelys-cli's generator at the pinned commit and reads docs/cli.reference
+# for the build holding the programs: 'maelys-release adopt' writes them,
+# 'check' compares them, and check-product.yml does it in this repository's CI.
+# The configuration reference is this product's own, generated here.
+config-reference: $(CLI)
 	python3 tools/generate_config_reference.py --binary $(abspath $(CLI)) \
 		--output docs/generated/config-reference.md
 
 # Rejects stale generated documentation; part of `check`.
 contract-check: $(CLI)
 	@mkdir -p $(BUILD)/contract
-	python3 $(MAELYS_CLI_REFERENCE) --build $(abspath $(BIN)) \
-		--markdown $(BUILD)/contract/cli-reference.md \
-		--json $(BUILD)/contract/cli-contract.json maelys-egress
 	python3 tools/generate_config_reference.py --binary $(abspath $(CLI)) \
 		--output $(BUILD)/contract/config-reference.md
-	@for name in cli-reference.md cli-contract.json config-reference.md; do \
-		cmp -s $(BUILD)/contract/$$name docs/generated/$$name || \
-			{ echo "docs/generated/$$name drifted; run make cli-reference" >&2; exit 1; }; \
-	done
+	@cmp -s $(BUILD)/contract/config-reference.md docs/generated/config-reference.md || \
+		{ echo "docs/generated/config-reference.md drifted; run make config-reference" >&2; exit 1; }
 	@echo "contract-check: ok"
 
 lifecycle-contract-check: $(CLI)
@@ -493,11 +490,11 @@ endif
 	install -m 0644 $(PC) $(DESTDIR)$(PREFIX)/lib/pkgconfig/
 	install -m 0755 $(CLI) $(DESTDIR)$(PREFIX)/bin/
 	install -m 0644 README.md CHANGELOG.md LICENSE LICENSING.md SECURITY.md \
-		THIRD_PARTY_NOTICES.md docs/*.md \
+		THIRD_PARTY_NOTICES.md docs/*.md docs/cli-contract.json \
 		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/
 	install -d $(DESTDIR)$(PREFIX)/share/doc/maelys-egress/generated \
 		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/protocol
-	install -m 0644 docs/generated/*.md docs/generated/*.json \
+	install -m 0644 docs/generated/*.md \
 		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/generated/
 	install -m 0644 protocol/*.json \
 		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/protocol/
@@ -579,7 +576,9 @@ install-check: all
 	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/examples/c/basic_proxy.c"; \
 	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/sdk/python/pyproject.toml"; \
 	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/sdk/node/package.json"; \
-	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/generated/cli-reference.md"; \
+	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/cli.md"; \
+	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/cli-contract.json"; \
+	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/generated/config-reference.md"; \
 	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/protocol/egress-lifecycle-v1.schema.json"
 
 dist:
