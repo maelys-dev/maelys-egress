@@ -1,6 +1,6 @@
 # Licensing
 
-Copyright 2026 Maelys Developers.
+Copyright 2026 David Bromberg.
 
 ## Source code: MPL-2.0
 
@@ -16,13 +16,20 @@ statically or otherwise, or embeds the daemon, keeps its own license
 in Source Code Form under MPL-2.0. Workloads mediated by the proxy are not
 covered software.
 
-## Installed agent texts: CC0-1.0
+## Installed agent texts: CC-BY-4.0
 
-The managed `maelys-cli` blocks of `AGENTS.md` and `CLAUDE.md`,
-`docs/maelys-cli-guide.md` and `.claude/skills/maelys-cli-command/SKILL.md`
-are installed by `maelys agents install` from the Maelys CLI distribution,
-whose `share/` texts are dedicated to the public domain under CC0-1.0. They
-carry no license obligation of their own.
+The managed `maelys-cli` and `maelys-release` blocks of `AGENTS.md` and
+`CLAUDE.md`, `docs/maelys-cli-guide.md`,
+`.claude/skills/maelys-cli-command/SKILL.md` and
+`.claude/skills/maelys-release/SKILL.md`
+are installed by `maelys agents install` and `maelys-release adopt` from
+the Maelys CLI and maelys-release distributions. Their `share/agents/`
+texts are licensed under CC-BY-4.0 with attribution to David Bromberg.
+Blocks installed before that change were copied under CC0-1.0 and that
+grant stands for those copies; the notices identifying copyright, source
+and license arrive with the next adoption. Retain them, and indicate your
+changes when sharing an adaptation. This applies to the installed blocks,
+not to what this repository writes outside them.
 
 ## Redistributed material
 
