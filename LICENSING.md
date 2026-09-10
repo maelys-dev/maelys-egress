@@ -10,6 +10,10 @@ examples and documentation of this repository is available under the Mozilla
 Public License 2.0. The complete terms are in [`LICENSE`](LICENSE); the SDK
 packages carry their own copy.
 
+Agent skills written in this repository, such as
+`.claude/skills/egress-cli-contract/SKILL.md`, are part of that documentation.
+The skills a Maelys distribution installs are covered by the next section.
+
 The MPL applies file by file. A program that links `libmaelys_egress.a`,
 statically or otherwise, or embeds the daemon, keeps its own license
 (section 3.3 of the MPL); only a modified covered file must remain available

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `LICENSING.md` says which license covers each agent text. The CC-BY-4.0
+  section lists the two skills a Maelys distribution installs,
+  `maelys-cli-command` and `maelys-release`, rather than the `.claude/`
+  directory, which would have placed a text written here under a grant made
+  by someone else; the MPL-2.0 section now names the skills written in this
+  repository, so both sides read explicitly. The line is distribution, not
+  prose against code: maelys-cli draws it the same way, keeping its own
+  `maelys-cli-framework` skill outside the `share/agents/` it distributes.
 - `README.md` names nothing in place of the documentation it no longer
   carries. `maelys-release migrate` wrote a pointer to `maelys-dev/maelys-docs`
   in 0.18.4, which is private and leads nowhere for a reader outside the
