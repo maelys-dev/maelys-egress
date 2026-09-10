@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.19.2 — 2026-09-10
+
+- Adopt maelys-release 0.25.1. Its fuzz job installs the compiler runtime the
+  sanitizers job beside it already had, so a smoke target written as a
+  libFuzzer binary can link there; this product spells its own as a
+  standalone driver and was never affected, which is why the report that led
+  to the fix described the wrong consequence. The campaign stays out of CI,
+  on the conventions' own terms rather than for want of a library.
+- The versions in between add declarations this product does not make: the
+  release targets and the manifest kinds become `packaging/release` inputs
+  with the socle's own values as defaults, and a registry channel is opt-in
+  through a file this repository does not carry. Only the pinned commits of
+  the three called workflows change here.
+
 ## 0.19.1 — 2026-09-10
 
 - Adopt maelys-release 0.23.0, whose `migrate` now rewrites every Markdown
