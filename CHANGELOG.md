@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.19.5 — 2026-09-10
 
 - `maelys egress` is bound to the binary it registers. The dispatcher manifest
   now carries the `sha256` of the executable, and the dispatcher of the pinned
