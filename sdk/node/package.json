@@ -1,6 +1,6 @@
 {
   "name": "@maelys/egress",
-  "version": "0.18.4",
+  "version": "0.18.5",
   "description": "Dependency-free process SDK for the Maelys Egress mediator",
   "type": "module",
   "main": "index.js",

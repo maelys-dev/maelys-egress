@@ -1,7 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.18.5 — 2026-09-10
 
+- The two reproduction probes of the audit of 2026-09-06 join their report in
+  `maelys-dev/maelys-docs`, under `maelys-egress/audits/2026-09-06/`. The
+  report moved there in 0.18.4 while its evidence stayed, so its links
+  resolved to nothing. They are not tests and were never installed: they
+  print observations and assert nothing, and every finding they reproduced is
+  closed by a regression test. `docs/` now holds only what this repository
+  generates.
 - `check-cli-contract` refuses a managed text written by another maelys-cli
   than the pinned one. The framework writes four files here through
   `maelys agents install`, which nothing in this repository regenerates, so a
