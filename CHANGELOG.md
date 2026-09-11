@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.19.9 — 2026-09-11
+
+- Adopt maelys-release 0.36.0, ten versions on from 0.26.0. Only the workflow
+  pins and the managed agent texts change here; the socle asks nothing new of
+  this product. `check`, `preflight` and `rehearse` of a current socle now
+  re-execute themselves from the socle a product pins, so the answer no longer
+  depends on which checkout a developer happens to have — the drift that cost
+  three failed gate runs here today.
+- `.github/workflows/ci.yml` runs once per pull request instead of twice. Its
+  `push:` trigger named no branch while `pull_request:` was declared too, so
+  every push of a pull request started both. `branches: [main]` leaves one run
+  per pull request and one per push to main. Advised by the socle's adoption,
+  and worth having the day a billing lock made every CI minute count.
+- `.claude/skills/maelys-release/SKILL.md` carries its CC-BY-4.0 notice, which
+  arrived with this adoption. Both installed skills now have theirs.
+
 ## 0.19.8 — 2026-09-11
 
 - Adopt agent-cli-spec 2.4.0 and maelys-cli 0.5.24. The specification adds
