@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.19.7 — 2026-09-11
 
 - `scripts/package-release.sh` reads each artifact back and checks that the
   manifest it contains describes the binary beside it: same digest, same
