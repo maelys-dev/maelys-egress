@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.19.8 — 2026-09-11
+
+- Adopt agent-cli-spec 2.4.0 and maelys-cli 0.5.24. The specification adds
+  `--field NAME` to the trunk of global options: it renders one top-level
+  member of `data` so a reader gets a member without a query tool. The trunk
+  belongs to the framework, so the move needed maelys-cli first — `--field`
+  arrives there in 0.5.23 — and pinning the specification alone would only
+  have failed the kit. No product code changes: the conformance kit goes from
+  244 to 259 checks, all passing, and `docs/cli-contract.json` gains the
+  option. The five framework versions crossed also bring maelys-json 0.1.6 and
+  a manifest error that names its failing value by RFC 6901 pointer.
+- The four texts `maelys agents install` writes carry their CC-BY-4.0 notice,
+  which arrived with this adoption rather than through a pull request, as
+  maelys-platform's licensing policy prescribes for an installed text.
+
 ## 0.19.7 — 2026-09-11
 
 - `scripts/package-release.sh` reads each artifact back and checks that the
