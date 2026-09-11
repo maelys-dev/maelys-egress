@@ -8,6 +8,31 @@ sha256() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$@"; else shasum -a 256 "$@"; fi
 }
 
+# The dispatcher runs `maelys egress` only when the manifest's sha256 matches
+# the binary at the declared path, so an artifact whose two halves disagree is
+# one the dispatcher will refuse. `make check` proves the rules produce a
+# matching pair; this proves it of the tree that is about to be shipped, which
+# is a different `make install` run.
+verify_manifest() {
+  local tree="$1" prefix="$2" binary manifest actual
+  binary="$tree$prefix/bin/maelys-egress"
+  manifest="$tree$prefix/share/maelys/commands/egress.json"
+  test -x "$binary" || { echo "$binary is missing from the staged tree" >&2; exit 1; }
+  test -f "$manifest" || { echo "$manifest is missing from the staged tree" >&2; exit 1; }
+  actual="$(sha256 "$binary" | awk '{print $1}')"
+  python3 - "$manifest" "$actual" "$prefix/bin/maelys-egress" "$version" <<'EOF'
+import json, sys
+manifest, actual, executable, version = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+declared = json.load(open(manifest, encoding="utf-8"))
+for field, want, got in (("sha256", actual, declared.get("sha256")),
+                         ("executable", executable, declared.get("executable")),
+                         ("version", version, declared.get("version"))):
+    if got != want:
+        raise SystemExit(f"{manifest}: declares {field} {got!r}, "
+                         f"but the tree it ships in holds {want!r}")
+EOF
+}
+
 case "$(uname -s)" in Linux) host_os=linux ;; Darwin) host_os=macos ;; *) exit 1 ;; esac
 case "$(uname -m)" in x86_64|amd64) host_arch=x86_64 ;; arm64|aarch64) host_arch=arm64 ;; *) exit 1 ;; esac
 target="${1:-${host_os}-${host_arch}}"
@@ -42,6 +67,14 @@ tar_name="maelys-egress-${version}-${target}.tar.gz"
 tar -czf "$dist/$tar_name" -C "$stage" .
 (cd "$dist" && sha256 "$tar_name" >"${tar_name}.sha256")
 
+# Read the archive back rather than the tree it came from: what ships is the
+# archive, and a tar that dropped or truncated one of the two files would leave
+# the tree correct and the artifact refused.
+unpacked="$tmp/unpacked"
+mkdir -p "$unpacked"
+tar -xzf "$dist/$tar_name" -C "$unpacked"
+verify_manifest "$unpacked" /usr/local
+
 if [ "$target" = linux-x86_64 ]; then
   python_sdk="maelys-egress-python-sdk-${version}"
   node_sdk="maelys-egress-node-sdk-${version}"
@@ -70,6 +103,8 @@ case "$host_arch" in x86_64) deb_arch=amd64; rpm_arch=x86_64 ;; arm64) deb_arch=
 
 linux_stage="$tmp/linux-stage"
 make VERSION="$version" install DESTDIR="$linux_stage" PREFIX=/usr
+# A third install, under a third prefix; the packages below are copies of it.
+verify_manifest "$linux_stage" /usr
 deb_root="$tmp/deb"
 cp -a "$linux_stage" "$deb_root"
 mkdir -p "$deb_root/DEBIAN"
@@ -89,6 +124,8 @@ EOF
 deb_name="maelys-egress_${version}_${deb_arch}.deb"
 dpkg-deb --root-owner-group --build "$deb_root" "$dist/$deb_name" >/dev/null
 (cd "$dist" && sha256 "$deb_name" >"${deb_name}.sha256")
+dpkg-deb -x "$dist/$deb_name" "$tmp/deb-unpacked"
+verify_manifest "$tmp/deb-unpacked" /usr
 
 rpm_top="$tmp/rpmbuild"
 mkdir -p "$rpm_top"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
