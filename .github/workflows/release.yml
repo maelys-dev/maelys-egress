@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   release:
-    uses: maelys-dev/maelys-release/.github/workflows/release.yml@5694ea650ec7cf061622fc4e7ce935a19ee352df # untagged
+    uses: maelys-dev/maelys-release/.github/workflows/release.yml@9099776554399fb65f88d7ae2c3ab403d22100ad # untagged
     permissions:
       contents: write
       id-token: write
@@ -28,16 +28,12 @@ jobs:
       product: maelys-egress
       tag: ${{ inputs.tag || github.ref_name }}
       dependency_checkout: |
-        mkdir -p "$RUNNER_TEMP/dependencies"
-        sh scripts/checkout-dependency.sh agent-cli-spec "$RUNNER_TEMP/dependencies/agent-cli-spec"
-        sh scripts/checkout-dependency.sh maelys-cli "$RUNNER_TEMP/dependencies/maelys-cli"
-        sh scripts/checkout-dependency.sh maelys-system "$RUNNER_TEMP/dependencies/maelys-system"
-        echo "MAELYS_DEPENDENCIES_DIR=$RUNNER_TEMP/dependencies" >>"$GITHUB_ENV"
+        sh scripts/checkout-dependencies.sh "$RUNNER_TEMP/dependencies" >>"$GITHUB_ENV"
 
   tap-maelys-egress:
     needs: release
     if: needs.release.result == 'success'
-    uses: maelys-dev/maelys-release/.github/workflows/tap.yml@5694ea650ec7cf061622fc4e7ce935a19ee352df # untagged
+    uses: maelys-dev/maelys-release/.github/workflows/tap.yml@9099776554399fb65f88d7ae2c3ab403d22100ad # untagged
     permissions:
       contents: write
       id-token: write
