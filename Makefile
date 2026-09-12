@@ -16,7 +16,13 @@ CXX ?= c++
 # depends on libmaelys-sys). dependencies/maelys-system.pin records the tag and
 # the commit; an installed System must carry the same ABI and at least the
 # pinned version.
-MAELYS_SYSTEM_DIR ?= ../maelys-system
+# Where the pinned dependencies are. The socle materialises them apart from
+# any working copy and exports MAELYS_DEPENDENCIES_DIR; ../NAME is not a
+# default any more, because it cannot be told apart from the working copy of
+# somebody who develops that dependency too -- which cost four `make check`
+# runs in one day.
+MAELYS_DEPENDENCIES_DIR ?= $(error MAELYS_DEPENDENCIES_DIR is unset: run 'maelys-release dependencies . --apply' and export what it prints)
+MAELYS_SYSTEM_DIR ?= $(MAELYS_DEPENDENCIES_DIR)/maelys-system
 MAELYS_SYSTEM_PREFIX ?=
 MAELYS_SYSTEM_TAG := $(word 1,$(shell cat dependencies/maelys-system.pin))
 MAELYS_SYSTEM_PIN := $(word 2,$(shell cat dependencies/maelys-system.pin))
@@ -29,7 +35,7 @@ else
 MAELYS_SYSTEM_LIB := $(MAELYS_SYSTEM_PREFIX)/lib/libmaelys_sys.a
 MAELYS_SYSTEM_INCLUDE := $(MAELYS_SYSTEM_PREFIX)/include
 endif
-MAELYS_CLI_DIR ?= ../maelys-cli
+MAELYS_CLI_DIR ?= $(MAELYS_DEPENDENCIES_DIR)/maelys-cli
 MAELYS_CLI_TAG := $(word 1,$(shell cat dependencies/maelys-cli.pin))
 MAELYS_CLI_PIN := $(word 2,$(shell cat dependencies/maelys-cli.pin))
 MAELYS_CLI_BUILD := $(abspath $(BUILD)/deps/maelys-cli)
@@ -39,7 +45,7 @@ MAELYS_CLI_REFERENCE := $(MAELYS_CLI_DIR)/tools/generate_cli_reference.py
 # agent-cli-spec owns the contract the command implements. Its conformance kit
 # drives the built binary from the outside, so the pin must be the one the
 # pinned framework targets; check-spec-contract holds the two together.
-MAELYS_SPEC_DIR ?= ../agent-cli-spec
+MAELYS_SPEC_DIR ?= $(MAELYS_DEPENDENCIES_DIR)/agent-cli-spec
 MAELYS_SPEC_TAG := $(word 1,$(shell cat dependencies/agent-cli-spec.pin))
 MAELYS_SPEC_PIN := $(word 2,$(shell cat dependencies/agent-cli-spec.pin))
 GENERATED := $(BUILD)/generated
