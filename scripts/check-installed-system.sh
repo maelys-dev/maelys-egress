@@ -6,7 +6,7 @@
 set -eu
 
 root=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
-system_dir=${MAELYS_SYSTEM_DIR:-$root/../maelys-system}
+system_dir=${MAELYS_SYSTEM_DIR:-${MAELYS_DEPENDENCIES_DIR:?MAELYS_DEPENDENCIES_DIR is unset: run scripts/checkout-dependencies.sh DESTINATION and export what it prints}/maelys-system}
 system_version=$(sed -n '1p' "$root/dependencies/maelys-system.pin")
 system_version=${system_version#v}
 temp_base=${TMPDIR:-/tmp}
@@ -19,7 +19,7 @@ make -C "$system_dir" BUILD="$work/system-build" VERSION="$system_version" CPPFL
 test -f "$work/prefix/lib/libmaelys_sys.a"
 
 make -C "$root" BUILD_PROFILE=installed-system \
-    MAELYS_SYSTEM_PREFIX="$work/prefix" MAELYS_CLI_DIR="${MAELYS_CLI_DIR:-$root/../maelys-cli}" \
+    MAELYS_SYSTEM_PREFIX="$work/prefix" MAELYS_CLI_DIR="${MAELYS_CLI_DIR:-${MAELYS_DEPENDENCIES_DIR:?MAELYS_DEPENDENCIES_DIR is unset: run scripts/checkout-dependencies.sh DESTINATION and export what it prints}/maelys-cli}" \
     PREFIX="$work/egress" install >/dev/null
 test -x "$work/egress/bin/maelys-egress"
 test ! -e "$work/egress/lib/libmaelys_sys.a"

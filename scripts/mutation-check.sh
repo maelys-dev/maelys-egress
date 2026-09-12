@@ -10,8 +10,8 @@ temp_base=$(printenv TMPDIR || printf '%s' /tmp)
 temp_base=${temp_base%/}
 work=$(mktemp -d "$temp_base/maelys-egress-mutations.XXXXXX")
 trap 'rm -rf "$work"' EXIT HUP INT TERM
-system_dir=${MAELYS_SYSTEM_DIR:-$root/../maelys-system}
-cli_dir=${MAELYS_CLI_DIR:-$root/../maelys-cli}
+system_dir=${MAELYS_SYSTEM_DIR:-${MAELYS_DEPENDENCIES_DIR:?MAELYS_DEPENDENCIES_DIR is unset: run scripts/checkout-dependencies.sh DESTINATION and export what it prints}/maelys-system}
+cli_dir=${MAELYS_CLI_DIR:-${MAELYS_DEPENDENCIES_DIR:?MAELYS_DEPENDENCIES_DIR is unset: run scripts/checkout-dependencies.sh DESTINATION and export what it prints}/maelys-cli}
 
 # One sequential dependency build, shared read-only by every mutant, so the
 # parallel mutants never race on the same dependency output directory.
