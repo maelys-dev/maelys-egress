@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.19.10 — 2026-09-12
+
+- Adopt maelys-release 0.41.0 and maelys-cli 0.5.25. Only the workflow pins
+  and the managed agent texts change here; neither asks anything of this
+  product. The framework's own maelys-json moves to 0.2.0, which removes two
+  functions nothing here calls — this product does not depend on maelys-json.
+  The socle brings a `[runners]` declaration for its macOS jobs, honoured on a
+  private repository only, a `cut` that audits its own write before creating a
+  branch, an SBOM attested against the file it describes, and a check that a
+  version carrier has not stopped carrying the version.
+
 ## 0.19.9 — 2026-09-11
 
 - Adopt maelys-release 0.36.0, ten versions on from 0.26.0. Only the workflow
