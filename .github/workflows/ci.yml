@@ -16,7 +16,7 @@ jobs:
   # `make check` on the three release targets and the socle drift check.
   # Sanitizers, mutation, TLS providers, Docker and packaging stay below.
   socle:
-    uses: maelys-dev/maelys-release/.github/workflows/check-product.yml@29d8be42e552233a44115aee930af3fb6d4e966b # v0.41.0
+    uses: maelys-dev/maelys-release/.github/workflows/check-product.yml@3cfeae4e219b0e0da038b4c538a8068b9062b1f1 # v0.46.1
     with:
       product: maelys-egress
       sanitizer_command: ""
@@ -48,9 +48,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - run: sh scripts/checkout-dependency.sh maelys-system
-      - run: sh scripts/checkout-dependency.sh maelys-cli
-      - run: sh scripts/checkout-dependency.sh agent-cli-spec
+      # One root for every pin, exported for this job: the build reads
+      # $MAELYS_DEPENDENCIES_DIR and nothing beside the repository.
+      - run: sh scripts/checkout-dependencies.sh "$RUNNER_TEMP/dependencies" >>"$GITHUB_ENV"
       - name: Install tools
         if: runner.os == 'Linux'
         run: |
@@ -70,9 +70,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - run: sh scripts/checkout-dependency.sh maelys-system
-      - run: sh scripts/checkout-dependency.sh maelys-cli
-      - run: sh scripts/checkout-dependency.sh agent-cli-spec
+      # One root for every pin, exported for this job: the build reads
+      # $MAELYS_DEPENDENCIES_DIR and nothing beside the repository.
+      - run: sh scripts/checkout-dependencies.sh "$RUNNER_TEMP/dependencies" >>"$GITHUB_ENV"
       - run: |
           # A broken third-party apt source of the runner image must not fail an
           # install of Ubuntu archive packages: the update reports, the install decides.
@@ -85,9 +85,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - run: sh scripts/checkout-dependency.sh maelys-system
-      - run: sh scripts/checkout-dependency.sh maelys-cli
-      - run: sh scripts/checkout-dependency.sh agent-cli-spec
+      # One root for every pin, exported for this job: the build reads
+      # $MAELYS_DEPENDENCIES_DIR and nothing beside the repository.
+      - run: sh scripts/checkout-dependencies.sh "$RUNNER_TEMP/dependencies" >>"$GITHUB_ENV"
       - run: |
           # A broken third-party apt source of the runner image must not fail an
           # install of Ubuntu archive packages: the update reports, the install decides.
@@ -103,9 +103,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - run: sh scripts/checkout-dependency.sh maelys-system
-      - run: sh scripts/checkout-dependency.sh maelys-cli
-      - run: sh scripts/checkout-dependency.sh agent-cli-spec
+      # One root for every pin, exported for this job: the build reads
+      # $MAELYS_DEPENDENCIES_DIR and nothing beside the repository.
+      - run: sh scripts/checkout-dependencies.sh "$RUNNER_TEMP/dependencies" >>"$GITHUB_ENV"
       - name: Install TLS development packages
         if: runner.os == 'Linux'
         run: |
@@ -152,9 +152,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - run: sh scripts/checkout-dependency.sh maelys-system
-      - run: sh scripts/checkout-dependency.sh maelys-cli
-      - run: sh scripts/checkout-dependency.sh agent-cli-spec
+      # One root for every pin, exported for this job: the build reads
+      # $MAELYS_DEPENDENCIES_DIR and nothing beside the repository.
+      - run: sh scripts/checkout-dependencies.sh "$RUNNER_TEMP/dependencies" >>"$GITHUB_ENV"
       - name: Install packaging tools
         if: runner.os == 'Linux'
         run: |

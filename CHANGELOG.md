@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.19.11 — 2026-09-13
+
+- Adopt maelys-release 0.46.1 and read every pinned dependency under one root.
+  `maelys-release.conf` declares `[dependencies] apart`; the socle then
+  materialises the pins away from this repository and exports
+  `MAELYS_DEPENDENCIES_DIR` in each place it clones, and the new managed
+  `scripts/checkout-dependencies.sh DESTINATION` does the same for a developer
+  in one command. The Makefile reads `$(MAELYS_DEPENDENCIES_DIR)/NAME` and no
+  longer falls back to a sibling: a directory beside this one cannot be told
+  apart from the working copy of someone who develops that dependency too, and
+  this build lost four `make check` runs in a day to exactly that. Naming a
+  single `MAELYS_*_DIR` by hand still works; only the case where nothing says
+  where anything is now fails, with our own message instead of a silent read.
+  The five hand-written CI jobs clone once each instead of three times, and the
+  release workflow does the same. Three places of this repository assumed a
+  sibling of their own accord and had to follow: `docker/Dockerfile.test`,
+  which cloned into the image and then built with nothing set, and
+  `scripts/check-installed-system.sh` and `scripts/mutation-check.sh`, which
+  carried a hard-coded `../maelys-system` fallback that ignored the root the
+  environment already held.
+
 ## 0.19.10 — 2026-09-12
 
 - Adopt maelys-release 0.41.0 and maelys-cli 0.5.25. Only the workflow pins

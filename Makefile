@@ -10,13 +10,31 @@ BIN := $(BUILD)/bin
 PREFIX ?= /usr/local
 CC ?= cc
 CXX ?= c++
+# Every pinned dependency is read under MAELYS_DEPENDENCIES_DIR, one directory
+# per name, materialised by scripts/checkout-dependencies.sh at the commit of
+# its pin. There is deliberately no `?= ..` here: a sibling directory cannot be
+# told apart from the working copy of someone who develops that dependency too,
+# and this build lost four `make check` runs in a day to exactly that. Set the
+# variable, or run:
+#
+#     sh scripts/checkout-dependencies.sh /somewhere/outside-this-repo
+#
+# which prints the line to export. maelys-release.conf declares `[dependencies]
+# apart`, so the socle sets it in CI and in the release.
+# Naming the three directories by hand still works, for a developer steering a
+# single dependency; the guard only refuses the case where nothing says where
+# anything is, which used to read whatever sat beside the repository.
+ifeq ($(MAELYS_DEPENDENCIES_DIR)$(MAELYS_SYSTEM_DIR)$(MAELYS_SYSTEM_PREFIX)$(MAELYS_CLI_DIR)$(MAELYS_SPEC_DIR),)
+$(error MAELYS_DEPENDENCIES_DIR is unset: run 'sh scripts/checkout-dependencies.sh DIR' and export the line it prints, or name each MAELYS_*_DIR)
+endif
+
 # Maelys System is either built from the pinned checkout MAELYS_SYSTEM_DIR
 # (the default, used by every gate) or taken already installed under
 # MAELYS_SYSTEM_PREFIX (packaging, for instance the Homebrew formula that
 # depends on libmaelys-sys). dependencies/maelys-system.pin records the tag and
 # the commit; an installed System must carry the same ABI and at least the
 # pinned version.
-MAELYS_SYSTEM_DIR ?= ../maelys-system
+MAELYS_SYSTEM_DIR ?= $(MAELYS_DEPENDENCIES_DIR)/maelys-system
 MAELYS_SYSTEM_PREFIX ?=
 MAELYS_SYSTEM_TAG := $(word 1,$(shell cat dependencies/maelys-system.pin))
 MAELYS_SYSTEM_PIN := $(word 2,$(shell cat dependencies/maelys-system.pin))
@@ -29,7 +47,7 @@ else
 MAELYS_SYSTEM_LIB := $(MAELYS_SYSTEM_PREFIX)/lib/libmaelys_sys.a
 MAELYS_SYSTEM_INCLUDE := $(MAELYS_SYSTEM_PREFIX)/include
 endif
-MAELYS_CLI_DIR ?= ../maelys-cli
+MAELYS_CLI_DIR ?= $(MAELYS_DEPENDENCIES_DIR)/maelys-cli
 MAELYS_CLI_TAG := $(word 1,$(shell cat dependencies/maelys-cli.pin))
 MAELYS_CLI_PIN := $(word 2,$(shell cat dependencies/maelys-cli.pin))
 MAELYS_CLI_BUILD := $(abspath $(BUILD)/deps/maelys-cli)
@@ -39,7 +57,7 @@ MAELYS_CLI_REFERENCE := $(MAELYS_CLI_DIR)/tools/generate_cli_reference.py
 # agent-cli-spec owns the contract the command implements. Its conformance kit
 # drives the built binary from the outside, so the pin must be the one the
 # pinned framework targets; check-spec-contract holds the two together.
-MAELYS_SPEC_DIR ?= ../agent-cli-spec
+MAELYS_SPEC_DIR ?= $(MAELYS_DEPENDENCIES_DIR)/agent-cli-spec
 MAELYS_SPEC_TAG := $(word 1,$(shell cat dependencies/agent-cli-spec.pin))
 MAELYS_SPEC_PIN := $(word 2,$(shell cat dependencies/agent-cli-spec.pin))
 GENERATED := $(BUILD)/generated
