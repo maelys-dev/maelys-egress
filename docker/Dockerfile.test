@@ -6,8 +6,9 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 
 WORKDIR /src
 COPY . .
-RUN sh scripts/checkout-dependency.sh maelys-system /maelys-system
-RUN sh scripts/checkout-dependency.sh maelys-cli /maelys-cli
-RUN sh scripts/checkout-dependency.sh agent-cli-spec /agent-cli-spec
+# One root for every pin, and the build reads it: the image has no sibling
+# directory to fall back on, which is the point.
+RUN sh scripts/checkout-dependencies.sh /dependencies
+ENV MAELYS_DEPENDENCIES_DIR=/dependencies
 
 CMD ["make", "check", "CC=clang", "CXX=clang++"]

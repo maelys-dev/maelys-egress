@@ -14,7 +14,12 @@
   single `MAELYS_*_DIR` by hand still works; only the case where nothing says
   where anything is now fails, with our own message instead of a silent read.
   The five hand-written CI jobs clone once each instead of three times, and the
-  release workflow does the same.
+  release workflow does the same. Three places of this repository assumed a
+  sibling of their own accord and had to follow: `docker/Dockerfile.test`,
+  which cloned into the image and then built with nothing set, and
+  `scripts/check-installed-system.sh` and `scripts/mutation-check.sh`, which
+  carried a hard-coded `../maelys-system` fallback that ignored the root the
+  environment already held.
 
 ## 0.19.10 — 2026-09-12
 
