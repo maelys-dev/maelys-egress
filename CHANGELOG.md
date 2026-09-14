@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Adopt maelys-release 0.54.0, whose shared CI legs are named after a
+  platform rather than a runner image: `check (linux)`, `check (linux-arm64)`
+  and `check (macos)` replace names carrying an Ubuntu or macOS version. A
+  required context that names an image turned every image upgrade into a lock
+  on every protected branch. The rename is survivable in one order only, which
+  this adoption followed: the three old names were removed from `main`'s
+  required checks first, the socle adopted, and the new names added back once
+  they had run.
+
 - Adopt maelys-cli 0.5.29 and agent-cli-spec 2.6.0, the specification the
   framework targets. 2.6.0 lets an operand declare `algorithms`, `digits` and
   `pattern`, all optional, and requires nothing of an implementation: the
