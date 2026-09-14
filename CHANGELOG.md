@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Adopt maelys-cli 0.5.29 and agent-cli-spec 2.6.0, the specification the
+  framework targets. 2.6.0 lets an operand declare `algorithms`, `digits` and
+  `pattern`, all optional, and requires nothing of an implementation: the
+  conformance kit stays at 267 checks, all passing, and neither the product
+  code nor `docs/cli-contract.json` changes.
+
 - Adopt maelys-cli 0.5.27 and agent-cli-spec 2.5.0. The framework's first tag
   to read its pinned dependencies under one root, which closes the cascade this
   repository reported: built without a root it now stops on one message naming
