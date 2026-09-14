@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Adopt maelys-release 0.56.0. The adoption marks each change by what it
+  touches, and here that is two workflow pins and three agent texts, no
+  mechanism. Those texts carried three false statements that 0.55.0
+  corrected, among them "public repositories use GitHub-hosted runners only",
+  false since 0.53.0, and an incomplete rename order that omitted the merge
+  between adopting and widening. This repository had widened after merging,
+  but by caution rather than because the text said so.
+
 - Adopt maelys-release 0.54.0, whose shared CI legs are named after a
   platform rather than a runner image: `check (linux)`, `check (linux-arm64)`
   and `check (macos)` replace names carrying an Ubuntu or macOS version. A
