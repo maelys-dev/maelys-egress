@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Adopt maelys-cli 0.5.27 and agent-cli-spec 2.5.0. The framework's first tag
+  to read its pinned dependencies under one root, which closes the cascade this
+  repository reported: built without a root it now stops on one message naming
+  the command to run, instead of a missing file three levels down. The
+  conformance kit goes from 259 to 267 checks, all passing, with no product
+  code changed and no movement in `docs/cli-contract.json` — the specification
+  bump adds rules about how the specification itself is written and what a
+  framework owes the kit, not obligations a product must meet.
+
 - `maelys-release.conf` declares `[gate] none`: the `release` environment
   requires no reviewer, and that is now written down rather than left tacit.
   `preflight` used to note the absence on every release; it now reports it as
