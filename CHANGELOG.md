@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.19.12 — 2026-09-14
+
+- Adopt maelys-release 0.50.1. Only the two workflows change, and `check`
+  reports no note at all: its search for a build that reaches next door now
+  reads every tracked file rather than `ci.yml` alone, so it can confirm what
+  it could not before — the three fixes of 0.19.11, in the test image and two
+  scripts, left nothing behind. The advice on the Homebrew renderer became a
+  statement of evidence, naming `archive/refs/tags` in our script as the
+  reason it hashes bytes it downloaded rather than an archive a macOS runner
+  would rebuild.
+
 ## 0.19.11 — 2026-09-13
 
 - Adopt maelys-release 0.46.1 and read every pinned dependency under one root.
