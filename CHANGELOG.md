@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- `maelys-release.conf` declares `[gate] none`: the `release` environment
+  requires no reviewer, and that is now written down rather than left tacit.
+  `preflight` used to note the absence on every release; it now reports it as
+  a choice the repository states. Nothing changes about how a release runs —
+  only whether the repository says so.
+
 ## 0.19.12 — 2026-09-14
 
 - Adopt maelys-release 0.50.1. Only the two workflows change, and `check`
