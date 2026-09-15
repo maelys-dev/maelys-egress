@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Adopt maelys-release 0.57.1. Two workflow pins. Among its fixes,
+  `protect --apply` no longer rewrites a whole classic protection to change its
+  checks: it had reset "require branches to be up to date" elsewhere. This
+  repository ran `protect --apply` under 0.54.0, so its protection was compared
+  setting by setting with a reading taken before the rename, and nothing had
+  changed — that setting was already off here.
+
 - Adopt maelys-release 0.57.0. A rename of the shared CI's legs no longer
   narrows a branch protection: the socle reports the former names as aliases,
   each red when any leg is red and run under `always()`, so an adoption removes
