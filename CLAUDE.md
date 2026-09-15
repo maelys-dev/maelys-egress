@@ -1,3 +1,9 @@
+# Agent instructions
+
+This repository's own rules, including when to adopt a new socle or framework
+and when not to publish, are in [`AGENTS.md`](AGENTS.md), above its managed
+blocks. Read them before changing the CLI, a pin or a release file.
+
 <!-- maelys-cli:begin -->
 <!-- SPDX-License-Identifier: CC-BY-4.0
 Copyright 2026 David Bromberg.

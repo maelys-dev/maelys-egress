@@ -14,6 +14,17 @@ No backward-compatibility alias should be introduced without an explicit
 product decision. The 0.x series prefers one clear contract over parallel old
 and new spellings.
 
+Adopting a new maelys-release, maelys-cli or agent-cli-spec is not publishing,
+and not every tag needs adopting. Run `maelys-release adopt .` without
+`--apply` first: its `impact` line says whether any version since this
+repository's pin asks it a gesture. When one does, adopt promptly and follow
+the order it names. Otherwise group adoptions, about once a week. Merge an
+adoption without a tag unless it changes what a user receives: a difference
+under `include/`, `protocol/`, `cli/`, in `docs/cli.md` or
+`docs/cli-contract.json`, or in an installed file. maelys-cli is linked
+statically, so a new pin can change the shipped binary with none of those
+moving; read its changelog for runtime changes before deciding.
+
 <!-- maelys-cli:begin -->
 <!-- SPDX-License-Identifier: CC-BY-4.0
 Copyright 2026 David Bromberg.
