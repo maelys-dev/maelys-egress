@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Adopt maelys-release 0.57.0. A rename of the shared CI's legs no longer
+  narrows a branch protection: the socle reports the former names as aliases,
+  each red when any leg is red and run under `always()`, so an adoption removes
+  nothing a branch requires and `protect --apply` swaps each alias for its leg
+  in one write. This repository had already completed the 0.54.0 rename, so
+  nothing is asked of it; three short alias jobs run on each pull request until
+  a later version removes them.
+
 - Adopt maelys-release 0.56.0. The adoption marks each change by what it
   touches, and here that is two workflow pins and three agent texts, no
   mechanism. Those texts carried three false statements that 0.55.0
