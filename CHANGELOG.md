@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Adopt maelys-release 0.58.0, which stops the managed blocks from naming the
+  private documentation repository. `AGENTS.md` and `CLAUDE.md` are as public as
+  the README of this public repository, and both named `maelys-dev/maelys-docs`
+  under a bullet forbidding exactly that — the same leak removed from the README
+  in 0.18.4, returned by another file. Impact lines also gain selectors for who
+  is concerned rather than who asked, after 0.57.2 told this repository
+  "nothing" about the leak it carried.
+
 - Adopt maelys-release 0.57.1. Two workflow pins. Among its fixes,
   `protect --apply` no longer rewrites a whole classic protection to change its
   checks: it had reset "require branches to be up to date" elsewhere. This
