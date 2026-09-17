@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Adopt maelys-release 0.59.1. Two workflow pins, nothing asked. The socle
+  now reads a branch's protection, a repository's metadata and its own
+  declaration words through one reader each, where four, seven and three sites
+  had read them separately. It announces that 0.60.0 removes the leg aliases
+  kept since 0.57.0; `main` here requires none of the old names, so nothing
+  will block.
+
 - Adopt maelys-release 0.58.0, which stops the managed blocks from naming the
   private documentation repository. `AGENTS.md` and `CLAUDE.md` are as public as
   the README of this public repository, and both named `maelys-dev/maelys-docs`
