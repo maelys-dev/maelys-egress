@@ -91,6 +91,10 @@ CLI_SOURCES := $(CLI_COMMON_SOURCES) cli/tls_listener.c
 CLI_COMMON_OBJECTS := $(CLI_COMMON_SOURCES:%.c=$(OBJ)/%.o)
 CLI_OBJECTS := $(CLI_SOURCES:%.c=$(OBJ)/%.o)
 # Only the command-line binary links libmaelys_cli; the library never does.
+# The pinned framework headers must precede ambient CPPFLAGS. A developer may
+# have another libmaelys-cli under /opt/homebrew/include; compiling its older
+# public structs and then linking the pinned archive is an ABI mismatch even
+# though both releases carry the same framework ABI number.
 CLI_CPPFLAGS := -I$(MAELYS_CLI_DIR)/include -I$(GENERATED)
 CLI_SCHEMAS := $(wildcard cli/schemas/*.json)
 CLI_SCHEMA_SYMBOLS := $(foreach schema,$(CLI_SCHEMAS),\
@@ -124,7 +128,7 @@ all: $(STATIC_LIB) $(CLI) $(TEST) $(PC) $(MANIFEST)
 
 -include $(DEPENDENCIES)
 
-.PHONY: all clean check test examples-check sdk-check audit check-system-contract check-cli-contract \
+.PHONY: all clean check test examples-check sdk-check audit docs-check check-system-contract check-cli-contract \
 	system-integration-check mutation-check check-spec-contract conformance-check \
 	config-reference contract-check lifecycle-contract-check schema-check package-homebrew \
 	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-binaries \
@@ -238,7 +242,7 @@ $(VERSION_STAMP): force-version
 # pattern rule, newer versions the shortest stem, and both must choose it.
 $(OBJ)/cli/%.o: cli/%.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CLI_CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
+	$(CC) $(CLI_CPPFLAGS) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
 $(OBJ)/%.o: %.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
@@ -276,7 +280,7 @@ $(CLI): $(CLI_OBJECTS) $(CLI_SCHEMA_OBJECT) $(STATIC_LIB) $(MAELYS_CLI_LIB) | $(
 
 $(OBJ)/cli/tls_listener-mbedtls.o: cli/tls_listener.c $(VERSION_STAMP) | $(MAELYS_CLI_LIB) $(GENERATED)/egress_schemas.h
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CLI_CPPFLAGS) $(CFLAGS) \
+	$(CC) $(CLI_CPPFLAGS) $(CPPFLAGS) $(CFLAGS) \
 		-DMAELYS_EGRESS_TLS_FACTORY=maelys_egress_tls_mbedtls_create \
 		-MMD -MP -c $< -o $@
 
@@ -287,7 +291,7 @@ $(MBEDTLS_CLI): $(OBJ)/cli/tls_listener-mbedtls.o $(CLI_COMMON_OBJECTS) $(CLI_SC
 
 $(OBJ)/cli/tls_listener-wolfssl.o: cli/tls_listener.c $(VERSION_STAMP) | $(MAELYS_CLI_LIB) $(GENERATED)/egress_schemas.h
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CLI_CPPFLAGS) $(CFLAGS) \
+	$(CC) $(CLI_CPPFLAGS) $(CPPFLAGS) $(CFLAGS) \
 		-DMAELYS_EGRESS_TLS_FACTORY=maelys_egress_tls_wolfssl_create \
 		-MMD -MP -c $< -o $@
 
@@ -427,6 +431,9 @@ tls-binaries: $(MBEDTLS_CLI) $(WOLFSSL_CLI)
 audit:
 	scripts/audit-boundaries.sh
 
+docs-check:
+	python3 tools/check_public_docs.py
+
 # Renders the Homebrew formula for an already-pushed tag (default: VERSION).
 package-homebrew:
 	scripts/render-homebrew-formula.sh v$(VERSION)
@@ -453,7 +460,7 @@ system-integration-check: $(STATIC_LIB) $(MAELYS_SYSTEM_LIB)
 conformance-check: $(CLI) check-spec-contract
 	python3 $(MAELYS_SPEC_DIR)/conformance/run.py $(abspath $(CLI))
 
-check: test examples-check sdk-check audit system-integration-check contract-check schema-check \
+check: test examples-check sdk-check audit docs-check system-integration-check contract-check schema-check \
 	conformance-check public-check reproducible-check install-metadata-check
 	$(CXX) -Iinclude -std=c++17 -Wall -Wextra -Wpedantic -Werror \
 		tests/header_cpp.cpp -c -o $(BUILD)/header-cpp.o

@@ -3,9 +3,9 @@
 - `basic_proxy.c` is a complete embedded server with authentication, exact SNI
   policy, receipts and signal-safe shutdown through a waiter thread.
 - `native_connector.c` opens a policy-checked, Egress-relayed TCP stream without
-  making the embedding application speak HTTP proxy or SOCKS5. The complete
-  ownership, authentication and deadline contract is in
-  `maelys-egress/native-connector.md` of `maelys-dev/maelys-docs`.
+  making the embedding application speak HTTP proxy or SOCKS5. The public
+  ownership, authentication and deadline contract is declared in
+  [`include/maelys/egress.h`](../include/maelys/egress.h).
 - `policy_reload.c` replaces a sealed policy from a control thread while the
   owner thread runs the reactor.
 - `metrics_snapshot.c` reads the immutable aggregate snapshot API.
