@@ -27,6 +27,14 @@ if grep_tree '#include[[:space:]]*[<"]maelys/cli' src include providers tests ex
     exit 1
 fi
 
+# The pinned CLI headers define the exact structure layout consumed by the
+# pinned archive. Ambient package-manager headers must never win include-order
+# precedence, even when an older installation exists on the build host.
+if grep -F '$(CC) $(CPPFLAGS) $(CLI_CPPFLAGS)' Makefile; then
+    echo "pinned maelys-cli headers must precede ambient CPPFLAGS" >&2
+    exit 1
+fi
+
 if grep_tree '(^|[^A-Za-z0-9_])(close|pipe|socketpair)[[:space:]]*\(' src; then
     echo "Egress must consume maelys-system descriptor ownership" >&2
     exit 1

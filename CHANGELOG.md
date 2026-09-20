@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Compile the command-line objects against the pinned maelys-cli headers before
+  any ambient `CPPFLAGS` include directory. A machine with Homebrew's older
+  `libmaelys-cli` installed could otherwise compile older public structure
+  layouts and link the pinned archive, producing an immediate segmentation
+  fault even though a clean CI runner passed.
+
+- Repair the public documentation after the prose migration: complete the TLS
+  section, rebuild the documentation map from files that actually ship, remove
+  stale product and dependency version claims, document the isolated dependency
+  root and current release procedure, and remove the remaining private
+  documentation-repository name from an installed example guide. A new
+  `docs-check` gate rejects broken local Markdown links, that private name and
+  prose paragraphs ending in a dangling connector.
+
+- Adopt maelys-release 0.60.0. The three former image-named CI aliases are no
+  longer emitted, after the fleet-wide migration to platform-named legs. This
+  repository already requires none of the old names, so the adoption changes
+  only the three shared-workflow pins and removes three redundant jobs from
+  each pull request. The 0.59.2 impact asks nothing of this product.
+
 - Adopt maelys-release 0.59.1. Two workflow pins, nothing asked. The socle
   now reads a branch's protection, a repository's metadata and its own
   declaration words through one reader each, where four, seven and three sites

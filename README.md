@@ -4,8 +4,9 @@ Maelys Egress is a small, policy-enforced forward proxy for sandboxed workloads.
 It accepts HTTP `CONNECT`, single-exchange HTTP/1.1 forward requests and SOCKS5,
 then connects only to exact TCP destinations in a sealed allowlist.
 
-Version 0.9 establishes the Egress product and ABI namespace. Consumers of
-the release does not ship duplicate compatibility symbols or binaries.
+The project owns the `maelys-egress` product and ABI namespace. A release
+contains one canonical binary and symbol family; it does not carry duplicate
+compatibility names.
 
 ```text
 sandboxed workload                 embedding host
@@ -21,7 +22,7 @@ sandboxed workload                 embedding host
   +---------+---------+
             |
             v
-  libmaelys-sys 0.4 reactor
+       libmaelys-sys reactor
        poll / epoll / kqueue
             |
             v
@@ -95,6 +96,8 @@ neither Mbed TLS nor wolfSSL.
 `include/maelys/egress_tls.h` defines a provider seam with opaque sessions and the
 states `COMPLETE`, `WANT_READ`, `WANT_WRITE`, `CLOSED` and `FAILED`. The
 optional Mbed TLS and wolfSSL modules implement that same contract without
+changing the Egress ABI. They protect incoming proxy listeners; they do not
+inspect the end-to-end TLS carried through `CONNECT`.
 
 ## Install
 
@@ -121,17 +124,23 @@ make install-check
 make tls-providers-check tls-binaries # optional development packages required
 ```
 
-The build requires the `maelys-system` tag and commit recorded in
-`dependencies/maelys-system.pin` and the `maelys-cli` tag recorded in
-`dependencies/maelys-cli.pin`. CI, the release workflow and developers obtain them
-with the managed `scripts/checkout-dependency.sh maelys-system` and
-`scripts/checkout-dependency.sh maelys-cli`, which clone next to this
-repository at the pinned commit. Packaging may link an installed Maelys System
-instead of the checkout: `make install MAELYS_SYSTEM_PREFIX=/opt/homebrew/opt/libmaelys-sys`
-accepts any installation with ABI 1 and at least the pinned version, and
-then installs neither `libmaelys_sys` nor its headers. Every installation
-also writes `share/maelys/commands/egress.json`, the manifest that lets the
-`maelys` dispatcher of maelys-cli run the daemon as `maelys egress`.
+The build uses the exact commits recorded under `dependencies/` for Maelys
+System, Maelys CLI and the agent CLI specification. Materialize them under one
+explicit root, outside this working tree, then export that root:
+
+```sh
+sh scripts/checkout-dependencies.sh /tmp/maelys-egress-dependencies
+export MAELYS_DEPENDENCIES_DIR=/tmp/maelys-egress-dependencies
+make check
+```
+
+The grouped checkout prevents an unrelated sibling working copy from entering
+the build. Packaging may instead link an installed Maelys System:
+`make install MAELYS_SYSTEM_PREFIX=/opt/homebrew/opt/libmaelys-sys` accepts an
+installation with ABI 1 and at least the pinned version, then installs neither
+`libmaelys_sys` nor its headers. Every installation also writes
+`share/maelys/commands/egress.json`, the digest-bound manifest that lets the
+Maelys dispatcher run the daemon as `maelys egress`.
 
 ## CLI
 
@@ -164,23 +173,25 @@ maelys-egress config validate --config /etc/maelys-egress.conf
 maelys-egress serve --config /etc/maelys-egress.conf
 ```
 
-launchd and container examples.
-
-Operational semantics, quota accounting, generation replacement and the exact
-limits of HMAC receipt evidence are documented in
+Deployment examples are provided as a [systemd unit](packaging/systemd/maelys-egress.service),
+a [launchd service](packaging/launchd/com.maelys.egress.plist) and a
+[container sidecar Dockerfile](docker/Dockerfile.sidecar).
 
 ## Documentation map
 
-  health, metrics and durable audit;
-  complete examples;
-  relayed stream semantics, descriptor ownership, deadlines and fd-4 boundary;
-  example, mutual TLS and C provider selection;
-  decision, backend differences, confinement and network boundaries;
-- [Python and Node.js process SDKs](sdk/README.md): what they automate and what
-  remains the application's proxy-client responsibility;
-  the generated [CLI reference](docs/cli.md) and
-  [machine-readable contract](docs/cli-contract.json);
-  [configuration-key reference](docs/generated/config-reference.md).
+- [CLI reference](docs/cli.md) and
+  [machine-readable CLI contract](docs/cli-contract.json): generated from the
+  executable catalog;
+- [configuration-key reference](docs/generated/config-reference.md): generated
+  from the standalone configuration catalog;
+- [Maelys CLI integration guide](docs/maelys-cli-guide.md): framework and
+  dispatcher conventions used by the command;
+- [Python and Node.js process SDKs](sdk/README.md): lifecycle automation and
+  the responsibilities left to the application's proxy client;
+- [C examples](examples/README.md): embedding, native connector, reload,
+  metrics, durable audit and attestation examples;
+- [security policy](SECURITY.md), [licensing](LICENSING.md) and
+  [release procedure](RELEASING.md).
 
 Compileable consumers live in `examples/`. Pure Python and Node.js helpers in
 `sdk/` manage the standalone process without changing the C ABI or inventing a
@@ -248,7 +259,7 @@ from the minimal package install.
 - Linux amd64/arm64 (`epoll` through Maelys System);
 - macOS 15+ on Apple Silicon (`kqueue` through Maelys System).
 
-Windows, UDP and transparent interception are outside the 0.6 contract. TLS
+Windows, UDP and transparent interception are outside the current contract. TLS
 inspection is not part of the core or default mode; it requires a separate,
 explicitly authorized PKI and threat-model design.
 
