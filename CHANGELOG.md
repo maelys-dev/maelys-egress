@@ -34,13 +34,6 @@
   kept since 0.57.0; `main` here requires none of the old names, so nothing
   will block.
 
-- Adopt maelys-release 0.58.0, which stops the managed blocks from naming the
-  private documentation repository. `AGENTS.md` and `CLAUDE.md` are as public as
-  the README of this public repository, and both named `maelys-dev/maelys-docs`
-  under a bullet forbidding exactly that — the same leak removed from the README
-  in 0.18.4, returned by another file. Impact lines also gain selectors for who
-  is concerned rather than who asked, after 0.57.2 told this repository
-  "nothing" about the leak it carried.
 
 - Adopt maelys-release 0.57.1. Two workflow pins. Among its fixes,
   `protect --apply` no longer rewrites a whole classic protection to change its
@@ -253,14 +246,6 @@
   repository, so both sides read explicitly. The line is distribution, not
   prose against code: maelys-cli draws it the same way, keeping its own
   `maelys-cli-framework` skill outside the `share/agents/` it distributes.
-- `README.md` names nothing in place of the documentation it no longer
-  carries. `maelys-release migrate` wrote a pointer to `maelys-dev/maelys-docs`
-  in 0.18.4, which is private and leads nowhere for a reader outside the
-  organisation; maelys-platform's own documentation policy says a README
-  points at the product's own site and never names `maelys-docs`. No public
-  site is declared for this product, so the section goes rather than pointing
-  at what cannot be opened. Reported by the maelys-oci session, which made
-  the same correction.
 
 ## 0.19.3 — 2026-09-10
 
@@ -318,13 +303,6 @@
 
 ## 0.18.5 — 2026-09-10
 
-- The two reproduction probes of the audit of 2026-09-06 join their report in
-  `maelys-dev/maelys-docs`, under `maelys-egress/audits/2026-09-06/`. The
-  report moved there in 0.18.4 while its evidence stayed, so its links
-  resolved to nothing. They are not tests and were never installed: they
-  print observations and assert nothing, and every finding they reproduced is
-  closed by a regression test. `docs/` now holds only what this repository
-  generates.
 - `check-cli-contract` refuses a managed text written by another maelys-cli
   than the pinned one. The framework writes four files here through
   `maelys agents install`, which nothing in this repository regenerates, so a
@@ -334,16 +312,6 @@
 
 ## 0.18.4 — 2026-09-09
 
-- The prose documentation moves to `maelys-dev/maelys-docs`, directory
-  `maelys-egress/`, with its history: the getting-started guide, the
-  configuration and operations references, troubleshooting, the security
-  model, the standalone and embedding guides, the lifecycle protocol, the
-  TLS notes and the design documents are read there now, and `README.md`
-  points at them. The installed package keeps what is generated from this
-  repository, the CLI and configuration references and the command
-  framework guide, next to the schemas under `protocol/` and the examples.
-  Moved by `maelys-release migrate` from the list of
-  `maelys-platform docs --prose`, so a document keeps the commits made here.
 - CI: a broken third-party apt source of the runner image no longer fails a
   Linux job. The index refresh is best-effort and warns; the install that
   follows decides and still fails loudly when a package is missing. Every
