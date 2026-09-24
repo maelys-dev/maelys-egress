@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Adopt maelys-cli 0.5.30, and take the built digest after each install rather
+  than once before them. The framework bakes
+  `-DMAELYS_CLI_COMMANDS_DIR=PREFIX/share/maelys/commands` into its objects, so
+  the binary built for one prefix is not the binary of another;
+  `install-metadata-check` had asserted one digest against both installs since
+  it was written. Nothing contradicted it while a prefix change rebuilt
+  nothing, and 0.5.30 rebuilds on it. The framework targets the same
+  agent-cli-spec 2.6.0, conformance stays at 267 checks, and neither the
+  product code nor `docs/cli-contract.json` moves.
+
 - A build directory remembers the command line it was made with and drops its
   objects and binaries when that line changes. Measured before the change:
   `make CC=gcc` over a tree built with `cc` rebuilt nothing at all, and `make
