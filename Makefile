@@ -25,7 +25,7 @@ CXX ?= c++
 # single dependency; the guard only refuses the case where nothing says where
 # anything is, which used to read whatever sat beside the repository.
 ifeq ($(MAELYS_DEPENDENCIES_DIR)$(MAELYS_SYSTEM_DIR)$(MAELYS_SYSTEM_PREFIX)$(MAELYS_CLI_DIR)$(MAELYS_SPEC_DIR),)
-$(error MAELYS_DEPENDENCIES_DIR is unset: run 'sh scripts/checkout-dependencies.sh DIR' and export the line it prints, or name each MAELYS_*_DIR)
+$(error MAELYS_DEPENDENCIES_DIR is unset: run 'sh scripts/checkout-dependencies.sh DIR' and export the lines it prints, or name each MAELYS_*_DIR)
 endif
 
 # Maelys System is either built from the pinned checkout MAELYS_SYSTEM_DIR
