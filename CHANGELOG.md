@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.19.14 — 2026-09-24
+
+- The test image retries a package fetch. `apt-get` runs with
+  `Acquire::Retries=3`, for update and for install: this release was held by a
+  single unanswered fetch from `security.ubuntu.com`, on the one step that had
+  no retry where the workflows installing packages already tolerate a failing
+  source.
 
 - Adopt maelys-cli 0.5.30, and take the built digest after each install rather
   than once before them. The framework bakes
