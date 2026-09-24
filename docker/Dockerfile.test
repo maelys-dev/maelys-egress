@@ -1,6 +1,11 @@
 FROM ubuntu:24.04
 
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+# Acquire::Retries because a mirror that does not answer is not a defect of
+# this image: the release of 0.19.14 was held by one unanswered fetch from
+# security.ubuntu.com, on a step that had no retry where the workflows
+# installing packages already tolerate a failing source.
+RUN apt-get -o Acquire::Retries=3 update && \
+    DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
     ca-certificates clang libclang-rt-18-dev curl gcc g++ git make nodejs pkg-config python3 && \
     rm -rf /var/lib/apt/lists/*
 
