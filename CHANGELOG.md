@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.19.13 — 2026-09-24
+
+- The unset-dependency guard says "the lines it prints": since the socle 0.60.0
+  adoption, `scripts/checkout-dependencies.sh` prints `MAELYS_RELEASE_DIR`
+  beside `MAELYS_DEPENDENCIES_DIR`, and someone exporting only the first laid
+  down half a root. The CI was never affected; its jobs append the whole output.
 
 - Compile the command-line objects against the pinned maelys-cli headers before
   any ambient `CPPFLAGS` include directory. A machine with Homebrew's older
