@@ -22,6 +22,11 @@ PUBLIC_DOCUMENTS = (
     "sdk/python/README.md",
     "sdk/node/README.md",
 )
+# Installed beside them, and it has carried the private name through three
+# removals elsewhere; only that check applies, since a changelog links to
+# commits and quotes prose the other two rules would reject.
+NAME_ONLY_DOCUMENTS = ("CHANGELOG.md",)
+PRIVATE_DOCUMENTATION = "maelys-dev/maelys-docs"
 LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 DANGLING_WORDS = {
     "a",
@@ -97,7 +102,7 @@ def main() -> int:
     for relative in PUBLIC_DOCUMENTS:
         document = ROOT / relative
         text = document.read_text(encoding="utf-8")
-        if "maelys-dev/maelys-docs" in text:
+        if PRIVATE_DOCUMENTATION in text:
             failures.append(f"{relative}: names a private documentation repository")
         for match in LINK.finditer(text):
             target = local_link_target(document, match.group(1))
@@ -112,12 +117,16 @@ def main() -> int:
                 failures.append(
                     f"{relative}:{line}: prose paragraph ends with dangling word '{words[-1]}'"
                 )
+    for relative in NAME_ONLY_DOCUMENTS:
+        if PRIVATE_DOCUMENTATION in (ROOT / relative).read_text(encoding="utf-8"):
+            failures.append(f"{relative}: names a private documentation repository")
     if failures:
         print("public documentation checks failed:", file=sys.stderr)
         for failure in failures:
             print(f"- {failure}", file=sys.stderr)
         return 1
-    print(f"public documentation checks passed ({len(PUBLIC_DOCUMENTS)} files)")
+    print("public documentation checks passed "
+          f"({len(PUBLIC_DOCUMENTS)} files, {len(NAME_ONLY_DOCUMENTS)} for the private name)")
     return 0
 
 
