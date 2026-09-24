@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- A build directory remembers the command line it was made with and drops its
+  objects and binaries when that line changes. Measured before the change:
+  `make CC=gcc` over a tree built with `cc` rebuilt nothing at all, and `make
+  check CC=gcc` then reported success over the objects `cc` had produced;
+  `CFLAGS='-O0 -g'` likewise left an `-O2` binary in place. A diagnostic only
+  one compiler emits could stay invisible until CI, which is how maelys-cli's
+  signed-`char` defect was caught twice by an x86 leg and never on its own
+  machine. The comparison happens while the makefile is read, not through a
+  stamp every rule depends on: the make of macOS is 3.81 and compares
+  modification times to the second. `make -n` writes nothing and `make clean`
+  triggers no removal.
+
 ## 0.19.13 — 2026-09-24
 
 - The unset-dependency guard says "the lines it prints": since the socle 0.60.0
