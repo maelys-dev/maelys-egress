@@ -72,6 +72,39 @@ override CFLAGS += -std=c11 -Wall -Wextra -Wpedantic -Werror -Wconversion \
 LDFLAGS += $(SANITIZE_FLAGS)
 LDLIBS += $(MAELYS_SYSTEM_LIB) -pthread
 
+# The build directory remembers the command line it was made with, and drops
+# what it holds when that line changes. Each profile already has its own
+# directory; this is for the flags a hand passes inside one. Measured here:
+# `make CC=gcc` after a build with cc rebuilt nothing at all, and `make check
+# CC=gcc` then reported success over the objects cc had produced — a
+# diagnostic only one compiler emits would stay invisible until CI. Passing
+# CFLAGS='-O0 -g' likewise left an -O2 binary in place. maelys-cli found the
+# same on a signed-char defect its x86 leg caught twice and its own machine
+# never did.
+#
+# The comparison is made while the makefile is read, and the stale output is
+# removed there, rather than through a stamp every rule depends on: the make
+# of macOS is 3.81, which compares modification times to the second, so an
+# object written in the same second as the stamp reads as up to date and is
+# silently kept.
+BUILD_LINE_STAMP := $(BUILD)/command-line.stamp
+BUILD_COMMAND_LINE := CC=$(CC) CXX=$(CXX) CPPFLAGS=$(CPPFLAGS) CFLAGS=$(CFLAGS) \
+	LDFLAGS=$(LDFLAGS) LDLIBS=$(LDLIBS)
+# Neither on `make clean`, nor on a dry run: `make -n` prints what a build
+# would do and must write nothing.
+DRY_RUN := $(findstring n,$(firstword -$(MAKEFLAGS)))
+ifeq ($(filter clean,$(MAKECMDGOALS))$(DRY_RUN),)
+BUILD_LINE_CHANGED := $(shell mkdir -p $(BUILD) && \
+	{ printf '%s\n' '$(BUILD_COMMAND_LINE)' | cmp -s - $(BUILD_LINE_STAMP) 2>/dev/null || \
+	  { printf '%s\n' '$(BUILD_COMMAND_LINE)' > $(BUILD_LINE_STAMP); echo changed; }; })
+ifeq ($(BUILD_LINE_CHANGED),changed)
+$(info $(BUILD): built with another command line; its objects and binaries are removed)
+$(shell rm -rf $(BUILD)/obj $(BUILD)/bin $(BUILD)/lib $(BUILD)/deps \
+	$(BUILD)/generated $(BUILD)/contract $(BUILD)/reproducible $(BUILD)/share \
+	$(BUILD)/header-cpp.o)
+endif
+endif
+
 # src/core holds the decisions taken on bytes alone: it never names
 # maelys_sys, a boundary scripts/audit-boundaries.sh enforces. src/server owns
 # the descriptors and the reactor. The three files between them touch the host
