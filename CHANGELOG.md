@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.19.14 — 2026-09-24
 
 - Adopt maelys-cli 0.5.30, and take the built digest after each install rather
   than once before them. The framework bakes

@@ -16,8 +16,8 @@ python3 -m pip install ./sdk/python
 From the GitHub release source archive:
 
 ```sh
-tar -xzf maelys-egress-python-sdk-0.19.13.tar.gz
-python3 -m pip install ./maelys-egress-python-sdk-0.19.13
+tar -xzf maelys-egress-python-sdk-0.19.14.tar.gz
+python3 -m pip install ./maelys-egress-python-sdk-0.19.14
 ```
 
 The SDK never searches the inherited `PATH`. It finds `maelys-egress` beside
