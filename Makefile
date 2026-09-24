@@ -662,6 +662,7 @@ reproducible-check: $(STATIC_LIB)
 install-metadata-check: all
 	python3 tests/test_install.py $(BUILD) PREFIX="$(PREFIX)" \
 		VERSION="$(VERSION)" \
+		MAELYS_DEPENDENCIES_DIR="$(MAELYS_DEPENDENCIES_DIR)" \
 		MAELYS_SYSTEM_DIR="$(MAELYS_SYSTEM_DIR)" \
 		MAELYS_SYSTEM_PREFIX="$(MAELYS_SYSTEM_PREFIX)" \
 		MAELYS_CLI_DIR="$(MAELYS_CLI_DIR)"

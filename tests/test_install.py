@@ -41,10 +41,16 @@ def main():
         if done.returncode:
             raise AssertionError(done.stdout + done.stderr)
 
-    built = digest(binary)
     with tempfile.TemporaryDirectory(prefix="install-test-", dir=build) as staging:
         for prefix in PREFIXES:
             invoke("install", f"PREFIX={prefix}", f"DESTDIR={staging}")
+            # After the install, not before the loop: the framework bakes
+            # -DMAELYS_CLI_COMMANDS_DIR=PREFIX/share/maelys/commands into its
+            # objects, so the binary of one prefix is not the binary of
+            # another. maelys-cli 0.5.30 rebuilds on that change instead of
+            # keeping the objects of the previous prefix, which is what made
+            # a digest read once at the start describe neither install.
+            built = digest(binary)
             stage = Path(staging) / prefix.lstrip("/")
             installed = stage / "bin/maelys-egress"
             declared = json.loads(
@@ -52,7 +58,7 @@ def main():
 
             assert declared["executable"] == f"{prefix}/bin/maelys-egress", declared
             assert declared["sha256"] == built == digest(installed), (
-                f"manifest {declared['sha256']}, built {built}, "
+                f"manifest {declared['sha256']}, built for {prefix} {built}, "
                 f"installed {digest(installed)}")
             assert len(declared["sha256"]) == 64, declared["sha256"]
             reported = subprocess.run([installed, "--version"], capture_output=True,
