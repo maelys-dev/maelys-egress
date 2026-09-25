@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Adopt maelys-release 0.62.0. 0.61.0 asks a product that pins other Maelys
+  repositories to re-adopt: `scripts/checkout-dependency.sh` gains the bundle
+  path a runner without credentials uses for a private pin, and this
+  repository carries none, so the file changes and nothing else does. 0.62.0
+  asks nothing of a product. Two workflow pins follow.
+
+- `tools/check_public_docs.py` no longer looks for the name of a private
+  documentation repository, so the repository no longer carries that name
+  anywhere: the socle's `check` refuses it in the seeded texts since 0.61.0,
+  and the four public files that once carried it were cleaned in 0.19.13.
+  The tool keeps its two other rules, local links that exist and prose that
+  does not end on a dangling word, over the same nine files.
+
 ## 0.20.0 — 2026-09-25
 
 - `maelys_egress_tls_files_t` states its layout. The structure a caller fills
