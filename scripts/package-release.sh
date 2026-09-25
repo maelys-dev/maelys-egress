@@ -53,7 +53,7 @@ stage="$tmp/stage"
 make VERSION="$version" install DESTDIR="$stage" PREFIX=/usr/local
 cat >"$tmp/smoke.c" <<'EOF'
 #include <maelys/egress.h>
-int main(void) { return MAELYS_EGRESS_ABI_VERSION == 2u ? 0 : 1; }
+int main(void) { return MAELYS_EGRESS_ABI_VERSION == 3u ? 0 : 1; }
 EOF
 "${CC:-cc}" -std=c11 -I"$stage/usr/local/include" "$tmp/smoke.c" \
   -L"$stage/usr/local/lib" -lmaelys_egress -lmaelys_sys -pthread -o "$tmp/smoke"

@@ -203,14 +203,28 @@ static void context_release(void *opaque) {
     free(context);
 }
 
+static void set_files_abi_error(char **out_error, unsigned int seen) {
+    if (!out_error) return;
+    char *message = malloc(96);
+    if (message) {
+        (void)snprintf(message, 96, "TLS files use ABI %u, Egress requires ABI %u",
+                       seen, (unsigned int)MAELYS_EGRESS_TLS_FILES_ABI_VERSION);
+    }
+    *out_error = message;
+}
+
 maelys_egress_result_t maelys_egress_tls_mbedtls_create(
     const maelys_egress_tls_files_t *files,
     maelys_egress_tls_provider_t **out_provider,
     char **out_error) {
     if (out_error) *out_error = NULL;
     if (out_provider) *out_provider = NULL;
-    if (!files || !out_provider ||
-        (!!files->certificate_file != !!files->private_key_file) ||
+    if (!files || !out_provider) return MAELYS_EGRESS_ERR_ARGUMENT;
+    if (files->abi_version != MAELYS_EGRESS_TLS_FILES_ABI_VERSION) {
+        set_files_abi_error(out_error, files->abi_version);
+        return MAELYS_EGRESS_ERR_UNSUPPORTED;
+    }
+    if ((!!files->certificate_file != !!files->private_key_file) ||
         (!files->certificate_file && !files->ca_file)) {
         return MAELYS_EGRESS_ERR_ARGUMENT;
     }

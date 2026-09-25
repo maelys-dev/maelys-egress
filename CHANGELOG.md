@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- `maelys_egress_tls_files_t` states its layout. The structure a caller fills
+  for `maelys_egress_tls_mbedtls_create` and `maelys_egress_tls_wolfssl_create`
+  was the one open type without a version: a field added to it could be read
+  from a caller that never wrote it. It now opens with `abi_version`, set to
+  `MAELYS_EGRESS_TLS_FILES_ABI_VERSION` (1), and both factories refuse any other
+  value with `MAELYS_EGRESS_ERR_UNSUPPORTED` and a diagnostic naming both
+  versions, as `maelys_egress_tls_provider_create` already does for the provider
+  table. The constant is distinct from `MAELYS_EGRESS_TLS_ABI_VERSION`: a change
+  to one structure leaves the other valid. The layout change makes this Egress
+  ABI 3; every other type, function and behavior of ABI 2 is unchanged. Done
+  before 1.0, when it is the last open structure of the public headers.
+
 ## 0.19.14 — 2026-09-24
 
 - The test image retries a package fetch. `apt-get` runs with

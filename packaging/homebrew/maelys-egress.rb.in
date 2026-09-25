@@ -41,7 +41,7 @@ class MaelysEgress < Formula
     sys = Formula["libmaelys-sys"]
     (testpath/"smoke.c").write <<~EOS
       #include <maelys/egress.h>
-      int main(void) { return MAELYS_EGRESS_ABI_VERSION == 2u ? 0 : 1; }
+      int main(void) { return MAELYS_EGRESS_ABI_VERSION == 3u ? 0 : 1; }
     EOS
     system ENV.cc, "-std=c11", "smoke.c", "-I#{include}", "-I#{sys.opt_include}",
            "-L#{lib}", "-L#{sys.opt_lib}", "-lmaelys_egress", "-lmaelys_sys",

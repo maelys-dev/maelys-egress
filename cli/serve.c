@@ -98,6 +98,7 @@ int egress_cli_run(
     }
     if (result == MAELYS_EGRESS_OK && settings->tls_cert) {
         const maelys_egress_tls_files_t tls_files = {
+            .abi_version = MAELYS_EGRESS_TLS_FILES_ABI_VERSION,
             .certificate_file = settings->tls_cert,
             .private_key_file = settings->tls_key,
             .ca_file = settings->tls_ca,
