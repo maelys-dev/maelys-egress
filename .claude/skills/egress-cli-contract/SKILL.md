@@ -51,7 +51,7 @@ framework's and are not redefined here.
 - Diagnostics never contain credentials, tokens or audit keys.
 - Keep TLS-only configuration keys absent from `config describe` for a binary
   built without a TLS provider, and refuse them with `UNSUPPORTED`.
-- Preserve ABI 2 unless the public C headers actually change.
+- Preserve ABI 3 unless the public C headers actually change.
 - The Egress library never includes `maelys/cli`, and only `cli/output.c`
   writes to stdout; `scripts/audit-boundaries.sh` enforces both.
 

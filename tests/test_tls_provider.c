@@ -32,6 +32,7 @@ int main(void) {
         return 1;
     }
     maelys_egress_tls_files_t files = {
+        .abi_version = MAELYS_EGRESS_TLS_FILES_ABI_VERSION,
         .certificate_file = certificate,
         .private_key_file = private_key,
         .ca_file = certificate,
@@ -39,6 +40,12 @@ int main(void) {
     };
     maelys_egress_tls_provider_t *provider = NULL;
     char *error = NULL;
+    files.abi_version = MAELYS_EGRESS_TLS_FILES_ABI_VERSION + 1u;
+    CHECK(MAELYS_TLS_FACTORY(&files, &provider, &error) == MAELYS_EGRESS_ERR_UNSUPPORTED);
+    CHECK(provider == NULL && error && strstr(error, "ABI 2") && strstr(error, "ABI 1"));
+    maelys_egress_error_free(error);
+    error = NULL;
+    files.abi_version = MAELYS_EGRESS_TLS_FILES_ABI_VERSION;
     CHECK(MAELYS_TLS_FACTORY(&files, &provider, &error) == MAELYS_EGRESS_OK);
     if (!provider) {
         fprintf(stderr, "provider creation: %s\n", error ? error : "no diagnostic");

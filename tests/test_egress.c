@@ -131,7 +131,7 @@ static maelys_egress_tls_provider_t *make_passthrough_provider(void) {
 
 static void test_version_and_tls_seam(void) {
     CHECK(strcmp(maelys_egress_version_string(), MAELYS_EGRESS_BUILD_VERSION) == 0);
-    CHECK(maelys_egress_abi_version() == 2u);
+    CHECK(maelys_egress_abi_version() == 3u);
     CHECK(strcmp(maelys_egress_result_string(MAELYS_EGRESS_ERR_CRYPTO), "crypto") == 0);
     maelys_egress_tls_ops_t bad = {.abi_version = 2u, .name = "bad"};
     maelys_egress_tls_provider_t *provider = NULL;

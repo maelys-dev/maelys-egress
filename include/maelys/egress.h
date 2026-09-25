@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define MAELYS_EGRESS_ABI_VERSION 2u
+#define MAELYS_EGRESS_ABI_VERSION 3u
 
 typedef enum maelys_egress_result {
     MAELYS_EGRESS_OK = 0,
