@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.20.0 — 2026-09-25
 
 - `maelys_egress_tls_files_t` states its layout. The structure a caller fills
   for `maelys_egress_tls_mbedtls_create` and `maelys_egress_tls_wolfssl_create`
