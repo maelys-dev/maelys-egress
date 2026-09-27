@@ -177,6 +177,27 @@ Deployment examples are provided as a [systemd unit](packaging/systemd/maelys-eg
 a [launchd service](packaging/launchd/com.maelys.egress.plist) and a
 [container sidecar Dockerfile](docker/Dockerfile.sidecar).
 
+### Native connector
+
+The proxy listeners are one way in. The other is the native connector of the
+library, which the configuration file and the CLI do not expose: an embedder
+creates an authenticated in-process connector with
+`maelys_egress_server_connector_create`, admits one exact TCP destination per
+`maelys_egress_connector_session_open`, and receives a blocking `CLOEXEC` TCP
+stream. That stream is Egress's own client end of a private relay, never the
+upstream socket, so the SNI guard, quotas, byte accounting, half-close and
+receipts apply exactly as they do to `CONNECT` and SOCKS5. With
+`maelys_egress_config_set_native_only` the server opens no port and no
+pathname at all: the policy, relay and receipt engine run, and only connectors
+reach them.
+
+This is the mode for a workload that must hold neither a proxy address nor a
+credential: its supervisor hands it an already-admitted stream, and it can ask
+for another only through that supervisor. The contract is declared in
+[`include/maelys/egress.h`](include/maelys/egress.h) and exercised by
+[`examples/native_connector.c`](examples/native_connector.c); maelys-warden
+brokers it to the sandboxed process over file descriptor 4.
+
 ## Documentation map
 
 - [CLI reference](docs/cli.md) and
