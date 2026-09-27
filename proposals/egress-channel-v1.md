@@ -152,10 +152,11 @@ closed. What is missing is that delivery is unconfirmed — the server cannot
 tell a delivered stream from one the kernel never queued.
 
 *Proposed:* the server checks `sendmsg`. On failure it closes its copy and
-releases the session as today, and records the failure in its log; because the
-client end of the relay is then closed, Egress tears the relay down and the
-receipt records the session as closed without payload. There is no
-acknowledgement message in v1: the client's successful `recvmsg` of an `OK`
+releases the session as today, and records the failure in its log; the client
+end of the relay is then closed, and Egress treats the session as it treats any
+client that closes before writing. What the receipt records for such a session
+is Egress's receipt contract, not this document's: the channel promises no
+receipt field. There is no acknowledgement message in v1: the client's successful `recvmsg` of an `OK`
 response with one descriptor is the only confirmation, and a client that
 receives nothing (EOF, error) treats the request as failed with no stream.
 On the client side, the received descriptor is set `CLOEXEC` before anything
@@ -176,9 +177,17 @@ supervisor's wakeup.
 *Proposed:* the host bound stays 253. The connect deadline is the server's,
 set by the supervisor when it creates the channel server, bounded by Egress to
 a finite non-zero value; v1 has no field for the client to set or extend it.
-Every request receives a response or the channel closes: the server never
-leaves a request unanswered while the channel is open. Two closures are
-distinct:
+The exchange as a whole is bounded on both sides. The server answers every
+request within the connect deadline plus a bounded processing time of its own
+(reading the datagram, `session_open`, `sendmsg`); while the channel is open it
+never leaves a request unanswered. The client applies a read deadline of its
+own choosing, at least the server's connect deadline; when it expires, the
+client **closes the channel** rather than sending another request on it, since
+with one request in flight and no identifier a late response would be paired
+with the wrong request. The server's deadline is not carried on the wire in
+v1: the supervisor that configures it is the one that hands the channel over,
+and tells the workload out of band, or the workload uses a generous bound. Two
+closures are distinct:
 
 - *the channel closes* — the client closed its end, or the supervisor destroyed
   the server. A request in flight completes inside Egress; its response is
@@ -229,9 +238,14 @@ response version `1`, and protocol `2` → `UNSUPPORTED`.
 
 ### 6. Descriptor cardinality and truncation
 
-*Current:* the client accepts up to four descriptors, keeps the first and
-closes the rest; on a non-zero status it closes whatever arrived; it rejects
-`MSG_TRUNC` and `MSG_CTRUNC`.
+*Current:* the client's control buffer has room for four descriptors. It keeps
+the first while counting and closes every further one, then rejects the
+response as a protocol error unless exactly one arrived and every ancillary
+header was a well-formed `SCM_RIGHTS`; on a non-zero status it closes whatever
+arrived; it rejects `MSG_TRUNC` and `MSG_CTRUNC`. The cardinality below is
+therefore what the current client already enforces; what changes is that the
+server side states it too, and that a descriptor on a non-`OK` status becomes a
+malformed response rather than a silently closed one.
 
 *Proposed:* exactly one descriptor on `OK`, none otherwise. A client receiving
 a descriptor with a non-`OK` status, more than one descriptor, an `SCM_RIGHTS`
