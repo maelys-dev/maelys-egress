@@ -111,7 +111,8 @@ endif
 # without being the server.
 CORE_SOURCES := src/core/common.c src/core/sha256.c src/core/receipt.c \
 	src/core/attestor.c src/core/policy.c src/core/profile.c src/core/tls.c \
-	src/core/clienthello.c src/core/http.c src/core/socks.c
+	src/core/clienthello.c src/core/http.c src/core/socks.c \
+	src/core/channel.c
 HOST_SOURCES := src/audit.c src/config.c src/connector.c
 SERVER_SOURCES := src/server/server.c src/server/listener.c \
 	src/server/connection.c src/server/relay.c src/server/quota.c \
@@ -143,6 +144,12 @@ MBEDTLS_CLI := $(BIN)/maelys-egress-mbedtls
 WOLFSSL_CLI := $(BIN)/maelys-egress-wolfssl
 TEST := $(BIN)/test-egress
 OPERATIONS_TEST := $(BIN)/test-operations
+# The channel codec decides on bytes alone and is compiled into the server
+# library and, later, into the client archive. Its test and its fuzz target
+# link the one object, never the library: a dependency creeping into the
+# codec fails here before it reaches a confined process.
+CHANNEL_CODEC := $(OBJ)/src/core/channel.o
+CHANNEL_TEST := $(BIN)/test-channel
 MBEDTLS_TEST := $(BIN)/test-tls-mbedtls
 WOLFSSL_TEST := $(BIN)/test-tls-wolfssl
 TLS_TEST_STAMP := $(BUILD)/tls-fixtures/generated
@@ -348,6 +355,10 @@ $(OPERATIONS_TEST): $(OBJ)/tests/test_operations.o $(STATIC_LIB) | $(MAELYS_SYST
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
+$(CHANNEL_TEST): tests/test_channel.c $(CHANNEL_CODEC)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
+
 $(BIN)/example-%: examples/%.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
@@ -390,9 +401,10 @@ install-metadata: $(CLI)
 $(PC) $(MANIFEST): | install-metadata
 	@test -f $@
 
-test: all $(OPERATIONS_TEST)
+test: all $(OPERATIONS_TEST) $(CHANNEL_TEST)
 	$(TEST)
 	$(OPERATIONS_TEST)
+	$(CHANNEL_TEST)
 	tests/test_cli.sh $(CLI)
 
 # The command reference and contract come from the maelys-cli generator; the
@@ -536,6 +548,10 @@ $(BIN)/fuzz-clienthello: tests/fuzz/fuzz_clienthello.c $(STATIC_LIB) | $(MAELYS_
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
+$(BIN)/fuzz-channel: tests/fuzz/fuzz_channel.c $(CHANNEL_CODEC)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
+
 # The committed seeds carry the structure each parser looks for, so a run
 # spends its budget on the boundaries instead of rediscovering that a request
 # starts with a method. libFuzzer writes what it finds into the build tree and
@@ -546,10 +562,11 @@ fuzz-smoke:
 		CFLAGS='-O1 -g -DMAELYS_FUZZ_STANDALONE' \
 		SANITIZE_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' \
 		build/fuzz-smoke/bin/fuzz-http build/fuzz-smoke/bin/fuzz-socks \
-		build/fuzz-smoke/bin/fuzz-clienthello
+		build/fuzz-smoke/bin/fuzz-clienthello build/fuzz-smoke/bin/fuzz-channel
 	build/fuzz-smoke/bin/fuzz-http tests/fuzz/corpus/http
 	build/fuzz-smoke/bin/fuzz-socks tests/fuzz/corpus/socks
 	build/fuzz-smoke/bin/fuzz-clienthello tests/fuzz/corpus/clienthello
+	build/fuzz-smoke/bin/fuzz-channel tests/fuzz/corpus/channel
 
 fuzz:
 	$(MAKE) clean
@@ -557,11 +574,13 @@ fuzz:
 		CFLAGS='-O1 -g' \
 		SANITIZE_FLAGS='-fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer' \
 		build/fuzz/bin/fuzz-http build/fuzz/bin/fuzz-socks \
-		build/fuzz/bin/fuzz-clienthello
-	@mkdir -p build/fuzz/corpus/http build/fuzz/corpus/socks build/fuzz/corpus/clienthello
+		build/fuzz/bin/fuzz-clienthello build/fuzz/bin/fuzz-channel
+	@mkdir -p build/fuzz/corpus/http build/fuzz/corpus/socks build/fuzz/corpus/clienthello \
+		build/fuzz/corpus/channel
 	build/fuzz/bin/fuzz-http build/fuzz/corpus/http tests/fuzz/corpus/http -runs=10000
 	build/fuzz/bin/fuzz-socks build/fuzz/corpus/socks tests/fuzz/corpus/socks -runs=10000
 	build/fuzz/bin/fuzz-clienthello build/fuzz/corpus/clienthello tests/fuzz/corpus/clienthello -runs=10000
+	build/fuzz/bin/fuzz-channel build/fuzz/corpus/channel tests/fuzz/corpus/channel -runs=10000
 
 install: $(STATIC_LIB) $(CLI) $(PC) $(MANIFEST) $(MAELYS_SYSTEM_LIB)
 ifeq ($(MAELYS_SYSTEM_PREFIX),)
@@ -574,7 +593,7 @@ endif
 		$(DESTDIR)$(PREFIX)/share/maelys/commands
 	install -m 0644 $(MANIFEST) $(DESTDIR)$(PREFIX)/share/maelys/commands/
 	install -m 0644 include/maelys/egress.h include/maelys/egress_tls.h \
-		include/maelys/egress_profile.h \
+		include/maelys/egress_profile.h include/maelys/egress_channel.h \
 		$(DESTDIR)$(PREFIX)/include/maelys/
 	install -m 0644 $(STATIC_LIB) $(DESTDIR)$(PREFIX)/lib/
 	install -m 0644 $(PC) $(DESTDIR)$(PREFIX)/lib/pkgconfig/

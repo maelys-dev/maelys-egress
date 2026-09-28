@@ -154,6 +154,7 @@ cp -a ${linux_stage}/. %{buildroot}/
 /usr/include/maelys/egress.h
 /usr/include/maelys/egress_tls.h
 /usr/include/maelys/egress_profile.h
+/usr/include/maelys/egress_channel.h
 /usr/include/maelys/sys.h
 /usr/include/maelys/sys/
 /usr/lib/libmaelys_egress.a

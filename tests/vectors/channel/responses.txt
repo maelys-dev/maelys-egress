@@ -1,0 +1,24 @@
+# Conformance vectors of the mediated-connection channel, version 1.
+# One vector per line: NAME <TAB> HEX <TAB> EXPECTED. Whitespace inside the
+# hex is for reading; "-" is the empty datagram. Regenerate nothing by hand:
+# tests/test_channel.c replays every line against the codec, and a client
+# that claims conformance replays the same lines. Contract:
+# proposals/egress-channel-v1.md until v1 freezes.
+# EXPECTED: 'OK STATUS VERSION' (the raw bytes; the caller judges them) or 'MALFORMED'; an OK vector of version 1 with reserved 0 and a known status also round-trips through the encoder.
+ok	4d454350 01 00 0000	OK 0 1
+denied	4d454350 01 01 0000	OK 1 1
+timeout	4d454350 01 02 0000	OK 2 1
+cancelled	4d454350 01 03 0000	OK 3 1
+malformed	4d454350 01 04 0000	OK 4 1
+unsupported	4d454350 01 05 0000	OK 5 1
+resource	4d454350 01 06 0000	OK 6 1
+internal	4d454350 01 07 0000	OK 7 1
+status-unknown-99	4d454350 01 63 0000	OK 99 1
+status-255	4d454350 01 ff 0000	OK 255 1
+reserved-nonzero-ignored	4d454350 01 00 beef	OK 0 1
+version-2-decodes-caller-decides	4d454350 02 05 0000	OK 5 2
+empty	-	MALFORMED
+short-by-one	4d454350 01 00 00	MALFORMED
+long-by-one	4d454350 01 00 0000 00	MALFORMED
+magic-of-the-old-netclient	4d455852 01 00 0000	MALFORMED
+magic-of-a-request	4d454351 01 00 0000	MALFORMED
