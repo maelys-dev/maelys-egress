@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- `libmaelys_egress_client`, the channel client a confined process links,
+  second part of `proposals/egress-channel-v1.md`. One call,
+  `maelys_egress_client_connect`, sends a request on the channel the
+  supervisor handed over and receives the relayed stream: exactly one
+  descriptor on OK, none otherwise, `CLOEXEC` set on receipt, a read deadline
+  that shuts the channel rather than leave a late answer to pair with the
+  next request, protocol-owned status codes mapped to the client's results,
+  and every descriptor a server in breach might send closed. The archive
+  holds `client/client.c` and the codec and stands on the C library: its
+  test, the release smoke and the Homebrew test link it without maelys-system
+  and without `-pthread`, and the boundary audit keeps `client/` from naming
+  either. Installed with `maelys-egress-client.pc`, which requires nothing.
+  ABI 1. Nothing serves the channel yet.
+
 - The codec of the mediated-connection channel, first part of
   `proposals/egress-channel-v1.md`. `include/maelys/egress_channel.h` names
   the bytes of version 1 — the request header and its host, the 8-byte

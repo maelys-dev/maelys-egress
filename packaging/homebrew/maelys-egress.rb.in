@@ -47,6 +47,13 @@ class MaelysEgress < Formula
            "-L#{lib}", "-L#{sys.opt_lib}", "-lmaelys_egress", "-lmaelys_sys",
            "-pthread", "-o", "smoke"
     system "./smoke"
+    (testpath/"client-smoke.c").write <<~EOS
+      #include <maelys/egress_client.h>
+      int main(void) { return maelys_egress_client_abi_version() == 1u ? 0 : 1; }
+    EOS
+    system ENV.cc, "-std=c11", "client-smoke.c", "-I#{include}", "-L#{lib}",
+           "-lmaelys_egress_client", "-o", "client-smoke"
+    system "./client-smoke"
     manifest = (share/"maelys/commands/egress.json").read
     assert_match "\"executable\": \"#{opt_bin}/maelys-egress\"", manifest
     (testpath/"egress.conf").write <<~EOS

@@ -59,6 +59,21 @@ EOF
   -L"$stage/usr/local/lib" -lmaelys_egress -lmaelys_sys -pthread -o "$tmp/smoke"
 "$tmp/smoke"
 test "$("$stage/usr/local/bin/maelys-egress" version)" = "maelys-egress $version"
+# The client archive must stand on the C library: this link names neither
+# maelys-system nor -pthread, so a dependency that crept in fails here.
+cat >"$tmp/client-smoke.c" <<'SMOKE'
+#include <maelys/egress_client.h>
+#include <maelys/egress_channel.h>
+int main(void) {
+  unsigned char request[MAELYS_EGRESS_CHANNEL_REQUEST_MAX_SIZE];
+  return maelys_egress_client_abi_version() == MAELYS_EGRESS_CLIENT_ABI_VERSION &&
+    maelys_egress_channel_encode_request("example.com", 443u, request, sizeof(request)) == 21u ? 0 : 1;
+}
+SMOKE
+"${CC:-cc}" -std=c11 -I"$stage/usr/local/include" "$tmp/client-smoke.c" \
+  -L"$stage/usr/local/lib" -lmaelys_egress_client -o "$tmp/client-smoke"
+"$tmp/client-smoke"
+grep -Fq "Version: $version" "$stage/usr/local/lib/pkgconfig/maelys-egress-client.pc"
 system_version="$(sed -n '1p' dependencies/maelys-system.pin)"
 grep -Fq "Version: ${system_version#v}" "$stage/usr/local/lib/pkgconfig/maelys-sys.pc"
 grep -Fq '"command": "egress"' "$stage/usr/local/share/maelys/commands/egress.json"
@@ -93,6 +108,7 @@ fi
 
 if [ "$host_os" = macos ]; then
   test "$(lipo -archs "$stage/usr/local/lib/libmaelys_egress.a")" = arm64
+  test "$(lipo -archs "$stage/usr/local/lib/libmaelys_egress_client.a")" = arm64
   test "$(lipo -archs "$stage/usr/local/lib/libmaelys_sys.a")" = arm64
   exit 0
 fi
@@ -155,11 +171,14 @@ cp -a ${linux_stage}/. %{buildroot}/
 /usr/include/maelys/egress_tls.h
 /usr/include/maelys/egress_profile.h
 /usr/include/maelys/egress_channel.h
+/usr/include/maelys/egress_client.h
 /usr/include/maelys/sys.h
 /usr/include/maelys/sys/
 /usr/lib/libmaelys_egress.a
+/usr/lib/libmaelys_egress_client.a
 /usr/lib/libmaelys_sys.a
 /usr/lib/pkgconfig/maelys-egress.pc
+/usr/lib/pkgconfig/maelys-egress-client.pc
 /usr/lib/pkgconfig/maelys-sys.pc
 /usr/share/doc/maelys-egress/
 /usr/share/maelys/commands/egress.json
