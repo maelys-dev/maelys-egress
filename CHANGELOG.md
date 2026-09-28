@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.22.0 — 2026-09-28
 
 - The mediated-connection channel, version 1, is a contract:
   `protocol/egress-channel-v1.md`, installed with the other protocol
