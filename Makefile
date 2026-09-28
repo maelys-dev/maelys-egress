@@ -167,7 +167,8 @@ TLS_TEST_KEY := $(BUILD)/tls-fixtures/tls-key.pem
 PC := $(LIB)/pkgconfig/maelys-egress.pc
 MANIFEST := $(BUILD)/share/maelys/commands/egress.json
 VERSION_STAMP := $(GENERATED)/version
-EXAMPLE_NAMES := basic_proxy native_connector policy_reload metrics_snapshot durable_audit custom_attestor
+EXAMPLE_NAMES := basic_proxy native_connector policy_reload metrics_snapshot durable_audit custom_attestor \
+	channel_supervisor channel_client
 EXAMPLE_BINS := $(EXAMPLE_NAMES:%=$(BIN)/example-%)
 
 # `all` is declared before the dependency files are included: a rule read
@@ -383,6 +384,12 @@ $(BIN)/example-%: examples/%.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
+# The confined side links the client archive alone: no library, no
+# maelys-system, no -pthread. That is what makes it an example.
+$(BIN)/example-channel_client: examples/channel_client.c $(CLIENT_LIB)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
+
 $(TLS_TEST_STAMP):
 	@mkdir -p $(@D)
 	openssl req -x509 -newkey rsa:2048 -nodes \
@@ -462,6 +469,7 @@ examples-check: $(EXAMPLE_BINS)
 	$(BIN)/example-policy_reload
 	$(BIN)/example-metrics_snapshot
 	$(BIN)/example-custom_attestor
+	$(BIN)/example-channel_supervisor $(abspath $(BIN)/example-channel_client)
 
 sdk-check: $(CLI)
 	@grep -Fq 'version = "$(SOURCE_VERSION)"' sdk/python/pyproject.toml || \
@@ -628,7 +636,7 @@ endif
 		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/protocol
 	install -m 0644 docs/generated/*.md \
 		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/generated/
-	install -m 0644 protocol/*.json \
+	install -m 0644 protocol/*.json protocol/*.md \
 		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/protocol/
 	install -d $(DESTDIR)$(PREFIX)/share/doc/maelys-egress/examples
 	install -m 0644 packaging/maelys-egress.conf.example \
@@ -682,8 +690,14 @@ public-check: all
 	$(CC) $(CFLAGS) tests/public/consumer.c $$flags $(LDFLAGS) \
 		-o "$$stage/consumer"; \
 	"$$stage/consumer"; \
+	client_flags="$$(PKG_CONFIG_PATH="$$stage$(PREFIX)/lib/pkgconfig" \
+		pkg-config --static --cflags --libs maelys-egress-client)"; \
 	for example in examples/*.c; do \
-		$(CC) $(CFLAGS) "$$example" $$flags $(LDFLAGS) -o "$$stage/example" || \
+		case "$$example" in \
+		examples/channel_client.c) example_flags="$$client_flags" ;; \
+		*) example_flags="$$flags" ;; \
+		esac; \
+		$(CC) $(CFLAGS) "$$example" $$example_flags $(LDFLAGS) -o "$$stage/example" || \
 			{ echo "public-check: $$example does not build against the installed library" >&2; \
 			  exit 1; }; \
 	done; \
@@ -723,6 +737,7 @@ install-check: all
 	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/cli-contract.json"; \
 	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/generated/config-reference.md"; \
 	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/protocol/egress-lifecycle-v1.schema.json"
+	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/protocol/egress-channel-v1.md"
 
 dist:
 	@mkdir -p dist

@@ -2,7 +2,32 @@
 
 ## Unreleased
 
-- The channel server, third part of `proposals/egress-channel-v1.md`.
+- The mediated-connection channel, version 1, is a contract:
+  `protocol/egress-channel-v1.md`, installed with the other protocol
+  documents, replaces the proposal of 0.21.0 and records maelys-warden's
+  answers to its four open questions. Two examples are its two sides:
+  `channel_supervisor.c` runs Egress with no port, binds a channel to a
+  connector and hands its client end to a child on a descriptor number of its
+  choosing, started by absolute path; `channel_client.c` links
+  `libmaelys_egress_client` alone and asks for one destination. Without
+  arguments the supervisor serves a loopback echo, and `examples-check` runs
+  the round trip with no network; `public-check` builds the client example
+  against the installed client archive through its own pkg-config file. The
+  criterion the proposal set is met: an integrator uses the native mode
+  across a process boundary without importing maelys-warden or reading its
+  sources.
+
+- `examples/native_connector.c` creates and destroys its server on the
+  thread that runs it. `maelys_egress_server_run` and
+  `maelys_egress_server_destroy` belong to the thread that created the
+  server — the reactor is bound to it — and the example created it on the
+  main thread, so its run failed at the first reactor step with "reactor
+  step failed", and a destroy from the main thread would have left the
+  reactor allocated; nothing ran it, since it reaches example.com. Found
+  while writing `channel_supervisor.c` from it, which `examples-check` and
+  the sanitizers do run.
+
+- The channel server, third part of `protocol/egress-channel-v1.md`.
   `maelys_egress_channel_create` binds a datagram pair to an authenticated
   connector and returns the client end for the supervisor to hand over; a
   thread serves it, one request at a time and in order, until
@@ -23,7 +48,7 @@
   exchange; the mutation gate holds the `DENIED` row of the table.
 
 - `libmaelys_egress_client`, the channel client a confined process links,
-  second part of `proposals/egress-channel-v1.md`. One call,
+  second part of `protocol/egress-channel-v1.md`. One call,
   `maelys_egress_client_connect`, sends a request on the channel the
   supervisor handed over and receives the relayed stream: exactly one
   descriptor on OK, none otherwise, `CLOEXEC` set on receipt, a read deadline
@@ -37,7 +62,7 @@
   ABI 1. Nothing serves the channel yet.
 
 - The codec of the mediated-connection channel, first part of
-  `proposals/egress-channel-v1.md`. `include/maelys/egress_channel.h` names
+  `protocol/egress-channel-v1.md`. `include/maelys/egress_channel.h` names
   the bytes of version 1 — the request header and its host, the 8-byte
   response, the eight status codes of the protocol — and `src/core/channel.c`
   encodes and decodes them with the C library alone, so the same object can
@@ -61,7 +86,7 @@
   `HTTP_FORWARD` and `tls_sni_verified` 0. The header and the key's description
   say it; a test sends the request and reads the refusal and the receipt.
 
-- A proposal for the mediated-connection channel, `proposals/egress-channel-v1.md`:
+- A proposal for the mediated-connection channel, `protocol/egress-channel-v1.md`:
   the interprocess channel to the native connector — today maelys-warden's
   private pair, `fd4_broker` and `netclient` — would belong to Egress, with a
   versioned protocol, the broker, a client a confined process links without
