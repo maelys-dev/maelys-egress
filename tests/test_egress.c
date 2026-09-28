@@ -1288,6 +1288,8 @@ static void *sni_upstream_main(void *opaque) {
 typedef struct sni_receipt_context {
     int count;
     int verified;
+    maelys_egress_protocol_t protocol;
+    maelys_egress_result_t result;
 } sni_receipt_context_t;
 
 static void capture_sni_receipt(
@@ -1295,6 +1297,74 @@ static void capture_sni_receipt(
     sni_receipt_context_t *context = opaque;
     ++context->count;
     context->verified = maelys_egress_receipt_tls_sni_verified(receipt);
+    context->protocol = maelys_egress_receipt_protocol(receipt);
+    context->result = maelys_egress_receipt_result(receipt);
+}
+
+/*
+ * A destination that requires the SNI admits only a TLS ClientHello naming
+ * it. An HTTP forward request to the same host and port would relay cleartext
+ * there; it is refused at admission, before any upstream connection, and the
+ * receipt records the refusal. The upstream listener accepts nothing, so a
+ * connection attempt would be visible as a hang or a receipt without DENIED.
+ */
+static void test_sni_guard_refuses_http_forward(void) {
+    uint16_t upstream_port = 0u;
+    int listener = listener_create(&upstream_port);
+    CHECK(listener >= 0);
+
+    maelys_egress_policy_t *policy = NULL;
+    maelys_egress_config_t *config = NULL;
+    char *error = NULL;
+    CHECK(maelys_egress_policy_create(&policy, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_allow_tcp(policy, "localhost", upstream_port, 1, &error) ==
+          MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_require_tls_sni(policy, "localhost", upstream_port, &error) ==
+          MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_seal(policy, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_create(&config, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_allow_unauthenticated_loopback(config, 1, &error) ==
+          MAELYS_EGRESS_OK);
+    sni_receipt_context_t receipt = {0};
+    maelys_egress_config_set_receipt_sink(config, capture_sni_receipt, &receipt);
+    proxy_context_t proxy = {
+        .lock = PTHREAD_MUTEX_INITIALIZER,
+        .condition = PTHREAD_COND_INITIALIZER,
+        .policy = policy,
+        .config = config
+    };
+    pthread_t proxy_thread;
+    CHECK(pthread_create(&proxy_thread, NULL, proxy_main, &proxy) == 0);
+    (void)pthread_mutex_lock(&proxy.lock);
+    while (!proxy.ready) (void)pthread_cond_wait(&proxy.condition, &proxy.lock);
+    (void)pthread_mutex_unlock(&proxy.lock);
+    CHECK(proxy.result == MAELYS_EGRESS_OK);
+
+    int client = connect_loopback(proxy.port);
+    CHECK(client >= 0);
+    char request[512];
+    int request_length = snprintf(request, sizeof(request),
+        "GET http://localhost:%u/ HTTP/1.1\r\nHost: localhost:%u\r\n\r\n",
+        (unsigned int)upstream_port, (unsigned int)upstream_port);
+    CHECK(request_length > 0 && send_all(client, request, (size_t)request_length));
+    char response[512] = {0};
+    CHECK(read_http_header(client, response, sizeof(response)));
+    CHECK(strncmp(response, "HTTP/1.1 403", 12u) == 0);
+    (void)close(client);
+    struct timespec delay = {.tv_sec = 0, .tv_nsec = 10000000L};
+    (void)nanosleep(&delay, NULL);
+    CHECK(maelys_egress_server_stop(proxy.server) == MAELYS_EGRESS_OK);
+    CHECK(pthread_join(proxy_thread, NULL) == 0);
+    CHECK(receipt.count == 1 && receipt.verified == 0);
+    CHECK(receipt.protocol == MAELYS_EGRESS_PROTOCOL_HTTP_FORWARD);
+    CHECK(receipt.result == MAELYS_EGRESS_ERR_DENIED);
+    CHECK(proxy.result == MAELYS_EGRESS_OK && proxy.error == NULL);
+    (void)close(listener);
+    maelys_egress_error_free(error);
+    maelys_egress_config_destroy(config);
+    maelys_egress_policy_destroy(policy);
+    (void)pthread_cond_destroy(&proxy.condition);
+    (void)pthread_mutex_destroy(&proxy.lock);
 }
 
 static void test_sni_guard_end_to_end(void) {
@@ -1378,6 +1448,7 @@ int main(void) {
     test_unix_listener();
     test_relay_backpressure_and_half_close();
     test_sni_guard_end_to_end();
+    test_sni_guard_refuses_http_forward();
     if (failures) {
         fprintf(stderr, "%d checks failed\n", failures);
         return 1;

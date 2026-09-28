@@ -26,7 +26,8 @@ static const egress_cli_config_spec_t config_specs[] = {
         "Allow one exact destination to resolve to private addresses."},
     {"allow_tls_sni", EGRESS_CLI_KEY_ALLOW_TLS_SNI, EGRESS_CLI_CONFIG_DESTINATION,
         0, 1, 0, 0, NULL, "HOST:1..65535", NULL, NULL, NULL,
-        "Allow one destination and require matching readable TLS SNI."},
+        "Allow one destination and require matching readable TLS SNI; "
+        "HTTP forward requests to it are refused."},
     {"token_file", EGRESS_CLI_KEY_TOKEN_FILE, EGRESS_CLI_CONFIG_PATH, 0, 0, 1, 0,
         NULL, "owner-only regular file, at least 16 bytes", NULL, NULL,
         "unauthenticated_loopback",
