@@ -158,7 +158,7 @@ static void test_descriptor_cardinality(void) {
     respond(channel[1], MAELYS_EGRESS_CHANNEL_OK, extra, 2u);
     CHECK(maelys_egress_client_connect(channel[0], "example.com", 443u, 1000u, &received,
                                        &error) == MAELYS_EGRESS_CLIENT_ERR_PROTOCOL);
-    CHECK(received == -1 && error && strstr(error, "2 descriptors"));
+    CHECK(received == -1 && error && strstr(error, "more than one descriptor"));
     maelys_egress_client_error_free(error);
     CHECK(open_descriptors() == before);
     /* Twenty on OK, more than the client once had room for: every one is
@@ -168,14 +168,14 @@ static void test_descriptor_cardinality(void) {
     respond(channel[1], MAELYS_EGRESS_CHANNEL_OK, twenty, 20u);
     CHECK(maelys_egress_client_connect(channel[0], "example.com", 443u, 1000u, &received,
                                        &error) == MAELYS_EGRESS_CLIENT_ERR_PROTOCOL);
-    CHECK(received == -1 && error && strstr(error, "20 descriptors"));
+    CHECK(received == -1 && error && strstr(error, "more than one descriptor"));
     maelys_egress_client_error_free(error);
     CHECK(open_descriptors() == before);
     /* No descriptor on OK. */
     respond(channel[1], MAELYS_EGRESS_CHANNEL_OK, NULL, 0u);
     CHECK(maelys_egress_client_connect(channel[0], "example.com", 443u, 1000u, &received,
                                        &error) == MAELYS_EGRESS_CLIENT_ERR_PROTOCOL);
-    CHECK(received == -1 && error && strstr(error, "0 descriptors"));
+    CHECK(received == -1 && error && strstr(error, "no descriptor"));
     maelys_egress_client_error_free(error);
     /* A descriptor on DENIED: closed, and malformed rather than denied. */
     respond(channel[1], MAELYS_EGRESS_CHANNEL_DENIED, &extra[0], 1u);

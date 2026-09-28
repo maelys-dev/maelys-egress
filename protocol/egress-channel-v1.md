@@ -39,9 +39,10 @@ Egress owns:
 - the server: `maelys_egress_channel_create` holds one authenticated connector
   and answers requests on one channel, one thread per channel;
 - the client, `libmaelys_egress_client`, small enough to link into a confined
-  process and standing on the C library alone — no Egress core, no
-  maelys-system — so a workload never links the proxy; `maelys-egress-client.pc`
-  requires nothing;
+  process: no Egress core, and of maelys-system the one object that passes a
+  descriptor, `fdpass.o`, so a workload never links the proxy, the loop, the
+  threads or the files; `maelys-egress-client.pc` requires nothing (see
+  "The client's one object of maelys-system" below);
 - the interprocess examples, the conformance vectors, the fuzz target and the
   mutation gate.
 
@@ -316,9 +317,36 @@ operator that this version records:
 3. The client archive: `libmaelys_egress_client`, `maelys-egress-client.pc`,
    MPL-2.0 with an SPDX header in each file, linking without the Egress core
    and without maelys-system, so that a confined process inherits neither.
+   Amended with Warden's agreement when maelys-system 0.10.0 published its
+   descriptor-passing primitive: see the next section.
 4. Warden's `netclient` becomes a thin wrapper of this client first, since it
    is part of the SDK Warden installs; it is retired in a later major version
    of Warden, with a documented migration.
+
+## The client's one object of maelys-system
+
+Until maelys-system 0.10.0 the rule for the client was "no maelys-system at
+all", and the client and the server each carried their own `SCM_RIGHTS`
+code. Two copies drifted, and one of them was the flaw of 0.22.0: a server
+that received requests without room for their descriptors, which macOS then
+installed in it unseen. maelys-system 0.10.0 publishes the gesture once —
+`maelys_sys_fd_send` and `maelys_sys_fd_receive` in `maelys/sys/fdpass.h`,
+with room for every descriptor either kernel delivers, the surplus closed and
+flagged, close-on-exec set — and Egress adopts it on both sides, so that one
+proven copy of descriptor passing serves the channel.
+
+The rule is now, as maelys-warden agreed: **`fdpass` alone** — the client
+includes `maelys/sys/fdpass.h` and names `maelys_sys_fd_send`,
+`maelys_sys_fd_receive` and their result type, nothing else of maelys-system,
+and the archive holds `fdpass.o` taken from the pinned `libmaelys_sys.a` —
+**and no undefined `maelys_sys_` or `pthread_` symbol in the archive**. The
+promise it keeps is the original one: a confined process that links the
+client inherits neither the loop, nor the threads, nor the files of
+maelys-system. Four guards hold it: `client-standalone-check` on the
+archive's symbols; the archive linked alone, without the library and without
+`-pthread`, by `test-client`, by the release smoke and by the Homebrew test;
+the boundary audit on `client/`; and maelys-system's own
+`fdpass-standalone-check`, which links the object by itself.
 
 ## Not in this document
 

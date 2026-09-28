@@ -1,36 +1,19 @@
 /*
  * The server side of the mediated-connection channel: one thread per
- * channel, one authenticated connector, one request at a time. It is the
- * one file of the library that passes a descriptor to another process, and
- * for that it calls sendmsg and recvmsg itself: maelys-system has no
- * primitive for SCM_RIGHTS yet, and scripts/audit-boundaries.sh names this
- * file as the exception until it does. Everything else — the socket pair,
- * the wakeup, the loop, the thread, the closes — goes through maelys-system.
+ * channel, one authenticated connector, one request at a time. The
+ * descriptor crosses the process boundary through maelys-system's fdpass,
+ * like everything else a socket does here — the pair, the wakeup, the loop,
+ * the thread, the closes.
  */
-#if defined(__APPLE__) && !defined(_DARWIN_C_SOURCE)
-#define _DARWIN_C_SOURCE
-#endif
-
 #include "src/internal.h"
 #include "maelys/egress_channel.h"
+#include "maelys/sys/fdpass.h"
 
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
-
-#ifndef MSG_NOSIGNAL
-#define MSG_NOSIGNAL 0
-#endif
 
 #define CHANNEL_TOKEN_REQUESTS UINT64_C(1)
-/* Room for every descriptor a kernel will ever deliver with one datagram:
- * macOS refuses more than 254 in its one SCM_RIGHTS header, Linux merges
- * headers and stops at 253. A request carries none by contract, but the
- * kernel does not know the contract: macOS installs whatever the peer
- * attached into this process even with no control buffer, with no flag to
- * say so, and only a buffer that can hold them all lets them be closed. */
-#define CHANNEL_MAX_RIGHTS 256u
 #define CHANNEL_TOKEN_WAKEUP UINT64_C(2)
 
 /*
@@ -91,88 +74,33 @@ static int send_response(
         MAELYS_EGRESS_CHANNEL_RESPONSE_SIZE) {
         return 0;
     }
-    struct iovec iov = {.iov_base = response, .iov_len = sizeof(response)};
-    unsigned char control[CMSG_SPACE(sizeof(int))];
-    struct msghdr message;
-    memset(&message, 0, sizeof(message));
-    message.msg_iov = &iov;
-    message.msg_iovlen = 1u;
-    if (stream_fd >= 0) {
-        memset(control, 0, sizeof(control));
-        message.msg_control = control;
-        message.msg_controllen = (socklen_t)CMSG_SPACE(sizeof(int));
-        struct cmsghdr *header = CMSG_FIRSTHDR(&message);
-        header->cmsg_level = SOL_SOCKET;
-        header->cmsg_type = SCM_RIGHTS;
-        header->cmsg_len = (socklen_t)CMSG_LEN(sizeof(int));
-        memcpy(CMSG_DATA(header), &stream_fd, sizeof(stream_fd));
-    }
-    ssize_t sent;
-    do {
-        sent = sendmsg(server_fd, &message, MSG_NOSIGNAL);
-    } while (sent < 0 && errno == EINTR);
-    return sent == (ssize_t)sizeof(response);
-}
-
-/* Closes every descriptor the received control data carries, reading no
- * further than the control bytes the kernel filled: a header may announce
- * more than was delivered when the kernel truncated. Returns how many. */
-static size_t close_received_rights(const struct msghdr *message) {
-    size_t closed = 0u;
-    const unsigned char *end = (const unsigned char *)message->msg_control +
-        message->msg_controllen;
-    for (struct cmsghdr *header = CMSG_FIRSTHDR(message); header;
-         header = CMSG_NXTHDR((struct msghdr *)message, header)) {
-        if (header->cmsg_level != SOL_SOCKET || header->cmsg_type != SCM_RIGHTS ||
-            header->cmsg_len < CMSG_LEN(0)) {
-            continue;
-        }
-        const unsigned char *data = CMSG_DATA(header);
-        size_t declared = header->cmsg_len - CMSG_LEN(0);
-        size_t available = data < end ? (size_t)(end - data) : 0u;
-        size_t count = (declared < available ? declared : available) / sizeof(int);
-        for (size_t i = 0; i < count; ++i) {
-            int descriptor = -1;
-            memcpy(&descriptor, data + i * sizeof(int), sizeof(descriptor));
-            (void)maelys_sys_fd_close(&descriptor);
-            ++closed;
-        }
-    }
-    return closed;
+    return maelys_sys_fd_send(server_fd, response, sizeof(response), stream_fd) ==
+        MAELYS_SYS_OK;
 }
 
 /* Reads one datagram and answers it. Returns 0 when the channel is gone. */
 static int serve_one(maelys_egress_channel_t *channel) {
     unsigned char request[MAELYS_EGRESS_CHANNEL_REQUEST_MAX_SIZE + 1u];
-    struct iovec iov = {.iov_base = request, .iov_len = sizeof(request)};
-    union {
-        struct cmsghdr align;
-        unsigned char bytes[CMSG_SPACE(sizeof(int) * CHANNEL_MAX_RIGHTS)];
-    } control;
-    struct msghdr message;
-    memset(&message, 0, sizeof(message));
-    memset(&control, 0, sizeof(control));
-    message.msg_iov = &iov;
-    message.msg_iovlen = 1u;
-    message.msg_control = control.bytes;
-    message.msg_controllen = (socklen_t)sizeof(control.bytes);
-    ssize_t received;
-    do {
-        received = recvmsg(channel->server_fd, &message, 0);
-    } while (received < 0 && errno == EINTR);
-    if (received < 0) return errno == EAGAIN || errno == EWOULDBLOCK;
-    /* A request carries no descriptor. Whatever the peer attached is closed
-     * here before anything else, and the request is refused: a confined
-     * process must not be able to fill this process's descriptor table. */
-    size_t attached = close_received_rights(&message);
+    size_t received = 0u;
+    size_t attached = 0u;
+    unsigned flags = 0u;
+    /* A request carries no descriptor, so none is asked for: fdpass reads
+     * with room for all a kernel can deliver and closes every one of them,
+     * and SURPLUS says some came. On macOS the kernel installs them in this
+     * process whatever the receiver asks; without that, a confined process
+     * could fill this process's descriptor table. */
+    maelys_sys_result_t got = maelys_sys_fd_receive(
+        channel->server_fd, request, sizeof(request), &received,
+        NULL, 0u, &attached, &flags);
+    if (got == MAELYS_SYS_ERR_WOULD_BLOCK) return 1;
+    if (got != MAELYS_SYS_OK) return 0;
     maelys_egress_channel_request_t decoded;
     maelys_egress_channel_status_t status;
-    if ((message.msg_flags & (MSG_TRUNC | MSG_CTRUNC)) || attached != 0u ||
-        message.msg_controllen != 0u) {
+    if (flags & (MAELYS_SYS_FDPASS_TRUNCATED | MAELYS_SYS_FDPASS_CONTROL_TRUNCATED |
+                 MAELYS_SYS_FDPASS_SURPLUS)) {
         status = MAELYS_EGRESS_CHANNEL_MALFORMED;
     } else {
-        status = maelys_egress_channel_decode_request(
-            request, (size_t)received, &decoded, NULL);
+        status = maelys_egress_channel_decode_request(request, received, &decoded, NULL);
     }
     int stream_fd = -1;
     maelys_egress_session_t *session = NULL;
