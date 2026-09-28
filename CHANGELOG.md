@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.22.1 — 2026-09-28
 
 - The channel server closes every descriptor a request carries, and refuses
   the request. It received requests without a control buffer, on the belief
