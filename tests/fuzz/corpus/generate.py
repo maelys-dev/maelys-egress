@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write the seed corpus of the three fuzz targets.
+"""Write the seed corpus of the four fuzz targets.
 
 A seed is a valid or nearly valid input: it carries the structure the parser
 looks for, so a campaign spends its budget on the boundaries instead of
@@ -90,6 +90,30 @@ CLIENTHELLO = {
 }
 
 
+def channel_request(host: bytes, port: int = 443, version: int = 1,
+                    protocol: int = 1, magic: int = 0x4d454351) -> bytes:
+    return (magic.to_bytes(4, "big") + bytes([version, protocol]) +
+            port.to_bytes(2, "big") + len(host).to_bytes(2, "big") + host)
+
+
+def channel_response(status: int, version: int = 1) -> bytes:
+    return (0x4d454350).to_bytes(4, "big") + bytes([version, status, 0, 0])
+
+
+# The mediated-connection channel: a request header and its host, and the
+# 8-byte response; the codec is fuzzed with both decoders on every input.
+CHANNEL = {
+    "request-valid": channel_request(b"example.com"),
+    "request-max-host": channel_request(b"a" * 253, port=65535),
+    "request-version-2": channel_request(b"example.com", version=2),
+    "request-netclient-magic": channel_request(b"example.com", magic=0x4d45584e),
+    "request-trailing-byte": channel_request(b"example.com") + b"\x00",
+    "response-ok": channel_response(0),
+    "response-denied": channel_response(1),
+    "response-version-2": channel_response(5, version=2),
+}
+
+
 def main() -> int:
     for name, data in HTTP.items():
         write("http", name, data)
@@ -97,7 +121,9 @@ def main() -> int:
         write("socks", name, data)
     for name, data in CLIENTHELLO.items():
         write("clienthello", name, data)
-    written = sum(len(group) for group in (HTTP, SOCKS, CLIENTHELLO))
+    for name, data in CHANNEL.items():
+        write("channel", name, data)
+    written = sum(len(group) for group in (HTTP, SOCKS, CLIENTHELLO, CHANNEL))
     print(f"corpus: {written} seeds written under {ROOT}")
     return 0
 

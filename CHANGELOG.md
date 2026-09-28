@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- The codec of the mediated-connection channel, first part of
+  `proposals/egress-channel-v1.md`. `include/maelys/egress_channel.h` names
+  the bytes of version 1 — the request header and its host, the 8-byte
+  response, the eight status codes of the protocol — and `src/core/channel.c`
+  encodes and decodes them with the C library alone, so the same object can
+  go into the server library and, next, into the client archive a confined
+  process links. Twenty-five request vectors and seventeen response vectors
+  under `tests/vectors/channel/` state what the codec accepts and refuses;
+  `test-channel` replays them against the codec object alone and round-trips
+  every accepted one, a fuzz target does the same on every input, and the
+  mutation gate holds the host bound. Nothing speaks the protocol yet: no
+  server, no client, no descriptor crosses a process in this release.
+
 ## 0.21.0 — 2026-09-28
 
 - The SNI guard holds on every protocol. A destination allowed with

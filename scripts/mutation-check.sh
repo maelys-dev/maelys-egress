@@ -61,12 +61,15 @@ run_mutant destination-port src/core/policy.c \
 run_mutant relay-half-close src/server/relay.c \
     'maelys_sys_socket_shutdown(connection->upstream_socket, SHUT_WR)' \
     'maelys_sys_socket_shutdown(connection->upstream_socket, SHUT_RD)' &
+run_mutant channel-host-bound src/core/channel.c \
+    'out->host_length > MAELYS_EGRESS_CHANNEL_MAX_HOST' \
+    'out->host_length >= MAELYS_EGRESS_CHANNEL_MAX_HOST' &
 wait
 
 killed=0
 total=0
 for name in sni-host-mismatch authority-mismatch credential-compare \
-    destination-port relay-half-close; do
+    destination-port relay-half-close channel-host-bound; do
     total=$((total + 1))
     result=$(cat "$work/$name.result" 2>/dev/null || printf 'missing')
     if test "$result" = killed; then
