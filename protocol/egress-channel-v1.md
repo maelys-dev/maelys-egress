@@ -90,6 +90,17 @@ behalf; a host that is not canonical is malformed. Egress validates the same
 form again inside `session_open`, so a request the server lets through and the
 policy refuses answers `DENIED`, not `PROTOCOL`.
 
+A request carries no ancillary data. The server reads every descriptor a
+kernel can deliver with one datagram, closes each of them before anything
+else, and answers `MALFORMED` to a request that carried any, or whose control
+data was truncated. Kernels differ here: Linux drops descriptors the receiver
+has no room for and says so with `MSG_CTRUNC`; macOS installs them in the
+receiver regardless and says nothing, so a server that asked for no control
+data would keep them open, unnamed, and a confined process could fill its
+descriptor table. *Erratum of 0.22.1:* 0.22.0 received requests without a
+control buffer and leaked those descriptors on macOS; the bytes of the
+protocol do not change, and a client that follows it never attaches any.
+
 ### Response — server to client
 
 | offset | size | field | value |

@@ -48,14 +48,18 @@ static void channel_pair(int pair[2]) {
 static void server_send(int server_fd, const unsigned char *bytes, size_t length,
                         const int *descriptors, size_t count) {
     struct iovec iov = {.iov_base = (void *)bytes, .iov_len = length};
-    unsigned char control[CMSG_SPACE(sizeof(int) * 4u)];
+    union {
+        struct cmsghdr align;
+        unsigned char bytes[CMSG_SPACE(sizeof(int) * 32u)];
+    } control;
     struct msghdr message;
     memset(&message, 0, sizeof(message));
     message.msg_iov = &iov;
     message.msg_iovlen = 1u;
+    CHECK(count <= 32u);
     if (count) {
-        memset(control, 0, sizeof(control));
-        message.msg_control = control;
+        memset(&control, 0, sizeof(control));
+        message.msg_control = control.bytes;
         message.msg_controllen = (socklen_t)CMSG_SPACE(sizeof(int) * count);
         struct cmsghdr *header = CMSG_FIRSTHDR(&message);
         header->cmsg_level = SOL_SOCKET;
@@ -155,6 +159,16 @@ static void test_descriptor_cardinality(void) {
     CHECK(maelys_egress_client_connect(channel[0], "example.com", 443u, 1000u, &received,
                                        &error) == MAELYS_EGRESS_CLIENT_ERR_PROTOCOL);
     CHECK(received == -1 && error && strstr(error, "2 descriptors"));
+    maelys_egress_client_error_free(error);
+    CHECK(open_descriptors() == before);
+    /* Twenty on OK, more than the client once had room for: every one is
+     * closed, none is read past the control bytes the kernel filled. */
+    int twenty[20];
+    for (size_t i = 0; i < 20u; ++i) twenty[i] = extra[0];
+    respond(channel[1], MAELYS_EGRESS_CHANNEL_OK, twenty, 20u);
+    CHECK(maelys_egress_client_connect(channel[0], "example.com", 443u, 1000u, &received,
+                                       &error) == MAELYS_EGRESS_CLIENT_ERR_PROTOCOL);
+    CHECK(received == -1 && error && strstr(error, "20 descriptors"));
     maelys_egress_client_error_free(error);
     CHECK(open_descriptors() == before);
     /* No descriptor on OK. */

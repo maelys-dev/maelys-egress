@@ -27,9 +27,12 @@
 #define MSG_NOSIGNAL 0
 #endif
 
-/* Room for the one descriptor the contract allows, plus what a server in
- * breach might add: the client must see the extra ones to close them. */
-#define CLIENT_MAX_RIGHTS 8u
+/* Room for every descriptor a kernel will ever deliver with one datagram:
+ * macOS refuses more than 254 in its one SCM_RIGHTS header, Linux merges
+ * headers and stops at 253. The contract allows one; a server in breach may
+ * send more, and macOS installs them all even when they do not fit the
+ * buffer, so only a buffer that holds them all lets the client close them. */
+#define CLIENT_MAX_RIGHTS 256u
 
 static void set_error(char **out_error, const char *format, ...)
     __attribute__((format(printf, 2, 3)));
@@ -136,14 +139,17 @@ maelys_egress_client_result_t maelys_egress_client_connect(
 
     unsigned char response[MAELYS_EGRESS_CHANNEL_RESPONSE_SIZE + 1u];
     struct iovec iov = {.iov_base = response, .iov_len = sizeof(response)};
-    unsigned char control[CMSG_SPACE(sizeof(int) * CLIENT_MAX_RIGHTS)];
+    union {
+        struct cmsghdr align;
+        unsigned char bytes[CMSG_SPACE(sizeof(int) * CLIENT_MAX_RIGHTS)];
+    } control;
     struct msghdr message;
     memset(&message, 0, sizeof(message));
-    memset(control, 0, sizeof(control));
+    memset(&control, 0, sizeof(control));
     message.msg_iov = &iov;
     message.msg_iovlen = 1u;
-    message.msg_control = control;
-    message.msg_controllen = sizeof(control);
+    message.msg_control = control.bytes;
+    message.msg_controllen = (socklen_t)sizeof(control.bytes);
     int flags = 0;
 #ifdef MSG_CMSG_CLOEXEC
     flags |= MSG_CMSG_CLOEXEC;
@@ -166,6 +172,9 @@ maelys_egress_client_result_t maelys_egress_client_connect(
     int stream = -1;
     size_t rights = 0u;
     int malformed_rights = 0;
+    /* Read no further than the control bytes the kernel filled: after a
+     * truncation a header may announce more than was delivered. */
+    const unsigned char *control_end = control.bytes + message.msg_controllen;
     for (struct cmsghdr *header = CMSG_FIRSTHDR(&message); header;
          header = CMSG_NXTHDR(&message, header)) {
         if (header->cmsg_level != SOL_SOCKET || header->cmsg_type != SCM_RIGHTS ||
@@ -174,8 +183,10 @@ maelys_egress_client_result_t maelys_egress_client_connect(
             malformed_rights = 1;
             continue;
         }
-        size_t count = (header->cmsg_len - CMSG_LEN(0)) / sizeof(int);
         const unsigned char *data = CMSG_DATA(header);
+        size_t declared = header->cmsg_len - CMSG_LEN(0);
+        size_t available = data < control_end ? (size_t)(control_end - data) : 0u;
+        size_t count = (declared < available ? declared : available) / sizeof(int);
         for (size_t i = 0; i < count; ++i) {
             int descriptor = -1;
             memcpy(&descriptor, data + i * sizeof(int), sizeof(descriptor));
