@@ -61,6 +61,14 @@ typedef struct vector {
     char expected[512];
 } vector_t;
 
+/* A field longer than its slot is a defect of the vector file, not
+ * something to truncate silently. */
+static void copy_field(char *out, size_t capacity, const char *text) {
+    size_t length = strlen(text);
+    CHECK(length < capacity);
+    memcpy(out, text, length + 1u);
+}
+
 static int read_vector(FILE *stream, vector_t *vector) {
     char line[2048];
     while (fgets(line, sizeof(line), stream)) {
@@ -74,9 +82,9 @@ static int read_vector(FILE *stream, vector_t *vector) {
         *tab = '\0';
         char *expected = tab + 1;
         expected[strcspn(expected, "\n")] = '\0';
-        (void)snprintf(vector->name, sizeof(vector->name), "%s", line);
+        copy_field(vector->name, sizeof(vector->name), line);
         vector->length = parse_hex(hex, vector->bytes, sizeof(vector->bytes));
-        (void)snprintf(vector->expected, sizeof(vector->expected), "%s", expected);
+        copy_field(vector->expected, sizeof(vector->expected), expected);
         return 1;
     }
     return 0;
