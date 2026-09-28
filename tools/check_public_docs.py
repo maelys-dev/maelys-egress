@@ -21,6 +21,7 @@ PUBLIC_DOCUMENTS = (
     "sdk/README.md",
     "sdk/python/README.md",
     "sdk/node/README.md",
+    "protocol/egress-channel-v1.md",
 )
 LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 DANGLING_WORDS = {

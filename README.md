@@ -80,9 +80,10 @@ type. Optional reference modules bind the TLS seam to Mbed TLS or wolfSSL.
   durability, plus a generic optional asymmetric/HSM attestor seam. HMAC alone
   is shared-key integrity, not public-key attestation.
 - an authenticated native connector/session API returning the client end of a
-  private TCP relay, never the upstream socket, so embedders and a future fd-4
-  adapter preserve SNI, quotas, byte accounting and receipts without speaking
-  HTTP or SOCKS themselves.
+  private TCP relay, never the upstream socket, and the mediated-connection
+  channel that carries it to another process, so embedders and confined
+  workloads preserve SNI, quotas, byte accounting and receipts without
+  speaking HTTP or SOCKS themselves.
 
 The proxy is not itself a sandbox. Strong enforcement requires the workload to
 have no direct ambient network path; otherwise it can ignore proxy variables.
@@ -195,8 +196,18 @@ This is the mode for a workload that must hold neither a proxy address nor a
 credential: its supervisor hands it an already-admitted stream, and it can ask
 for another only through that supervisor. The contract is declared in
 [`include/maelys/egress.h`](include/maelys/egress.h) and exercised by
-[`examples/native_connector.c`](examples/native_connector.c); maelys-warden
-brokers it to the sandboxed process over file descriptor 4.
+[`examples/native_connector.c`](examples/native_connector.c).
+
+Across a process boundary, the same connector serves the
+[mediated-connection channel](protocol/egress-channel-v1.md):
+`maelys_egress_channel_create` binds a datagram pair to the connector and
+returns the client end for the supervisor to hand over, at the descriptor
+number of its own convention; the confined process links
+`libmaelys_egress_client` alone — the C library, nothing of the proxy — and
+asks for one destination per `maelys_egress_client_connect`, receiving the
+stream as a passed descriptor. [`examples/channel_supervisor.c`](examples/channel_supervisor.c)
+and [`examples/channel_client.c`](examples/channel_client.c) are the two sides;
+maelys-warden hands the channel to the sandboxed process on file descriptor 4.
 
 ## Documentation map
 
@@ -209,8 +220,10 @@ brokers it to the sandboxed process over file descriptor 4.
   dispatcher conventions used by the command;
 - [Python and Node.js process SDKs](sdk/README.md): lifecycle automation and
   the responsibilities left to the application's proxy client;
-- [C examples](examples/README.md): embedding, native connector, reload,
-  metrics, durable audit and attestation examples;
+- [mediated-connection channel](protocol/egress-channel-v1.md): the
+  interprocess contract of the native connector, version 1;
+- [C examples](examples/README.md): embedding, native connector, channel,
+  reload, metrics, durable audit and attestation examples;
 - [security policy](SECURITY.md), [licensing](LICENSING.md) and
   [release procedure](RELEASING.md).
 

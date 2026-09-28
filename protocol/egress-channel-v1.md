@@ -1,38 +1,49 @@
 # Maelys Egress mediated-connection channel, v1
 
-**Status: proposal — not implemented.** Nothing here is a contract. It becomes
-one when this repository holds the implementation, the conformance vectors and
-the adversarial gate this document names; v1 freezes then, and the normative
-byte tables move to `protocol/`, where installed contracts live. Until then this
-file is the place to disagree.
+**Status: contract, version 1, frozen with Egress 0.22.0.** The bytes and the
+decisions below are what `libmaelys_egress` serves
+(`maelys_egress_channel_create`), what `libmaelys_egress_client` speaks
+(`maelys_egress_client_connect`), what `tests/vectors/channel/` states and what
+the mutation and fuzz gates hold. A change to a byte or to a decision is a
+version 2, with its own document; this one no longer moves. It began as a
+proposal reviewed with maelys-warden, whose answers to its four open questions
+are recorded at the end.
 
 ## Why
 
 `maelys_egress_connector_session_open` ([egress.h](../include/maelys/egress.h))
 returns a policy-checked TCP stream to an embedder in the same process. A
 sandboxed workload lives in another process; someone must carry its request
-across that boundary and hand the stream back. Today that someone is
-maelys-warden: `integrations/egress/fd4_broker.c` (server, 202 lines) and
-`src/netclient/{protocol.h,client.c}` (client, 198 lines), read at 9a7c1f5. The
-protocol they speak is private to Warden, and an integrator who wants the native
-mode without Warden has nothing to build on but Warden's sources.
+across that boundary and hand the stream back. Before this
+contract that someone was maelys-warden alone, with a private pair of its own
+(`integrations/egress/fd4_broker.c` and `src/netclient`, read at 9a7c1f5), and
+an integrator who wanted the native mode without Warden had nothing to build on
+but Warden's sources.
 
-The channel should belong to Egress: the semantics it carries — exact
-destinations, pinned addresses, the SNI guard, quotas, receipts — are Egress's,
-and only Egress can promise them. This document proposes the boundary and the
-contract. The criterion it serves: **an integrator uses the native mode across a
-process boundary without importing maelys-warden or reading its sources.**
+The channel belongs to Egress: the semantics it carries — exact destinations,
+pinned addresses, the SNI guard, quotas, receipts — are Egress's, and only
+Egress can promise them. The criterion this document serves: **an integrator
+uses the native mode across a process boundary without importing maelys-warden
+or reading its sources.** The pieces: the codec of
+[`egress_channel.h`](../include/maelys/egress_channel.h), the server of
+[`egress.h`](../include/maelys/egress.h), the client of
+[`egress_client.h`](../include/maelys/egress_client.h) in its own archive, and
+[`examples/channel_supervisor.c`](../examples/channel_supervisor.c) with
+[`examples/channel_client.c`](../examples/channel_client.c).
 
 ## Boundary
 
 Egress owns:
 
-- the channel protocol, versioned and documented here, later under `protocol/`;
-- the server (the broker): it holds one authenticated connector and answers
-  requests on one channel;
-- a client small enough to link into a confined process, with no dependency on
-  the Egress core — a separate archive, so a workload never links the proxy;
-- an interprocess example, the conformance vectors and the adversarial tests.
+- the channel protocol, versioned and documented here;
+- the server: `maelys_egress_channel_create` holds one authenticated connector
+  and answers requests on one channel, one thread per channel;
+- the client, `libmaelys_egress_client`, small enough to link into a confined
+  process and standing on the C library alone — no Egress core, no
+  maelys-system — so a workload never links the proxy; `maelys-egress-client.pc`
+  requires nothing;
+- the interprocess examples, the conformance vectors, the fuzz target and the
+  mutation gate.
 
 The supervisor (maelys-warden, or any other) owns:
 
@@ -49,14 +60,12 @@ establish, not the channel's.
 
 ## Transport
 
-Current: an `AF_UNIX` `SOCK_DGRAM` socket pair created with `CLOEXEC`; one
-datagram per message; the stream travels as `SCM_RIGHTS` ancillary data on the
-response.
-
-Proposed: unchanged. A datagram carries message boundaries for free, which is
-why the messages below have no length prefix, and a truncated datagram is
-detectable (`MSG_TRUNC`, `MSG_CTRUNC`) where a truncated stream read is not.
-The pair is created by the server; the supervisor receives the client end.
+An `AF_UNIX` `SOCK_DGRAM` socket pair created with `CLOEXEC`; one datagram per
+message; the stream travels as `SCM_RIGHTS` ancillary data on the response. A
+datagram carries message boundaries for free, which is why the messages below
+have no length prefix, and a truncated datagram is detectable (`MSG_TRUNC`,
+`MSG_CTRUNC`) where a truncated stream read is not. The pair is created by the
+server; the supervisor receives the client end and hands it over.
 
 ## Messages
 
@@ -81,10 +90,6 @@ behalf; a host that is not canonical is malformed. Egress validates the same
 form again inside `session_open`, so a request the server lets through and the
 policy refuses answers `DENIED`, not `PROTOCOL`.
 
-Current: identical layout with magic `0x4d45584e` (`MEXN`); the server checks
-port, length and bounds but not the host's bytes; NUL inside the host would be
-cut by the C string the server builds.
-
 ### Response — server to client
 
 | offset | size | field | value |
@@ -98,13 +103,6 @@ Ancillary data: on `OK`, exactly one descriptor in one `SCM_RIGHTS` header. On
 any other status, none. A response of another size, another magic, with
 ancillary data of another shape, or truncated, is malformed for the client.
 
-Current: 8 bytes as `magic u32, status u32`, the status an `errno` of the
-platform (`EACCES`, `ETIMEDOUT`, `ECANCELED`, `ENOMEM`, `EPROTO`, `EIO`), no
-version field. `errno` values differ between Linux and macOS; that does not
-break a local channel between two processes of one machine, but it makes the
-contract depend on the platform and on how each side's C library numbers its
-errors. A protocol carries its own codes.
-
 ### Status codes
 
 | code | name | when |
@@ -112,7 +110,7 @@ errors. A protocol carries its own codes.
 | 0 | `OK` | the stream is attached |
 | 1 | `DENIED` | the sealed policy refuses the destination |
 | 2 | `TIMEOUT` | the upstream connect did not complete within the server's deadline |
-| 3 | `CANCELLED` | the server is stopping |
+| 3 | `CANCELLED` | the server is stopping, or has stopped |
 | 4 | `MALFORMED` | the request violates this document |
 | 5 | `UNSUPPORTED` | version or protocol the server does not speak |
 | 6 | `RESOURCE` | the server could not allocate |
@@ -120,22 +118,26 @@ errors. A protocol carries its own codes.
 
 The codes are the protocol's, not a numeric mirror of `maelys_egress_result_t`.
 The server maps by an explicit table — `ERR_DENIED → DENIED`, `ERR_TIMEOUT →
-TIMEOUT`, `ERR_CANCELLED → CANCELLED`, `ERR_MEMORY → RESOURCE`, `ERR_ARGUMENT`
-and `ERR_PROTOCOL → MALFORMED`, everything else including results that do not
+TIMEOUT`, `ERR_CANCELLED` and `ERR_STATE → CANCELLED` (a server that is
+stopping cancels the open, one that has stopped refuses it as a state; from
+the channel both read the same), `ERR_MEMORY → RESOURCE`, `ERR_ARGUMENT` and
+`ERR_PROTOCOL → MALFORMED` (a host the codec accepts but the connector refuses
+as not canonical lands here), everything else including results that do not
 exist yet `→ INTERNAL` — so the C API and the wire can move separately. A client
 treats a code it does not know as `INTERNAL`.
 
 ## Decisions
 
-Each decision states what the current Warden pair does, what v1 proposes, and
-the conformance test that would hold the proposal.
+Each decision keeps the shape of its review: what the pair that preceded this
+contract did, what v1 does, and the test that holds it. "Current" names
+maelys-warden's private pair at 9a7c1f5, kept for the record of why.
 
 ### 1. Identity
 
 *Current:* the broker is created with a connector the supervisor authenticated;
 the request carries no identity. Implicit, unwritten.
 
-*Proposed:* written. A channel is bound at creation to one connector, hence to
+*Contract:* written. A channel is bound at creation to one connector, hence to
 one principal and one invocation; the request has no field for either, and v1
 adds none. A client that wants another identity needs another channel from its
 supervisor.
@@ -151,10 +153,11 @@ the return value is discarded. There is no leak: the server's copy is always
 closed. What is missing is that delivery is unconfirmed — the server cannot
 tell a delivered stream from one the kernel never queued.
 
-*Proposed:* the server checks `sendmsg`. On failure it closes its copy and
-releases the session as today, and records the failure in its log; the client
-end of the relay is then closed, and Egress treats the session as it treats any
-client that closes before writing. What the receipt records for such a session
+*Contract:* the server closes its copy of the stream and releases the session
+whether or not the kernel took the datagram; the client end of the relay is
+then closed when the send failed, and Egress treats the session as it treats
+any client that closes before writing. The server keeps no log of the refused
+send: the channel has no logging surface, and none is promised. What the receipt records for such a session
 is Egress's receipt contract, not this document's: the channel promises no
 receipt field. There is no acknowledgement message in v1: the client's successful `recvmsg` of an `OK`
 response with one descriptor is the only confirmation, and a client that
@@ -163,10 +166,12 @@ On the client side, the received descriptor is set `CLOEXEC` before anything
 else is done with it; the kernel does not carry that flag across `SCM_RIGHTS`
 on every platform (`MSG_CMSG_CLOEXEC` exists on Linux, not on macOS).
 
-*Test:* the client end of the channel is closed while a request is in flight;
-after the server's `sendmsg` fails, the process's descriptor count is what it
-was before the request and the session count of the connector is zero. A
-descriptor received by the client has `FD_CLOEXEC` set.
+*Test:* the client end has shut its reading side before the answer comes, so
+the kernel refuses the server's datagram every time (a close would race the
+answer, and a datagram already queued is collected by the kernel later);
+after the refused send, the process's descriptor count is what it was before
+the request and no session is active. A descriptor received by the client has
+`FD_CLOEXEC` set. (`tests/test_operations.c`, `tests/test_client.c`.)
 
 ### 3. Bounds, deadlines and shutdown
 
@@ -174,7 +179,7 @@ descriptor received by the client has `FD_CLOEXEC` set.
 5000 ms; the server thread ends on `POLLHUP`/`POLLERR` of the channel or on the
 supervisor's wakeup.
 
-*Proposed:* the host bound stays 253. The connect deadline is the server's,
+*Contract:* the host bound stays 253. The connect deadline is the server's,
 set by the supervisor when it creates the channel server, bounded by Egress to
 a finite non-zero value; v1 has no field for the client to set or extend it.
 The exchange as a whole is bounded on both sides. The server answers every
@@ -182,9 +187,12 @@ request within the connect deadline plus a bounded processing time of its own
 (reading the datagram, `session_open`, `sendmsg`); while the channel is open it
 never leaves a request unanswered. The client applies a read deadline of its
 own choosing, at least the server's connect deadline; when it expires, the
-client **closes the channel** rather than sending another request on it, since
-with one request in flight and no identifier a late response would be paired
-with the wrong request. The server's deadline is not carried on the wire in
+client **shuts the channel down** rather than sending another request on it,
+since with one request in flight and no identifier a late response would be
+paired with the wrong request: a further call on that channel fails, and the
+descriptor stays the caller's to close. Whether the server's end then reads
+end of file differs between kernels for a datagram pair; the contract promises
+the refusal, not the EOF. The server's deadline is not carried on the wire in
 v1: the supervisor that configures it is the one that hands the channel over,
 and tells the workload out of band, or the workload uses a generous bound. Two
 closures are distinct:
@@ -212,7 +220,7 @@ response. Requests are therefore ordered and, in practice, one in flight; a
 client that sends two before reading gets two responses in order, with nothing
 in the response that says which is which.
 
-*Proposed:* one request in flight per channel, written. A client sends the next
+*Contract:* one request in flight per channel, written. A client sends the next
 request only after reading the previous response. The server keeps ordered
 processing; it does not need to detect a second request early, since a
 datagram waits in the socket. No request identifier in v1: multiplexing has no
@@ -227,7 +235,7 @@ must not rely on, since v1 only promises the sequential case.
 *Current:* `errno` values; a request with an unknown version is answered
 `EPROTO`, indistinguishable from a malformed one.
 
-*Proposed:* the table above. The request's version byte is checked before
+*Contract:* the table above. The request's version byte is checked before
 anything else: an unknown version answers `UNSUPPORTED` with the server's own
 version in the response, so a client learns what to speak; an unknown protocol
 byte likewise. Everything else malformed answers `MALFORMED`. A v1 client
@@ -247,7 +255,7 @@ therefore what the current client already enforces; what changes is that the
 server side states it too, and that a descriptor on a non-`OK` status becomes a
 malformed response rather than a silently closed one.
 
-*Proposed:* exactly one descriptor on `OK`, none otherwise. A client receiving
+*Contract:* exactly one descriptor on `OK`, none otherwise. A client receiving
 a descriptor with a non-`OK` status, more than one descriptor, an `SCM_RIGHTS`
 header of another shape, or any ancillary data of another type, closes every
 descriptor it received and treats the response as malformed. Truncation of
@@ -260,7 +268,7 @@ either the data or the ancillary part is malformed.
 
 *Current:* undocumented on the wire; the connector API says it.
 
-*Proposed:* written in the protocol. `OK` means Egress has connected to a
+*Contract:* written in the protocol. `OK` means Egress has connected to a
 pinned upstream address for the destination and has attached the client end
 of **its own relay** — never the upstream socket. It does not mean the future
 TLS ClientHello has passed the SNI guard, nor that later bytes will be relayed:
@@ -273,30 +281,37 @@ another SNI; the stream closes and the receipt records the SNI refusal.
 
 ## Conformance vectors
 
-To be produced under `tests/vectors/channel/` with the implementation, each as
-hex plus the expected outcome: the valid request and response; every malformed
-request of section "Messages"; every status code; the descriptor cardinality
-cases; the sequential exchange of two requests. The same vectors drive the
-server's tests here and any client that wants to claim conformance.
+`tests/vectors/channel/requests.txt` and `responses.txt`: one line per vector
+as name, hex and expected outcome — the valid requests, every malformed and
+unsupported request of section "Messages", every status code, the malformed
+responses. `test-channel` replays them against the codec object alone and
+round-trips every accepted one; `fuzz_channel` runs both decoders on every
+input. A client or server that claims conformance replays the same lines. The
+descriptor cardinality cases and the sequential exchange of two requests are
+held by `tests/test_client.c` and `tests/test_operations.c`, since they need a
+socket pair, not bytes alone.
 
-## Open questions, for maelys-warden first
+## What maelys-warden answered
 
-1. Magics: new values (`MECQ`/`MECP`) so a current `netclient` and a channel
-   server can never mistake each other, or Warden's values with a version bump
-   to `2`? This document proposes new values, since the protocol changes owner.
-2. The connect deadline: a server-creation parameter, as proposed, or a
-   configuration key of the embedding side? The client has no say in v1 either
-   way.
-3. The client archive's name and licence header; it must link into a confined
-   process without the Egress core.
-4. Whether Warden's `netclient` becomes a thin wrapper of Egress's client or
-   is replaced by it.
+The four questions the proposal left open, and the answers of Warden's
+operator that this version records:
+
+1. Magics: new values, `MECQ`/`MECP`. The protocol changed owner, and a
+   `netclient` of before must never be taken for a channel server. Warden's
+   former pair stays as it was until its migration.
+2. The connect deadline: a parameter of `maelys_egress_channel_create`.
+   Warden creates the server for each execution and knows its budgets; the
+   confined process has no say.
+3. The client archive: `libmaelys_egress_client`, `maelys-egress-client.pc`,
+   MPL-2.0 with an SPDX header in each file, linking without the Egress core
+   and without maelys-system, so that a confined process inherits neither.
+4. Warden's `netclient` becomes a thin wrapper of this client first, since it
+   is part of the SDK Warden installs; it is retired in a later major version
+   of Warden, with a documented migration.
 
 ## Not in this document
 
 CLI exposure. The repository's convention keeps operational settings in the
 configuration file, so a channel mode of `serve` would be a key, not an option,
 and receiving a descriptor from the launching environment is its own design;
-that comes after the library surface and the example exist. The freeze of v1:
-it comes after the implementation and its adversarial gate, not with this
-text.
+it comes, if it comes, as a version of the command, not of this protocol.
