@@ -47,16 +47,18 @@ def sha256_file(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("prefix", "version", "system-version", "binary", "pkgconfig",
-                 "manifest"):
+                 "client-pkgconfig", "manifest"):
         parser.add_argument(f"--{name}", required=True)
     args = parser.parse_args()
     if not Path(args.prefix).is_absolute() or any(c in args.prefix for c in "\n\r\0"):
         parser.error("prefix must be an absolute, single-line path")
 
     pc = (ROOT / "pkgconfig/maelys-egress.pc.in").read_text(encoding="utf-8")
+    client_pc = (ROOT / "pkgconfig/maelys-egress-client.pc.in").read_text(encoding="utf-8")
     for name, value in (("PREFIX", args.prefix), ("VERSION", args.version),
                         ("SYSTEM_VERSION", args.system_version)):
         pc = pc.replace(f"@{name}@", value)
+        client_pc = client_pc.replace(f"@{name}@", value)
 
     manifest = json.loads((ROOT / "cli/command.json.in").read_text(encoding="utf-8"))
     manifest["executable"] = str(Path(args.prefix) / "bin/maelys-egress")
@@ -64,6 +66,7 @@ def main():
     manifest["sha256"] = sha256_file(args.binary)
 
     publish(args.pkgconfig, pc)
+    publish(args.client_pkgconfig, client_pc)
     publish(args.manifest, json.dumps(manifest, indent=2) + "\n")
 
 

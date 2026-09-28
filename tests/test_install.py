@@ -29,6 +29,7 @@ def main():
     binary = build / "bin/maelys-egress"
     manifest = build / "share/maelys/commands/egress.json"
     pc = build / "lib/pkgconfig/maelys-egress.pc"
+    client_pc = build / "lib/pkgconfig/maelys-egress-client.pc"
 
     environment = dict(os.environ)
     for name in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL"):
@@ -68,13 +69,19 @@ def main():
             assert declared["command"] == "egress", declared
             assert (stage / "lib/pkgconfig/maelys-egress.pc").read_text(
                 encoding="utf-8").splitlines()[0] == f"prefix={prefix}", prefix
+            client_pc_text = (stage / "lib/pkgconfig/maelys-egress-client.pc").read_text(
+                encoding="utf-8")
+            assert client_pc_text.splitlines()[0] == f"prefix={prefix}", prefix
+            assert "Requires" not in client_pc_text, client_pc_text
+            assert (stage / "lib/libmaelys_egress_client.a").is_file()
+            assert (stage / "include/maelys/egress_client.h").is_file()
             assert installed.stat().st_mode & 0o777 == 0o755, oct(installed.stat().st_mode)
             shutil.rmtree(stage)
 
         # Rendering again for an unchanged prefix must not touch the files, or
         # everything downstream of them would rebuild on every invocation.
         invoke("install-metadata", f"PREFIX={PREFIXES[-1]}")
-        stamps = {path: path.stat().st_mtime_ns for path in (manifest, pc)}
+        stamps = {path: path.stat().st_mtime_ns for path in (manifest, pc, client_pc)}
         invoke("install-metadata", f"PREFIX={PREFIXES[-1]}")
         for path, before in stamps.items():
             assert path.stat().st_mtime_ns == before, f"{path.name} was rewritten"

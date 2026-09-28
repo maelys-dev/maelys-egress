@@ -49,6 +49,15 @@ if grep_tree '(^|[^A-Za-z0-9_])maelys_sys' src/core; then
     exit 1
 fi
 
+# The channel client is linked into a confined process: it names neither
+# maelys-system nor the Egress core, and includes only its two public
+# headers and the C library. The archive's link in test-client and in the
+# release smoke proves the object; this keeps the sources honest.
+if grep_tree '(^|[^A-Za-z0-9_])maelys_sys|#include[[:space:]]*"(maelys/egress\.h|maelys/egress_tls|maelys/egress_profile|src/)' client; then
+    echo "client/ stands on the C library and its two public headers" >&2
+    exit 1
+fi
+
 # File identity, advisory locks and identity-checked removal come from
 # maelys-system's file primitives, never from lstat, flock or unlink here.
 if grep_tree '(^|[^A-Za-z0-9_])(lstat|flock|unlink)[[:space:]]*\(' src; then

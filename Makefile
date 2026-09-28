@@ -134,9 +134,18 @@ CLI_SCHEMAS := $(wildcard cli/schemas/*.json)
 CLI_SCHEMA_SYMBOLS := $(foreach schema,$(CLI_SCHEMAS),\
 	egress_$(subst -,_,$(basename $(notdir $(schema))))_schema=$(schema))
 CLI_SCHEMA_OBJECT := $(OBJ)/generated/egress_schemas.o
-DEPENDENCIES := $(OBJECTS:.o=.d) $(CLI_OBJECTS:.o=.d) \
+DEPENDENCIES := $(OBJECTS:.o=.d) $(CLI_OBJECTS:.o=.d) $(CLIENT_OBJECTS:.o=.d) \
 	$(OBJ)/tests/test_egress.d $(OBJ)/tests/test_operations.d
 STATIC_LIB := $(LIB)/libmaelys_egress.a
+# The channel client a confined process links: the codec and client/client.c,
+# on the C library alone. Its test and the release smoke link it without
+# maelys-system and without -pthread; scripts/audit-boundaries.sh keeps the
+# sources from naming either.
+CLIENT_SOURCES := client/client.c
+CLIENT_OBJECTS := $(CLIENT_SOURCES:%.c=$(OBJ)/%.o)
+CLIENT_LIB := $(LIB)/libmaelys_egress_client.a
+CLIENT_TEST := $(BIN)/test-client
+CLIENT_PC := $(LIB)/pkgconfig/maelys-egress-client.pc
 MBEDTLS_LIB := $(LIB)/libmaelys_egress_tls_mbedtls.a
 WOLFSSL_LIB := $(LIB)/libmaelys_egress_tls_wolfssl.a
 CLI := $(BIN)/maelys-egress
@@ -164,7 +173,7 @@ EXAMPLE_BINS := $(EXAMPLE_NAMES:%=$(BIN)/example-%)
 # `all` is declared before the dependency files are included: a rule read
 # from an included makefile would otherwise become the default goal, and
 # plain `make` would build one stale object instead of the product.
-all: $(STATIC_LIB) $(CLI) $(TEST) $(PC) $(MANIFEST)
+all: $(STATIC_LIB) $(CLIENT_LIB) $(CLI) $(TEST) $(PC) $(CLIENT_PC) $(MANIFEST)
 
 -include $(DEPENDENCIES)
 
@@ -359,6 +368,14 @@ $(CHANNEL_TEST): tests/test_channel.c $(CHANNEL_CODEC)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
+$(CLIENT_LIB): $(CLIENT_OBJECTS) $(CHANNEL_CODEC)
+	@mkdir -p $(@D)
+	ZERO_AR_DATE=1 ar rcs $@ $^
+
+$(CLIENT_TEST): tests/test_client.c $(CLIENT_LIB)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
+
 $(BIN)/example-%: examples/%.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
@@ -396,15 +413,17 @@ install-metadata: $(CLI)
 	python3 scripts/render-install-metadata.py --prefix="$(PREFIX)" \
 		--version="$(VERSION)" \
 		--system-version="$(MAELYS_SYSTEM_VERSION)" \
-		--binary="$(CLI)" --pkgconfig="$(PC)" --manifest="$(MANIFEST)"
+		--binary="$(CLI)" --pkgconfig="$(PC)" --client-pkgconfig="$(CLIENT_PC)" \
+		--manifest="$(MANIFEST)"
 
-$(PC) $(MANIFEST): | install-metadata
+$(PC) $(CLIENT_PC) $(MANIFEST): | install-metadata
 	@test -f $@
 
-test: all $(OPERATIONS_TEST) $(CHANNEL_TEST)
+test: all $(OPERATIONS_TEST) $(CHANNEL_TEST) $(CLIENT_TEST)
 	$(TEST)
 	$(OPERATIONS_TEST)
 	$(CHANNEL_TEST)
+	$(CLIENT_TEST)
 	tests/test_cli.sh $(CLI)
 
 # The command reference and contract come from the maelys-cli generator; the
@@ -534,7 +553,7 @@ tsan:
 analyze: | $(MAELYS_SYSTEM_LIB)
 	$(CC) --analyze -Xclang -analyzer-output=text -Xclang -analyzer-werror \
 		$(CPPFLAGS) -std=c11 -D_POSIX_C_SOURCE=200809L \
-		-D_XOPEN_SOURCE=700 $(SOURCES)
+		-D_XOPEN_SOURCE=700 $(SOURCES) $(CLIENT_SOURCES)
 
 $(BIN)/fuzz-http: tests/fuzz/fuzz_http.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
@@ -582,7 +601,7 @@ fuzz:
 	build/fuzz/bin/fuzz-clienthello build/fuzz/corpus/clienthello tests/fuzz/corpus/clienthello -runs=10000
 	build/fuzz/bin/fuzz-channel build/fuzz/corpus/channel tests/fuzz/corpus/channel -runs=10000
 
-install: $(STATIC_LIB) $(CLI) $(PC) $(MANIFEST) $(MAELYS_SYSTEM_LIB)
+install: $(STATIC_LIB) $(CLIENT_LIB) $(CLI) $(PC) $(CLIENT_PC) $(MANIFEST) $(MAELYS_SYSTEM_LIB)
 ifeq ($(MAELYS_SYSTEM_PREFIX),)
 	$(MAKE) -C $(MAELYS_SYSTEM_DIR) BUILD=$(MAELYS_SYSTEM_BUILD) \
 		VERSION=$(MAELYS_SYSTEM_VERSION) CPPFLAGS= DESTDIR=$(DESTDIR) \
@@ -594,9 +613,10 @@ endif
 	install -m 0644 $(MANIFEST) $(DESTDIR)$(PREFIX)/share/maelys/commands/
 	install -m 0644 include/maelys/egress.h include/maelys/egress_tls.h \
 		include/maelys/egress_profile.h include/maelys/egress_channel.h \
+		include/maelys/egress_client.h \
 		$(DESTDIR)$(PREFIX)/include/maelys/
-	install -m 0644 $(STATIC_LIB) $(DESTDIR)$(PREFIX)/lib/
-	install -m 0644 $(PC) $(DESTDIR)$(PREFIX)/lib/pkgconfig/
+	install -m 0644 $(STATIC_LIB) $(CLIENT_LIB) $(DESTDIR)$(PREFIX)/lib/
+	install -m 0644 $(PC) $(CLIENT_PC) $(DESTDIR)$(PREFIX)/lib/pkgconfig/
 	install -m 0755 $(CLI) $(DESTDIR)$(PREFIX)/bin/
 	install -m 0644 README.md CHANGELOG.md LICENSE LICENSING.md SECURITY.md \
 		THIRD_PARTY_NOTICES.md docs/*.md docs/cli-contract.json \

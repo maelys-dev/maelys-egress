@@ -1,0 +1,10 @@
+prefix=@PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: maelys-egress-client
+Description: Client of the Maelys Egress mediated-connection channel, for a confined process
+Version: @VERSION@
+Libs: -L${libdir} -lmaelys_egress_client
+Cflags: -I${includedir}
