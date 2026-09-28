@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.21.0 — 2026-09-28
 
 - The SNI guard holds on every protocol. A destination allowed with
   `allow_tls_sni` admits only a TLS ClientHello that names it — but an HTTP
@@ -11,6 +11,17 @@
   upstream connection, and the receipt records it with protocol
   `HTTP_FORWARD` and `tls_sni_verified` 0. The header and the key's description
   say it; a test sends the request and reads the refusal and the receipt.
+
+- A proposal for the mediated-connection channel, `proposals/egress-channel-v1.md`:
+  the interprocess channel to the native connector — today maelys-warden's
+  private pair, `fd4_broker` and `netclient` — would belong to Egress, with a
+  versioned protocol, the broker, a client a confined process links without
+  the Egress core, conformance vectors and adversarial tests, while the
+  supervisor keeps process creation, identity binding, the descriptor it hands
+  over and the removal of other network paths. Not implemented, not a
+  contract: v1 freezes after the implementation and its gate. maelys-warden
+  has answered its four open questions and accepted the boundary. The README's
+  CLI section now names the native connector and what it is for.
 
 - Adopt maelys-release 0.62.0. 0.61.0 asks a product that pins other Maelys
   repositories to re-adopt: `scripts/checkout-dependency.sh` gains the bundle
