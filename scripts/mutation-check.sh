@@ -65,7 +65,7 @@ run_mutant channel-host-bound src/core/channel.c \
     'out->host_length > MAELYS_EGRESS_CHANNEL_MAX_HOST' \
     'out->host_length >= MAELYS_EGRESS_CHANNEL_MAX_HOST' &
 run_mutant channel-request-rights src/channel_server.c \
-    'attached != 0u ||' 'attached == 0u ||' &
+    '                 MAELYS_SYS_FDPASS_SURPLUS)) {' '                 0u)) {' &
 run_mutant channel-status-denied src/channel_server.c \
     'case MAELYS_EGRESS_ERR_DENIED: return MAELYS_EGRESS_CHANNEL_DENIED;' \
     'case MAELYS_EGRESS_ERR_DENIED: return MAELYS_EGRESS_CHANNEL_OK;' &

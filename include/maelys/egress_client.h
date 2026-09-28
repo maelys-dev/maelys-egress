@@ -12,10 +12,11 @@ extern "C" {
 /*
  * The client of the mediated-connection channel, for the confined process:
  * it sends one request on the channel its supervisor handed it and receives
- * the relayed stream. It lives in libmaelys_egress_client, which links with
- * the C library alone — no Egress core, no maelys-system — so nothing of the
- * proxy reaches the process that is being confined. The contract is
- * proposals/egress-channel-v1.md until v1 freezes.
+ * the relayed stream. It lives in libmaelys_egress_client, which holds no
+ * Egress core and, of maelys-system, only the object that passes a
+ * descriptor — so nothing of the proxy, the loop or the threads reaches the
+ * process that is being confined, and the archive links alone, without
+ * -pthread. The contract is protocol/egress-channel-v1.md.
  */
 #define MAELYS_EGRESS_CLIENT_ABI_VERSION 1u
 

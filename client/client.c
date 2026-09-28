@@ -1,8 +1,12 @@
 /* SPDX-License-Identifier: MPL-2.0 */
 /*
- * The channel client. This file and the codec are the whole of
- * libmaelys_egress_client; both use the C library alone, and
- * scripts/audit-boundaries.sh keeps it so. The descriptor handling here is
+ * The channel client. This file, the codec and maelys-system's fdpass are
+ * the whole of libmaelys_egress_client. fdpass.o comes from the pinned
+ * libmaelys_sys.a as the very object the library holds, and names nothing
+ * else of it; scripts/audit-boundaries.sh keeps this file to fdpass alone,
+ * and the build refuses any undefined maelys_sys_ or pthread_ symbol in the
+ * archive, so a confined process inherits neither the loop, nor the
+ * threads, nor the files of maelys-system. The descriptor handling here is
  * deliberately the caller's: the channel stays the caller's to close, the
  * stream becomes the caller's on success, and nothing else is kept.
  */
@@ -12,9 +16,9 @@
 
 #include "maelys/egress_client.h"
 #include "maelys/egress_channel.h"
+#include "maelys/sys/fdpass.h"
 
 #include <errno.h>
-#include <fcntl.h>
 #include <poll.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -22,17 +26,6 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
-#ifndef MSG_NOSIGNAL
-#define MSG_NOSIGNAL 0
-#endif
-
-/* Room for every descriptor a kernel will ever deliver with one datagram:
- * macOS refuses more than 254 in its one SCM_RIGHTS header, Linux merges
- * headers and stops at 253. The contract allows one; a server in breach may
- * send more, and macOS installs them all even when they do not fit the
- * buffer, so only a buffer that holds them all lets the client close them. */
-#define CLIENT_MAX_RIGHTS 256u
 
 static void set_error(char **out_error, const char *format, ...)
     __attribute__((format(printf, 2, 3)));
@@ -78,12 +71,16 @@ static maelys_egress_client_result_t from_status(uint8_t status) {
     }
 }
 
-static int send_request(int channel_fd, const unsigned char *request, size_t length) {
-    ssize_t sent;
-    do {
-        sent = send(channel_fd, request, length, MSG_NOSIGNAL);
-    } while (sent < 0 && errno == EINTR);
-    return sent == (ssize_t)length;
+/* What a failed fdpass call means, in the client's words: the client may
+ * name fdpass alone, not the rest of maelys-system's vocabulary. */
+static const char *transfer_failure(maelys_sys_result_t result) {
+    switch (result) {
+    case MAELYS_SYS_ERR_CLOSED: return "the channel's other end is gone";
+    case MAELYS_SYS_ERR_WOULD_BLOCK: return "the channel's queue is full";
+    case MAELYS_SYS_ERR_ARGUMENT: return "the descriptor is not a connected datagram channel";
+    case MAELYS_SYS_ERR_OS: return strerror(errno);
+    default: return "the transfer failed";
+    }
 }
 
 /* Waits for the response within the deadline. Returns 1 when readable, 0 on
@@ -119,8 +116,9 @@ maelys_egress_client_result_t maelys_egress_client_connect(
                   "ASCII bytes, a port of 1..65535 and an output");
         return MAELYS_EGRESS_CLIENT_ERR_ARGUMENT;
     }
-    if (!send_request(channel_fd, request, request_length)) {
-        set_error(out_error, "cannot send the channel request: %s", strerror(errno));
+    maelys_sys_result_t sent = maelys_sys_fd_send(channel_fd, request, request_length, -1);
+    if (sent != MAELYS_SYS_OK) {
+        set_error(out_error, "cannot send the channel request: %s", transfer_failure(sent));
         return MAELYS_EGRESS_CLIENT_ERR_IO;
     }
     int ready = await_response(channel_fd, read_timeout_ms);
@@ -137,71 +135,31 @@ maelys_egress_client_result_t maelys_egress_client_connect(
         return MAELYS_EGRESS_CLIENT_ERR_UNANSWERED;
     }
 
+    /* One descriptor is room enough: fdpass reads with room for all a
+     * kernel can deliver, closes those beyond this one and says SURPLUS,
+     * and sets close-on-exec on the one it returns. */
     unsigned char response[MAELYS_EGRESS_CHANNEL_RESPONSE_SIZE + 1u];
-    struct iovec iov = {.iov_base = response, .iov_len = sizeof(response)};
-    union {
-        struct cmsghdr align;
-        unsigned char bytes[CMSG_SPACE(sizeof(int) * CLIENT_MAX_RIGHTS)];
-    } control;
-    struct msghdr message;
-    memset(&message, 0, sizeof(message));
-    memset(&control, 0, sizeof(control));
-    message.msg_iov = &iov;
-    message.msg_iovlen = 1u;
-    message.msg_control = control.bytes;
-    message.msg_controllen = (socklen_t)sizeof(control.bytes);
-    int flags = 0;
-#ifdef MSG_CMSG_CLOEXEC
-    flags |= MSG_CMSG_CLOEXEC;
-#endif
-    ssize_t received;
-    do {
-        received = recvmsg(channel_fd, &message, flags);
-    } while (received < 0 && errno == EINTR);
-    if (received < 0) {
-        set_error(out_error, "cannot receive the channel response: %s", strerror(errno));
-        return MAELYS_EGRESS_CLIENT_ERR_IO;
-    }
-    if (received == 0) {
-        set_error(out_error, "the channel closed before answering");
-        return MAELYS_EGRESS_CLIENT_ERR_IO;
-    }
-
-    /* Collect every descriptor first, whatever the data says: one that is
-     * not kept must be closed, and a malformed message may still carry some. */
-    int stream = -1;
+    size_t received = 0u;
+    int descriptors[1] = {-1};
     size_t rights = 0u;
-    int malformed_rights = 0;
-    /* Read no further than the control bytes the kernel filled: after a
-     * truncation a header may announce more than was delivered. */
-    const unsigned char *control_end = control.bytes + message.msg_controllen;
-    for (struct cmsghdr *header = CMSG_FIRSTHDR(&message); header;
-         header = CMSG_NXTHDR(&message, header)) {
-        if (header->cmsg_level != SOL_SOCKET || header->cmsg_type != SCM_RIGHTS ||
-            header->cmsg_len < CMSG_LEN(0) ||
-            (header->cmsg_len - CMSG_LEN(0)) % sizeof(int) != 0u) {
-            malformed_rights = 1;
-            continue;
-        }
-        const unsigned char *data = CMSG_DATA(header);
-        size_t declared = header->cmsg_len - CMSG_LEN(0);
-        size_t available = data < control_end ? (size_t)(control_end - data) : 0u;
-        size_t count = (declared < available ? declared : available) / sizeof(int);
-        for (size_t i = 0; i < count; ++i) {
-            int descriptor = -1;
-            memcpy(&descriptor, data + i * sizeof(int), sizeof(descriptor));
-            if (rights++ == 0u) stream = descriptor;
-            else close_quietly(&descriptor);
-        }
+    unsigned flags = 0u;
+    maelys_sys_result_t got = maelys_sys_fd_receive(
+        channel_fd, response, sizeof(response), &received,
+        descriptors, 1u, &rights, &flags);
+    if (got != MAELYS_SYS_OK) {
+        set_error(out_error, "cannot receive the channel response: %s", transfer_failure(got));
+        return MAELYS_EGRESS_CLIENT_ERR_IO;
     }
-    if (message.msg_flags & (MSG_TRUNC | MSG_CTRUNC)) {
+    int stream = rights ? descriptors[0] : -1;
+    int surplus = (flags & MAELYS_SYS_FDPASS_SURPLUS) != 0u;
+    if (flags & (MAELYS_SYS_FDPASS_TRUNCATED | MAELYS_SYS_FDPASS_CONTROL_TRUNCATED)) {
         close_quietly(&stream);
         set_error(out_error, "the channel response was truncated");
         return MAELYS_EGRESS_CLIENT_ERR_PROTOCOL;
     }
     maelys_egress_channel_response_t decoded;
     const char *reason = NULL;
-    if (!maelys_egress_channel_decode_response(response, (size_t)received, &decoded, &reason)) {
+    if (!maelys_egress_channel_decode_response(response, received, &decoded, &reason)) {
         close_quietly(&stream);
         set_error(out_error, "malformed channel response: %s", reason ? reason : "unknown");
         return MAELYS_EGRESS_CLIENT_ERR_PROTOCOL;
@@ -217,7 +175,7 @@ maelys_egress_client_result_t maelys_egress_client_connect(
     }
     maelys_egress_client_result_t result = from_status(decoded.status);
     if (result != MAELYS_EGRESS_CLIENT_OK) {
-        int carried = rights != 0u || malformed_rights;
+        int carried = rights != 0u || surplus;
         close_quietly(&stream);
         if (carried) {
             set_error(out_error, "channel response %s carried a descriptor",
@@ -233,16 +191,14 @@ maelys_egress_client_result_t maelys_egress_client_connect(
                   " (the server speaks another version)" : "");
         return result;
     }
-    if (malformed_rights || rights != 1u || stream < 0) {
+    if (surplus || rights != 1u || stream < 0) {
         close_quietly(&stream);
-        set_error(out_error, "channel response OK carried %zu descriptors, not one", rights);
+        if (surplus) {
+            set_error(out_error, "channel response OK carried more than one descriptor");
+        } else {
+            set_error(out_error, "channel response OK carried no descriptor");
+        }
         return MAELYS_EGRESS_CLIENT_ERR_PROTOCOL;
-    }
-    int descriptor_flags = fcntl(stream, F_GETFD);
-    if (descriptor_flags < 0 || fcntl(stream, F_SETFD, descriptor_flags | FD_CLOEXEC) < 0) {
-        close_quietly(&stream);
-        set_error(out_error, "cannot mark the relayed stream CLOEXEC: %s", strerror(errno));
-        return MAELYS_EGRESS_CLIENT_ERR_IO;
     }
 #ifdef SO_NOSIGPIPE
     int enabled = 1;

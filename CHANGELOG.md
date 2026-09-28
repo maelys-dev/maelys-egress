@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+- Descriptors cross the channel through maelys-system's `fdpass`, adopted
+  with maelys-system 0.10.0 on both sides. The server and the client each
+  carried their own `SCM_RIGHTS` code, and the two copies had drifted: one
+  of them was the flaw of 0.22.0. `maelys_sys_fd_send` and
+  `maelys_sys_fd_receive` now do it once, with room for every descriptor
+  either kernel delivers, the surplus closed and flagged, close-on-exec set;
+  the server asks for no descriptor and refuses a request that brought some,
+  the client asks for one. No `sendmsg` or `recvmsg` remains in Egress, and
+  the boundary audit refuses them everywhere, where 0.22.0 named one file as
+  an exception.
+
+- The client's rule changes, with maelys-warden's agreement, since the rule
+  was Warden's: from "no maelys-system" to "`fdpass` alone, and no undefined
+  `maelys_sys_` or `pthread_` symbol in the archive". The motive is one
+  proven copy of descriptor passing instead of two that drift. The archive
+  holds `fdpass.o` taken from the pinned `libmaelys_sys.a` — the very object
+  the library holds, which also works against an installed maelys-system
+  that ships no source. `client-standalone-check`, part of `make check`,
+  refuses any `maelys_sys_` or `pthread_` symbol an object of the archive
+  needs and another does not define, and was seen to refuse an archive
+  without `fdpass.o` and one with a `pthread` call; the archive still links
+  alone in the client test, the release smoke and the Homebrew test; the
+  audit keeps `client/` to `fdpass.h` and its two functions. The contract
+  records the change and its reason.
+
 ## 0.22.1 — 2026-09-28
 
 - The channel server closes every descriptor a request carries, and refuses

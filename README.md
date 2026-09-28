@@ -203,7 +203,8 @@ Across a process boundary, the same connector serves the
 `maelys_egress_channel_create` binds a datagram pair to the connector and
 returns the client end for the supervisor to hand over, at the descriptor
 number of its own convention; the confined process links
-`libmaelys_egress_client` alone — the C library, nothing of the proxy — and
+`libmaelys_egress_client` alone — nothing of the proxy, and of maelys-system
+only its descriptor-passing object — and
 asks for one destination per `maelys_egress_client_connect`, receiving the
 stream as a passed descriptor. [`examples/channel_supervisor.c`](examples/channel_supervisor.c)
 and [`examples/channel_client.c`](examples/channel_client.c) are the two sides;

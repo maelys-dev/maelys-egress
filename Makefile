@@ -137,11 +137,16 @@ CLI_SCHEMA_OBJECT := $(OBJ)/generated/egress_schemas.o
 DEPENDENCIES := $(OBJECTS:.o=.d) $(CLI_OBJECTS:.o=.d) $(CLIENT_OBJECTS:.o=.d) \
 	$(OBJ)/tests/test_egress.d $(OBJ)/tests/test_operations.d
 STATIC_LIB := $(LIB)/libmaelys_egress.a
-# The channel client a confined process links: the codec and client/client.c,
-# on the C library alone. Its test and the release smoke link it without
-# maelys-system and without -pthread; scripts/audit-boundaries.sh keeps the
-# sources from naming either.
+# The channel client a confined process links: the codec, client/client.c and
+# maelys-system's fdpass. fdpass.o is taken from the pinned libmaelys_sys.a —
+# the very object the library holds, in source mode as against an installed
+# prefix, which ships no source — and names nothing else of maelys-system.
+# Its test, the release smoke and the Homebrew test link the archive without
+# the library and without -pthread; client-standalone-check refuses any
+# undefined maelys_sys_ or pthread_ symbol in it, and
+# scripts/audit-boundaries.sh keeps client/ to fdpass alone.
 CLIENT_SOURCES := client/client.c
+FDPASS_OBJECT := $(OBJ)/deps/fdpass.o
 CLIENT_OBJECTS := $(CLIENT_SOURCES:%.c=$(OBJ)/%.o)
 CLIENT_LIB := $(LIB)/libmaelys_egress_client.a
 CLIENT_TEST := $(BIN)/test-client
@@ -183,7 +188,7 @@ all: $(STATIC_LIB) $(CLIENT_LIB) $(CLI) $(TEST) $(PC) $(CLIENT_PC) $(MANIFEST)
 	config-reference contract-check lifecycle-contract-check schema-check package-homebrew \
 	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-binaries \
 	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check \
-	public-check reproducible-check install-metadata-check dist
+	public-check reproducible-check install-metadata-check dist client-standalone-check
 
 ifeq ($(MAELYS_SYSTEM_PREFIX),)
 check-system-contract:
@@ -372,9 +377,28 @@ $(CHANNEL_TEST): tests/test_channel.c $(CHANNEL_CODEC)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-$(CLIENT_LIB): $(CLIENT_OBJECTS) $(CHANNEL_CODEC)
+$(FDPASS_OBJECT): $(MAELYS_SYSTEM_LIB)
+	@mkdir -p $(@D)
+	cd $(@D) && ar x $(abspath $(MAELYS_SYSTEM_LIB)) fdpass.o
+	@touch $@
+
+$(CLIENT_LIB): $(CLIENT_OBJECTS) $(CHANNEL_CODEC) $(FDPASS_OBJECT)
 	@mkdir -p $(@D)
 	ZERO_AR_DATE=1 ar rcs $@ $^
+
+# The client archive must not reach into maelys-system or the thread runtime
+# for anything it does not hold: every maelys_sys_ or pthread_ symbol an
+# object of the archive needs must be defined by another object of it.
+client-standalone-check: $(CLIENT_LIB)
+	@undefined="$$(nm -u $(CLIENT_LIB) | awk '{print $$NF}' | sed 's/^_//' | \
+		grep -E '^(maelys_sys_|pthread_)' | sort -u)"; \
+	defined="$$(nm -g $(CLIENT_LIB) | awk 'NF == 3 && $$2 != "U" {print $$3}' | \
+		sed 's/^_//' | sort -u)"; \
+	missing="$$(printf '%s\n' "$$undefined" | grep -v '^$$' | while read -r symbol; do \
+		printf '%s\n' "$$defined" | grep -qx "$$symbol" || printf '%s\n' "$$symbol"; done)"; \
+	test -z "$$missing" || \
+		{ echo "libmaelys_egress_client reaches outside itself for: $$missing" >&2; exit 1; }; \
+	echo "client-standalone-check: the client archive names maelys-system only through fdpass.o"
 
 $(CLIENT_TEST): tests/test_client.c $(CLIENT_LIB)
 	@mkdir -p $(@D)
@@ -536,7 +560,8 @@ conformance-check: $(CLI) check-spec-contract
 	python3 $(MAELYS_SPEC_DIR)/conformance/run.py $(abspath $(CLI))
 
 check: test examples-check sdk-check audit docs-check system-integration-check contract-check schema-check \
-	conformance-check public-check reproducible-check install-metadata-check
+	conformance-check public-check reproducible-check install-metadata-check \
+	client-standalone-check
 	$(CXX) -Iinclude -std=c++17 -Wall -Wextra -Wpedantic -Werror \
 		tests/header_cpp.cpp -c -o $(BUILD)/header-cpp.o
 

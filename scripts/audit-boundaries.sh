@@ -49,12 +49,24 @@ if grep_tree '(^|[^A-Za-z0-9_])maelys_sys' src/core; then
     exit 1
 fi
 
-# The channel client is linked into a confined process: it names neither
-# maelys-system nor the Egress core, and includes only its two public
-# headers and the C library. The archive's link in test-client and in the
-# release smoke proves the object; this keeps the sources honest.
-if grep_tree '(^|[^A-Za-z0-9_])maelys_sys|#include[[:space:]]*"(maelys/egress\.h|maelys/egress_tls|maelys/egress_profile|src/)' client; then
-    echo "client/ stands on the C library and its two public headers" >&2
+# The channel client is linked into a confined process. It names nothing
+# of the Egress core and, of maelys-system, fdpass alone: its header, its
+# two functions and the result type they return, since fdpass.o is the one
+# object of the library the client archive holds. The link of the archive
+# alone in test-client, in the release smoke and in the Homebrew test, and
+# client-standalone-check on its symbols, prove the object; this keeps the
+# sources to that promise. The rule was maelys-warden's, and changed with
+# its agreement: see protocol/egress-channel-v1.md.
+if grep_tree '#include[[:space:]]*"(maelys/egress\.h|maelys/egress_tls|maelys/egress_profile|maelys/sys\.h|src/)' client; then
+    echo "client/ includes its two public headers, fdpass and the C library only" >&2
+    exit 1
+fi
+if grep -rnE '#include[[:space:]]*"maelys/sys/' client | grep -v '"maelys/sys/fdpass\.h"'; then
+    echo "client/ includes nothing of maelys-system but maelys/sys/fdpass.h" >&2
+    exit 1
+fi
+if grep -rhoE 'maelys_sys_[a-z_0-9]+' client | grep -vxE 'maelys_sys_(fd_send|fd_receive|result_t)'; then
+    echo "client/ names nothing of maelys-system but maelys_sys_fd_send and maelys_sys_fd_receive" >&2
     exit 1
 fi
 
@@ -79,12 +91,10 @@ if grep_tree '(^|[^A-Za-z0-9_.>])(socket|accept|accept4|connect|bind|listen|recv
     echo "Egress must consume maelys-system sockets" >&2
     exit 1
 fi
-# Passing a descriptor to another process needs sendmsg and recvmsg with
-# SCM_RIGHTS, which maelys-system does not provide yet. src/channel_server.c
-# is the one file allowed to call them, and only them; the rule above still
-# holds it to maelys-system for everything else a socket does.
-if grep_tree '(^|[^A-Za-z0-9_.>])(sendmsg|recvmsg)[[:space:]]*\(' --exclude=channel_server.c src; then
-    echo "only src/channel_server.c may pass descriptors with sendmsg/recvmsg" >&2
+# Descriptors cross a process boundary through maelys-system's fdpass, on
+# the server as in the client: no sendmsg or recvmsg of our own anywhere.
+if grep_tree '(^|[^A-Za-z0-9_.>])(sendmsg|recvmsg)[[:space:]]*\(' src client; then
+    echo "Egress passes descriptors through maelys_sys_fd_send and maelys_sys_fd_receive" >&2
     exit 1
 fi
 
