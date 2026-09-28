@@ -17,12 +17,15 @@
   across a process boundary without importing maelys-warden or reading its
   sources.
 
-- `examples/native_connector.c` creates its server on the thread that runs
-  it. `maelys_egress_server_run` owns the thread that created the server —
-  the reactor is bound to it — and the example created it on the main
-  thread, so its run failed at the first reactor step with "reactor step
-  failed"; nothing ran it, since it reaches example.com. Found while writing
-  `channel_supervisor.c` from it, which `examples-check` does run.
+- `examples/native_connector.c` creates and destroys its server on the
+  thread that runs it. `maelys_egress_server_run` and
+  `maelys_egress_server_destroy` belong to the thread that created the
+  server — the reactor is bound to it — and the example created it on the
+  main thread, so its run failed at the first reactor step with "reactor
+  step failed", and a destroy from the main thread would have left the
+  reactor allocated; nothing ran it, since it reaches example.com. Found
+  while writing `channel_supervisor.c` from it, which `examples-check` and
+  the sanitizers do run.
 
 - The channel server, third part of `protocol/egress-channel-v1.md`.
   `maelys_egress_channel_create` binds a datagram pair to an authenticated

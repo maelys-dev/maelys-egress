@@ -35,6 +35,8 @@ static void *server_main(void *opaque) {
     if (context->result == MAELYS_EGRESS_OK) {
         context->result = maelys_egress_server_run(context->server, &context->error);
     }
+    /* destroy belongs to the thread that created the server, like run. */
+    maelys_egress_server_destroy(context->server);
     return NULL;
 }
 
@@ -104,7 +106,6 @@ int main(void) {
         if (server) (void)maelys_egress_server_stop(server);
         (void)pthread_join(thread, NULL);
         maelys_egress_error_free(thread_context.error);
-        maelys_egress_server_destroy(server);
         return 1;
     }
     if (maelys_egress_server_connector_create(
@@ -113,7 +114,6 @@ int main(void) {
         maelys_egress_error_free(error);
         (void)maelys_egress_server_stop(server);
         (void)pthread_join(thread, NULL);
-        maelys_egress_server_destroy(server);
         return 1;
     }
     if (maelys_egress_connector_session_open(
@@ -124,7 +124,6 @@ int main(void) {
         (void)maelys_egress_server_stop(server);
         (void)pthread_join(thread, NULL);
         maelys_egress_connector_release(connector);
-        maelys_egress_server_destroy(server);
         return 1;
     }
     static const char request[] =
@@ -142,6 +141,5 @@ int main(void) {
     (void)maelys_egress_server_stop(server);
     (void)pthread_join(thread, NULL);
     maelys_egress_error_free(thread_context.error);
-    maelys_egress_server_destroy(server);
     return received > 0 ? 0 : 1;
 }

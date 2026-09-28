@@ -56,6 +56,8 @@ static void *server_main(void *opaque) {
     if (context->result == MAELYS_EGRESS_OK) {
         context->result = maelys_egress_server_run(context->server, &context->error);
     }
+    /* destroy belongs to the thread that created the server, like run. */
+    maelys_egress_server_destroy(context->server);
     return NULL;
 }
 
@@ -199,6 +201,7 @@ int main(int argc, char **argv) {
         if (server) (void)maelys_egress_server_stop(server);
         (void)pthread_join(thread, NULL);
     }
+    server = NULL;
     maelys_egress_config_destroy(config);
     maelys_egress_policy_destroy(policy);
     if (echo_started) {
@@ -214,6 +217,5 @@ int main(int argc, char **argv) {
     }
     maelys_egress_error_free(thread_context.error);
     maelys_egress_error_free(error);
-    maelys_egress_server_destroy(server);
     return status;
 }
