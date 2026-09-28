@@ -79,6 +79,14 @@ if grep_tree '(^|[^A-Za-z0-9_.>])(socket|accept|accept4|connect|bind|listen|recv
     echo "Egress must consume maelys-system sockets" >&2
     exit 1
 fi
+# Passing a descriptor to another process needs sendmsg and recvmsg with
+# SCM_RIGHTS, which maelys-system does not provide yet. src/channel_server.c
+# is the one file allowed to call them, and only them; the rule above still
+# holds it to maelys-system for everything else a socket does.
+if grep_tree '(^|[^A-Za-z0-9_.>])(sendmsg|recvmsg)[[:space:]]*\(' --exclude=channel_server.c src; then
+    echo "only src/channel_server.c may pass descriptors with sendmsg/recvmsg" >&2
+    exit 1
+fi
 
 if grep_tree '(^|[^A-Za-z0-9_])(puts|printf|fputs|fputc|fwrite)[[:space:]]*\(|fprintf[[:space:]]*\([[:space:]]*stdout' \
     --exclude=output.c cli; then

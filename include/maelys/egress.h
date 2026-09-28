@@ -313,6 +313,34 @@ maelys_egress_result_t maelys_egress_session_take_fd(
 /* Closes the client stream if ownership was not transferred. */
 void maelys_egress_session_release(maelys_egress_session_t *session);
 
+/*
+ * The mediated-connection channel: a datagram pair on which a process in
+ * another address space asks this connector for destinations and receives
+ * each stream as a passed descriptor, speaking the protocol of
+ * <maelys/egress_channel.h>. A thread serves the channel, one request at a
+ * time, in order, from creation until destroy. The connector is retained;
+ * every session it opens is bound to the connector's principal, and the
+ * request has no field to name another.
+ *
+ * *out_client_fd is the other end, CLOEXEC, owned by the caller: the
+ * supervisor hands it to the confined process, at the descriptor number of
+ * its own convention, and closes its copy. connect_timeout_ms bounds every
+ * upstream connect the channel opens and is not carried on the wire.
+ *
+ * Destroying the channel ends its thread and closes the server end; a
+ * request in flight completes inside Egress and its stream is closed. The
+ * streams already handed over are not touched: they end with the server
+ * (maelys_egress_server_stop cancels active sessions) or with their holder.
+ */
+typedef struct maelys_egress_channel maelys_egress_channel_t;
+maelys_egress_result_t maelys_egress_channel_create(
+    maelys_egress_connector_t *connector,
+    uint64_t connect_timeout_ms,
+    maelys_egress_channel_t **out_channel,
+    int *out_client_fd,
+    char **out_error);
+void maelys_egress_channel_destroy(maelys_egress_channel_t *channel);
+
 uint64_t maelys_egress_receipt_id(const maelys_egress_receipt_t *receipt);
 maelys_egress_protocol_t maelys_egress_receipt_protocol(
     const maelys_egress_receipt_t *receipt);

@@ -113,7 +113,7 @@ CORE_SOURCES := src/core/common.c src/core/sha256.c src/core/receipt.c \
 	src/core/attestor.c src/core/policy.c src/core/profile.c src/core/tls.c \
 	src/core/clienthello.c src/core/http.c src/core/socks.c \
 	src/core/channel.c
-HOST_SOURCES := src/audit.c src/config.c src/connector.c
+HOST_SOURCES := src/audit.c src/config.c src/connector.c src/channel_server.c
 SERVER_SOURCES := src/server/server.c src/server/listener.c \
 	src/server/connection.c src/server/relay.c src/server/quota.c \
 	src/server/receipt.c src/server/connector.c src/server/admin.c
@@ -360,7 +360,10 @@ $(OBJ)/tests/test_operations.o: tests/test_operations.c $(VERSION_STAMP) | $(MAE
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
-$(OPERATIONS_TEST): $(OBJ)/tests/test_operations.o $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
+# The operations test drives the channel from both ends: it links the
+# client archive before the library, so the codec comes from the archive a
+# confined process would hold.
+$(OPERATIONS_TEST): $(OBJ)/tests/test_operations.o $(CLIENT_LIB) $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
