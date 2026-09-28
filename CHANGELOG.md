@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.22.2 — 2026-09-28
 
 - Descriptors cross the channel through maelys-system's `fdpass`, adopted
   with maelys-system 0.10.0 on both sides. The server and the client each
