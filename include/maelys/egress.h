@@ -93,7 +93,10 @@ maelys_egress_result_t maelys_egress_policy_allow_tcp(
  * Require the first bytes of every tunnel to be a bounded TLS ClientHello
  * whose sole server_name equals the destination host. The destination must
  * already exist, must use a DNS name (not a numeric address), and the setting
- * becomes part of the sealed policy digest. HTTP forward mode is unaffected.
+ * becomes part of the sealed policy digest. An HTTP forward request to such a
+ * destination is refused as DENIED before any upstream connection: it would
+ * relay cleartext to the same host and port. The receipt records the refusal
+ * with protocol HTTP_FORWARD and tls_sni_verified 0.
  */
 maelys_egress_result_t maelys_egress_policy_require_tls_sni(
     maelys_egress_policy_t *policy,

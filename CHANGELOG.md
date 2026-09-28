@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- The SNI guard holds on every protocol. A destination allowed with
+  `allow_tls_sni` admits only a TLS ClientHello that names it — but an HTTP
+  forward request to the same host and port was relayed as cleartext, since
+  the guard ran on tunnels only and nothing turned the forward mode off; the
+  header even said so. Found by maelys-warden while wiring the flag through its
+  adapter. Such a request is now refused as `DENIED` at admission, before any
+  upstream connection, and the receipt records it with protocol
+  `HTTP_FORWARD` and `tls_sni_verified` 0. The header and the key's description
+  say it; a test sends the request and reads the refusal and the receipt.
+
 - Adopt maelys-release 0.62.0. 0.61.0 asks a product that pins other Maelys
   repositories to re-adopt: `scripts/checkout-dependency.sh` gains the bundle
   path a runner without credentials uses for a private pin, and this

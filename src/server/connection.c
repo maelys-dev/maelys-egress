@@ -320,6 +320,14 @@ int egress_connection_begin_request(
         egress_connection_fail(server, slot, MAELYS_EGRESS_ERR_DENIED, 0);
         return egress_connection_update_watches(server, slot);
     }
+    /* The destination admits only a TLS ClientHello that names it. A forward
+     * request would relay cleartext to the same host and port; refusing it here
+     * keeps the guard whole on every protocol, and the receipt says so. */
+    if (connection->destination->require_tls_sni &&
+        request->protocol == MAELYS_EGRESS_PROTOCOL_HTTP_FORWARD) {
+        egress_connection_fail(server, slot, MAELYS_EGRESS_ERR_DENIED, 0);
+        return egress_connection_update_watches(server, slot);
+    }
     if (request->principal_index < server->config.principal_count) {
         ++server->principal_active[request->principal_index];
         connection->quota_admitted = 1;

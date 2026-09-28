@@ -12,7 +12,7 @@ Configuration schema version 1, grammar `strict-key-value`. TLS listener keys ar
 | `unix_peer` | `enum` | no | no | no | `authenticated` | authenticated,same-euid | Peer authentication rule for an AF_UNIX listener. Requires: `listen_unix`. |
 | `allow` | `destination` | no | yes | no |  | HOST:1..65535 | Allow one exact public TCP destination. |
 | `allow_private` | `destination` | no | yes | no |  | HOST:1..65535 | Allow one exact destination to resolve to private addresses. |
-| `allow_tls_sni` | `destination` | no | yes | no |  | HOST:1..65535 | Allow one destination and require matching readable TLS SNI. |
+| `allow_tls_sni` | `destination` | no | yes | no |  | HOST:1..65535 | Allow one destination and require matching readable TLS SNI; HTTP forward requests to it are refused. |
 | `token_file` | `path` | no | no | yes |  | owner-only regular file, at least 16 bytes | Bearer secret; the proxy username is maelys. Conflicts: `unauthenticated_loopback`. |
 | `unauthenticated_loopback` | `boolean` | no | no | no | `false` | true,false | Development-only opt-out on a loopback TCP listener. Conflicts: `token_file,listen_unix,principal quotas`. |
 | `max_connections` | `integer` | no | no | no | `128` | 1..4096 | Maximum concurrent mediated connections. |
