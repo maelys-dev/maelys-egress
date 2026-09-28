@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <netinet/in.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -875,7 +876,7 @@ static int channel_read_raw(int channel_fd, unsigned int *out_version, size_t *o
  * to stop: the main thread sets stop, then connects once to unblock accept. */
 typedef struct channel_upstream_context {
     int listener;
-    volatile int stop;
+    atomic_int stop;
 } channel_upstream_context_t;
 
 /* One thread per accepted connection: a stream left open by the test must
@@ -899,7 +900,7 @@ static void *channel_upstream_main(void *opaque) {
         int client;
         do { client = accept(context->listener, NULL, NULL); }
         while (client < 0 && errno == EINTR);
-        if (client < 0 || context->stop) {
+        if (client < 0 || atomic_load(&context->stop)) {
             if (client >= 0) (void)close(client);
             return NULL;
         }
@@ -1106,7 +1107,7 @@ static void test_channel(void) {
     maelys_egress_connector_release(connector);
     CHECK(maelys_egress_server_stop(server.server) == MAELYS_EGRESS_OK);
     CHECK(pthread_join(server_thread, NULL) == 0);
-    upstream.stop = 1;
+    atomic_store(&upstream.stop, 1);
     int wake = connect_loopback(upstream_port);
     CHECK(pthread_join(upstream_thread, NULL) == 0);
     if (wake >= 0) (void)close(wake);
