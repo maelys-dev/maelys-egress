@@ -64,12 +64,15 @@ run_mutant relay-half-close src/server/relay.c \
 run_mutant channel-host-bound src/core/channel.c \
     'out->host_length > MAELYS_EGRESS_CHANNEL_MAX_HOST' \
     'out->host_length >= MAELYS_EGRESS_CHANNEL_MAX_HOST' &
+run_mutant channel-status-denied src/channel_server.c \
+    'case MAELYS_EGRESS_ERR_DENIED: return MAELYS_EGRESS_CHANNEL_DENIED;' \
+    'case MAELYS_EGRESS_ERR_DENIED: return MAELYS_EGRESS_CHANNEL_OK;' &
 wait
 
 killed=0
 total=0
 for name in sni-host-mismatch authority-mismatch credential-compare \
-    destination-port relay-half-close channel-host-bound; do
+    destination-port relay-half-close channel-host-bound channel-status-denied; do
     total=$((total + 1))
     result=$(cat "$work/$name.result" 2>/dev/null || printf 'missing')
     if test "$result" = killed; then

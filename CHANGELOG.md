@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- The channel server, third part of `proposals/egress-channel-v1.md`.
+  `maelys_egress_channel_create` binds a datagram pair to an authenticated
+  connector and returns the client end for the supervisor to hand over; a
+  thread serves it, one request at a time and in order, until
+  `maelys_egress_channel_destroy`. Each request becomes one
+  `session_open` of the connector under the deadline the creator chose, and
+  the answer carries the stream as the one passed descriptor, or a status
+  from the protocol's explicit table: the policy's refusal is `DENIED`, a
+  server that is stopping or has stopped is `CANCELLED`, a host the codec
+  accepts but the connector refuses as not canonical is `MALFORMED`. The
+  server closes its copy of the stream and releases the session whether or
+  not the kernel took the datagram; destroying the channel touches no stream
+  already handed over. `src/channel_server.c` is the one file allowed to
+  call `sendmsg` and `recvmsg`, for the descriptor: maelys-system has no
+  primitive for `SCM_RIGHTS` yet, and the boundary audit names the exception.
+  The operations test drives both ends in one process — the client archive
+  on one side, the library on the other, raw datagrams where the client
+  would never produce the case — and counts descriptors around every
+  exchange; the mutation gate holds the `DENIED` row of the table.
+
 - `libmaelys_egress_client`, the channel client a confined process links,
   second part of `proposals/egress-channel-v1.md`. One call,
   `maelys_egress_client_connect`, sends a request on the channel the
