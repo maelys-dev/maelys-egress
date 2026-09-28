@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+- The channel server closes every descriptor a request carries, and refuses
+  the request. It received requests without a control buffer, on the belief
+  that the kernel drops descriptors the receiver has no room for. Linux does,
+  and says so with `MSG_CTRUNC`; macOS installs them in the receiving process
+  regardless and says nothing — measured with 1, 50 and 200 descriptors. On
+  macOS a confined process could therefore attach up to 254 descriptors to
+  each request and fill the descriptor table of the process that mediates its
+  network: a denial of service on the channel of 0.22.0. Found by
+  maelys-system while measuring both kernels for its descriptor-passing
+  primitive. The server now reads with room for every descriptor a kernel can
+  deliver in one datagram (254 on macOS, 253 on Linux), closes them all, and
+  answers `MALFORMED`; the contract states the rule. The client, whose room
+  was eight descriptors, gets the same room and reads no further than the
+  control bytes the kernel filled: on macOS a truncated header can announce
+  more than was delivered, and the client would have closed integers read
+  past its buffer. Its peer is the trusted server, so that half is
+  robustness. Tests send fifty descriptors with a valid request and twenty
+  with an `OK` response, and count descriptors around each; both failed
+  before the change on macOS. The mutation gate holds the refusal.
+
 ## 0.22.0 — 2026-09-28
 
 - The mediated-connection channel, version 1, is a contract:

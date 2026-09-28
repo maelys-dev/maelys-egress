@@ -838,6 +838,34 @@ static void channel_send_raw(int channel_fd, const unsigned char *bytes, size_t 
     CHECK(send(channel_fd, bytes, length, 0) == (ssize_t)length);
 }
 
+/* A request with descriptors attached, which no client of the contract
+ * sends: on macOS the kernel installs them in the receiver whether or not
+ * it asked for control data. */
+static void channel_send_with_rights(int channel_fd, const unsigned char *bytes, size_t length,
+                                     int descriptor, size_t count) {
+    int rights[64];
+    CHECK(count <= sizeof(rights) / sizeof(rights[0]));
+    for (size_t i = 0; i < count; ++i) rights[i] = descriptor;
+    struct iovec iov = {.iov_base = (void *)bytes, .iov_len = length};
+    union {
+        struct cmsghdr align;
+        unsigned char bytes[CMSG_SPACE(sizeof(int) * 64u)];
+    } control;
+    memset(&control, 0, sizeof(control));
+    struct msghdr message;
+    memset(&message, 0, sizeof(message));
+    message.msg_iov = &iov;
+    message.msg_iovlen = 1u;
+    message.msg_control = control.bytes;
+    message.msg_controllen = (socklen_t)CMSG_SPACE(sizeof(int) * count);
+    struct cmsghdr *header = CMSG_FIRSTHDR(&message);
+    header->cmsg_level = SOL_SOCKET;
+    header->cmsg_type = SCM_RIGHTS;
+    header->cmsg_len = (socklen_t)CMSG_LEN(sizeof(int) * count);
+    memcpy(CMSG_DATA(header), rights, sizeof(int) * count);
+    CHECK(sendmsg(channel_fd, &message, 0) == (ssize_t)length);
+}
+
 /* Reads one raw response: returns the status byte, sets *out_version and
  * *out_rights to what arrived, closing every descriptor that came with it. */
 static int channel_read_raw(int channel_fd, unsigned int *out_version, size_t *out_rights) {
@@ -1051,6 +1079,31 @@ static void test_channel(void) {
     channel_send_raw(client_fd, oversized, sizeof(oversized));
     CHECK(channel_read_raw(client_fd, &version, &rights) == MAELYS_EGRESS_CHANNEL_MALFORMED);
     CHECK(descriptors_settle_at(with_channel));
+
+    /* A valid request carrying descriptors: refused, and every descriptor
+     * the kernel installed in this process is closed again. Fifty of them,
+     * enough to see a leak at once; the count after equals the count
+     * before, on a kernel that installs them (macOS) as on one that drops
+     * them (Linux). */
+    {
+        unsigned char valid[MAELYS_EGRESS_CHANNEL_REQUEST_MAX_SIZE];
+        size_t valid_length = maelys_egress_channel_encode_request(
+            "localhost", upstream_port, valid, sizeof(valid));
+        CHECK(valid_length > 0u);
+        int carried[2];
+        CHECK(socketpair(AF_UNIX, SOCK_STREAM, 0, carried) == 0);
+        int with_carried = open_descriptors();
+        for (int round = 0; round < 4; ++round) {
+            channel_send_with_rights(client_fd, valid, valid_length, carried[0], 50u);
+            CHECK(channel_read_raw(client_fd, &version, &rights) ==
+                  MAELYS_EGRESS_CHANNEL_MALFORMED);
+            CHECK(rights == 0u);
+        }
+        CHECK(descriptors_settle_at(with_carried));
+        (void)close(carried[0]);
+        (void)close(carried[1]);
+        CHECK(descriptors_settle_at(with_channel));
+    }
 
     /* Two requests sent before either answer: answered in order, each with
      * its own stream. The contract promises the sequential case; this pins
