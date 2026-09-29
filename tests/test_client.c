@@ -15,10 +15,14 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 #define CHECK(condition) \
@@ -262,6 +266,75 @@ static void test_deadline_shuts_the_channel(void) {
     (void)close(channel[1]);
 }
 
+static volatile sig_atomic_t deadline_interruptions;
+
+static void interrupt_deadline(int signal_number) {
+    (void)signal_number;
+    ++deadline_interruptions;
+}
+
+static uint64_t test_monotonic_ms(void) {
+    struct timespec value;
+    CHECK(clock_gettime(CLOCK_MONOTONIC, &value) == 0);
+    return (uint64_t)value.tv_sec * 1000u + (uint64_t)value.tv_nsec / 1000000u;
+}
+
+/* Repeated EINTR must consume one deadline, not restart it. Run the wait in
+ * a child so the old unbounded behavior is killed and reported rather than
+ * hanging the whole test suite. */
+static void test_deadline_survives_interrupts(void) {
+    int channel[2];
+    channel_pair(channel);
+    pid_t child = fork();
+    CHECK(child >= 0);
+    if (child == 0) {
+        struct sigaction action;
+        memset(&action, 0, sizeof(action));
+        action.sa_handler = interrupt_deadline;
+        CHECK(sigemptyset(&action.sa_mask) == 0);
+        CHECK(sigaction(SIGALRM, &action, NULL) == 0);
+        struct itimerval timer = {
+            .it_interval = {.tv_sec = 0, .tv_usec = 5000},
+            .it_value = {.tv_sec = 0, .tv_usec = 5000}
+        };
+        CHECK(setitimer(ITIMER_REAL, &timer, NULL) == 0);
+        uint64_t started = test_monotonic_ms();
+        int received = -1;
+        char *error = NULL;
+        maelys_egress_client_result_t result = maelys_egress_client_connect(
+            channel[0], "example.com", 443u, 80u, &received, &error);
+        uint64_t elapsed = test_monotonic_ms() - started;
+        memset(&timer, 0, sizeof(timer));
+        CHECK(setitimer(ITIMER_REAL, &timer, NULL) == 0);
+        int ok = result == MAELYS_EGRESS_CLIENT_ERR_UNANSWERED && received == -1 &&
+                 error != NULL && deadline_interruptions >= 2 &&
+                 elapsed >= 50u && elapsed < 250u;
+        maelys_egress_client_error_free(error);
+        (void)close(channel[0]);
+        (void)close(channel[1]);
+        _exit(ok ? 0 : 1);
+    }
+    (void)close(channel[0]);
+    (void)close(channel[1]);
+    int status = 0;
+    int finished = 0;
+    for (unsigned int attempt = 0u; attempt < 100u; ++attempt) {
+        pid_t waited = waitpid(child, &status, WNOHANG);
+        if (waited == child) {
+            finished = 1;
+            break;
+        }
+        CHECK(waited == 0);
+        struct timespec delay = {.tv_sec = 0, .tv_nsec = 5000000L};
+        (void)nanosleep(&delay, NULL);
+    }
+    if (!finished) {
+        (void)kill(child, SIGKILL);
+        CHECK(waitpid(child, &status, 0) == child);
+    }
+    CHECK(finished && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+}
+
 static void test_channel_closed_by_server(void) {
     int channel[2];
     channel_pair(channel);
@@ -319,7 +392,8 @@ int main(void) {
     test_descriptor_cardinality();
     test_malformed_responses();
     test_deadline_shuts_the_channel();
+    test_deadline_survives_interrupts();
     test_channel_closed_by_server();
-    (void)printf("client: success, refusals, cardinality, malformed, deadline, closed channel ok\n");
+    (void)printf("client: success, refusals, cardinality, malformed, deadlines, closed channel ok\n");
     return 0;
 }

@@ -969,6 +969,84 @@ static void wait_until_idle(maelys_egress_server_t *server) {
     }
 }
 
+typedef struct channel_destroy_context {
+    maelys_egress_channel_t *channel;
+    atomic_int returned;
+} channel_destroy_context_t;
+
+static void *channel_destroy_main(void *opaque) {
+    channel_destroy_context_t *context = opaque;
+    maelys_egress_channel_destroy(context->channel);
+    atomic_store(&context->returned, 1);
+    return NULL;
+}
+
+/* A confined client is not trusted to obey the one-request rule or to read
+ * its answers. Filling the response queue must end the channel and must never
+ * strand the supervisor in channel_destroy. */
+static void test_channel_response_backpressure(maelys_egress_connector_t *connector) {
+    int baseline = open_descriptors();
+    maelys_egress_channel_t *channel = NULL;
+    int client_fd = -1;
+    char *error = NULL;
+    CHECK(maelys_egress_channel_create(connector, 100u, &channel, &client_fd, &error) ==
+          MAELYS_EGRESS_OK);
+    int receive_bytes = 1024;
+    CHECK(setsockopt(client_fd, SOL_SOCKET, SO_RCVBUF,
+                     &receive_bytes, (socklen_t)sizeof(receive_bytes)) == 0);
+    int flags = fcntl(client_fd, F_GETFL);
+    CHECK(flags >= 0 && fcntl(client_fd, F_SETFL, flags | O_NONBLOCK) == 0);
+    int peer_closed = 0;
+    size_t sent = 0u;
+    for (unsigned int attempt = 0u; attempt < 5000u && !peer_closed; ++attempt) {
+        ssize_t amount = send(client_fd, "!", 1u, MSG_DONTWAIT | MSG_NOSIGNAL);
+        if (amount == 1) {
+            ++sent;
+            continue;
+        }
+        if (amount < 0 && (errno == EINTR || errno == EAGAIN ||
+                           errno == EWOULDBLOCK || errno == ENOBUFS)) {
+            struct timespec delay = {.tv_sec = 0, .tv_nsec = 1000000L};
+            (void)nanosleep(&delay, NULL);
+            continue;
+        }
+        peer_closed = 1;
+    }
+    CHECK(sent > 0u && peer_closed);
+
+    channel_destroy_context_t destroy = {.channel = channel};
+    atomic_init(&destroy.returned, 0);
+    pthread_t destroy_thread;
+    int created = pthread_create(&destroy_thread, NULL, channel_destroy_main, &destroy);
+    CHECK(created == 0);
+    int returned_without_client_close = 0;
+    if (created == 0) {
+        for (unsigned int attempt = 0u; attempt < 300u; ++attempt) {
+            if (atomic_load(&destroy.returned)) {
+                returned_without_client_close = 1;
+                break;
+            }
+            struct timespec delay = {.tv_sec = 0, .tv_nsec = 1000000L};
+            (void)nanosleep(&delay, NULL);
+        }
+        /* This releases the known-bad implementation before reporting the
+         * failure, so a regression cannot hang the rest of the suite. */
+        if (!returned_without_client_close) {
+            (void)close(client_fd);
+            client_fd = -1;
+        }
+        CHECK(pthread_join(destroy_thread, NULL) == 0);
+    } else {
+        (void)close(client_fd);
+        client_fd = -1;
+        maelys_egress_channel_destroy(channel);
+    }
+    CHECK(returned_without_client_close);
+    if (client_fd >= 0) (void)close(client_fd);
+    maelys_egress_error_free(error);
+    CHECK(descriptors_settle_at(baseline));
+}
+
 
 static void test_channel(void) {
     /* Everything this test opens — upstream, server, channels, streams —
@@ -1140,20 +1218,22 @@ static void test_channel(void) {
      * comes. Shutting its reading side first makes the kernel refuse the
      * server's datagram every time (a close would race the answer, and a
      * datagram already queued would be collected only later). The server
-     * closes its copy and releases the session: nothing stays open or
-     * active on this side, and the request reached a session that ends. */
+     * closes its copy, releases the session and ends the channel: nothing
+     * stays open or active on this side, and the request reached a session
+     * that ends. */
+    int before_second = open_descriptors();
     int second_client = -1;
     CHECK(maelys_egress_channel_create(connector, 3000u, &channel, &second_client, &error) ==
           MAELYS_EGRESS_OK);
-    int with_second = open_descriptors();
     CHECK(shutdown(second_client, SHUT_RD) == 0);
     channel_send_raw(second_client, request, request_length);
     wait_until_idle(server.server);
-    CHECK(descriptors_settle_at(with_second));
     (void)close(second_client);
-    CHECK(descriptors_settle_at(with_second - 1));
     maelys_egress_channel_destroy(channel);
     channel = NULL;
+    CHECK(descriptors_settle_at(before_second));
+
+    test_channel_response_backpressure(connector);
 
     /* Stopping the server ends the stream handed over earlier. */
     (void)close(stream);

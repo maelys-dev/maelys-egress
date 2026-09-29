@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- The native channel server cannot be held inside `sendmsg` by a confined
+  client that sends requests without reading their answers. Its end of the
+  datagram pair is nonblocking; when the response queue is full, it closes the
+  stream it could not deliver and ends the channel. The worker closes its own
+  channel end on every exit, so the client observes the end and
+  `maelys_egress_channel_destroy` can always join it. An adversarial operations
+  test fills the response queue, keeps the client end open and requires
+  destruction to return within 300 ms; the old Linux implementation blocked
+  until the client descriptor was closed.
+
+- The standalone channel client's read deadline is one monotonic interval
+  across interruptions. `poll` used the complete `read_timeout_ms` again
+  after every `EINTR`, so a process receiving signals could wait without
+  bound. The client now subtracts elapsed monotonic time after each wake and
+  splits only deadlines larger than `INT_MAX`; a test interrupts an 80 ms
+  wait every 5 ms and bounds the whole call, with a parent process that turns
+  the former hang into a deterministic failure.
+
 - Adopt maelys-release 0.62.1, which asks nothing of a product: two workflow
   pins follow.
 

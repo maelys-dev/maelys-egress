@@ -168,12 +168,17 @@ tell a delivered stream from one the kernel never queued.
 *Contract:* the server closes its copy of the stream and releases the session
 whether or not the kernel took the datagram; the client end of the relay is
 then closed when the send failed, and Egress treats the session as it treats
-any client that closes before writing. The server keeps no log of the refused
-send: the channel has no logging surface, and none is promised. What the receipt records for such a session
-is Egress's receipt contract, not this document's: the channel promises no
-receipt field. There is no acknowledgement message in v1: the client's successful `recvmsg` of an `OK`
-response with one descriptor is the only confirmation, and a client that
-receives nothing (EOF, error) treats the request as failed with no stream.
+any client that closes before writing. The server's channel end is
+nonblocking. If its response cannot be queued, the server closes the channel:
+keeping it open would leave that request unanswered and a blocking send would
+let a client that does not read prevent its supervisor from destroying the
+channel. The server keeps no log of the refused send: the channel has no
+logging surface, and none is promised. What the receipt records for such a
+session is Egress's receipt contract, not this document's: the channel
+promises no receipt field. There is no acknowledgement message in v1: the
+client's successful `recvmsg` of an `OK` response with one descriptor is the
+only confirmation, and a client that receives nothing (EOF, error) treats the
+request as failed with no stream.
 On the client side, the received descriptor is set `CLOEXEC` before anything
 else is done with it; the kernel does not carry that flag across `SCM_RIGHTS`
 on every platform (`MSG_CMSG_CLOEXEC` exists on Linux, not on macOS).
@@ -183,7 +188,9 @@ the kernel refuses the server's datagram every time (a close would race the
 answer, and a datagram already queued is collected by the kernel later);
 after the refused send, the process's descriptor count is what it was before
 the request and no session is active. A descriptor received by the client has
-`FD_CLOEXEC` set. (`tests/test_operations.c`, `tests/test_client.c`.)
+`FD_CLOEXEC` set. A client that fills the response queue without reading sees
+the channel close, and the supervisor destroys it before closing the client
+end. (`tests/test_operations.c`, `tests/test_client.c`.)
 
 ### 3. Bounds, deadlines and shutdown
 
@@ -197,9 +204,11 @@ a finite non-zero value; v1 has no field for the client to set or extend it.
 The exchange as a whole is bounded on both sides. The server answers every
 request within the connect deadline plus a bounded processing time of its own
 (reading the datagram, `session_open`, `sendmsg`); while the channel is open it
-never leaves a request unanswered. The client applies a read deadline of its
-own choosing, at least the server's connect deadline; when it expires, the
-client **shuts the channel down** rather than sending another request on it,
+never leaves a request unanswered: failure to queue the answer closes the
+channel. The client applies one absolute monotonic read deadline of its own
+choosing, at least the server's connect deadline; interruptions consume that
+same interval rather than restarting it. When it expires, the client **shuts
+the channel down** rather than sending another request on it,
 since with one request in flight and no identifier a late response would be
 paired with the wrong request: a further call on that channel fails, and the
 descriptor stays the caller's to close. Whether the server's end then reads
@@ -222,7 +231,9 @@ closures are distinct:
 *Test:* open a stream, close the channel, write through the stream: the bytes
 arrive upstream. Stop the server: the stream reads EOF. Send a request, then
 close the channel before the response: the server's session count returns to
-zero within the deadline.
+zero within the deadline. Interrupt a client wait repeatedly: it still ends at
+its original deadline. Fill the response queue while keeping the client end
+open: the server ends the channel and its destructor returns.
 
 ### 4. Serialisation
 

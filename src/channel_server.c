@@ -118,12 +118,15 @@ static int serve_one(maelys_egress_channel_t *channel) {
     /* Whether or not the kernel took the datagram, the copy here closes and
      * the session is released: the client end of the relay is then gone
      * when the send failed, and Egress treats the session as any client
-     * that closed before writing. Delivery is confirmed only by the client's
-     * own receipt of the message; the contract has no acknowledgement. */
-    (void)send_response(channel->server_fd, status, stream_fd);
+     * that closed before writing. A response the nonblocking channel cannot
+     * queue ends the channel: leaving it open would leave this request
+     * unanswered and let a client that does not read block its supervisor.
+     * Delivery is confirmed only by the client's own receipt of the message;
+     * the contract has no acknowledgement. */
+    int delivered = send_response(channel->server_fd, status, stream_fd);
     (void)maelys_sys_fd_close(&stream_fd);
     maelys_egress_session_release(session);
-    return 1;
+    return delivered;
 }
 
 static void *channel_main(void *opaque) {
@@ -166,6 +169,10 @@ static void *channel_main(void *opaque) {
         if (requests_watch) (void)maelys_sys_loop_unwatch(loop, requests_watch);
         (void)maelys_sys_loop_destroy(&loop);
     }
+    /* Closing here makes every way the worker stops observable by the
+     * client, including response backpressure. destroy joins before it
+     * touches the descriptor again, so its close remains idempotent. */
+    (void)maelys_sys_fd_close(&channel->server_fd);
     return NULL;
 }
 
@@ -194,6 +201,11 @@ maelys_egress_result_t maelys_egress_channel_create(
         goto fail;
     }
     channel->server_fd = pair[0];
+    if (maelys_sys_fd_set_nonblocking(channel->server_fd) != MAELYS_SYS_OK) {
+        egress_set_error(out_error, "cannot make the channel server nonblocking: %s",
+                         strerror(errno));
+        goto fail;
+    }
     if (maelys_sys_wakeup_create(&channel->wakeup) != MAELYS_SYS_OK ||
         maelys_sys_mutex_create(&channel->lock) != MAELYS_SYS_OK ||
         maelys_sys_condition_create(&channel->condition) != MAELYS_SYS_OK) {
