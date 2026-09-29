@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.22.3 — 2026-09-29
 
 - The native channel server cannot be held inside `sendmsg` by a confined
   client that sends requests without reading their answers. Its end of the
