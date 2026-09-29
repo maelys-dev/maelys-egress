@@ -34,7 +34,9 @@ way to inject descriptor 4 into an already running process.
 Egress owns:
 
 - this versioned bootstrap protocol;
-- the broker listener, bound at creation to one execution principal;
+- an independently embeddable broker whose own worker thread manages the
+  listener, leases and channel destruction, bound at creation to one execution
+  principal;
 - the client open operation in `libmaelys_egress_client`;
 - the lifetime lease joining a broker-owned channel to its remote holder;
 - the codec, vectors, cross-platform conformance and adversarial tests;
@@ -180,6 +182,11 @@ numeric mirror of a C result enumeration. A client treats an unknown code as
 `INTERNAL`. A local failure before a response — path refusal, connection
 failure, EOF or client deadline — remains a local client result.
 
+The numeric spaces are deliberately local to their frames. In particular,
+code `2` is bootstrap `BUSY` but channel-v1 `TIMEOUT`. A client first selects
+the protocol from the frame magic (`MEBP` or `MECP`) and only then interprets
+the status; it must not feed both values through one common numeric enum.
+
 ## The lease
 
 The accepted stream becomes a lifetime lease after an `OK` response. Neither
@@ -191,11 +198,19 @@ side sends another byte. The broker retains all three of:
 
 It closes the copy of the client channel descriptor immediately after the
 response send succeeds or fails. On success, EOF or any byte on the lease
-causes the broker to destroy the channel and release the slot. On failed or
-incomplete response delivery, it destroys the channel before releasing the
-accepted connection. A process exit closes both client descriptors and
-therefore reclaims the server-side thread even on a kernel where closing the
-peer of a datagram pair is not observable while idle.
+causes the broker worker to destroy the channel and release the slot. On failed
+or incomplete response delivery, the worker destroys the channel before
+releasing the accepted connection. A process exit closes both client
+descriptors and therefore reclaims the server-side thread even on a kernel
+where closing the peer of a datagram pair is not observable while idle.
+
+The worker is not the Egress server owner thread. Channel destruction waits
+for the channel thread, and that thread may be waiting for a connector command
+which only the server owner reactor can complete. Destruction on the owner
+reactor would therefore stop all proxy and connector progress until the open
+deadline. The broker may wait in its own execution domain, while the server
+reactor remains free to complete or cancel the command. This separation is a
+required implementation invariant, not an optimization.
 
 The lease is necessary. Channel v1 records that idle datagram-pair peer closure
 is not reported consistently by Linux and macOS; a broker that passed the
@@ -220,8 +235,8 @@ identifier before it opens the listener. It creates every channel from that
 identity. The wire contains no way to select or replace it.
 
 The listener path is absolute, canonical and absent at startup. Its immediate
-parent is held open and checked without following a symlink. Two deployment
-forms are proposed:
+parent is held open and checked without following a symlink. V1 supports two
+deployment forms:
 
 - parent owned by the broker's effective UID, mode `0700`; the client runs as
   that UID and the socket is mode `0600`;
@@ -296,11 +311,13 @@ owns both descriptors. Its borrowed channel descriptor is passed to the
 existing `maelys_egress_client_connect`; the caller uses a read timeout at
 least as large as the reported broker connect timeout.
 
-Adding this surface bumps `MAELYS_EGRESS_CLIENT_ABI_VERSION` from 1 to 2. The
-standalone boundary does not change: the archive contains no Egress core and
-no thread runtime. It may take from maelys-system only the new standalone
-stream descriptor-passing object beside the existing `fdpass.o`, with no
-undefined `maelys_sys_` or `pthread_` symbol.
+This additive opaque type and these new functions leave
+`MAELYS_EGRESS_CLIENT_ABI_VERSION` at 1. The repository changes that number
+when an existing layout or semantic contract becomes incompatible, not when a
+header only gains symbols. The standalone boundary does not change: the
+archive contains no Egress core and no thread runtime. It may take from
+maelys-system only the new standalone stream descriptor-passing object beside
+the existing `fdpass.o`, with no undefined `maelys_sys_` or `pthread_` symbol.
 
 ## Proposed CLI and configuration surface
 
@@ -357,11 +374,19 @@ admin listener remain available. Principal quota keys require either
 or second spelling is introduced.
 
 The core library must expose the same capability, not leave it in the CLI. The
-implementation is expected to add a channel-broker configuration surface to
-`libmaelys_egress`, integrate the listener with the server owner thread and
-bind its configured principal without manufacturing a bearer secret. Exact C
-names are reviewed with the implementation; changing the public core header
-will bump the Egress ABI from 3 to 4.
+implementation adds an independently embeddable opaque broker handle to
+`libmaelys_egress`. It is created from one connector already bound to the
+configured principal, retains that connector, and owns a worker thread which
+accepts bootstrap clients, watches leases and calls
+`maelys_egress_channel_destroy`. The listener and lease watches are never
+registered on the server owner reactor. The CLI also needs an additive core
+operation which binds the configured principal without manufacturing a bearer
+secret; exact C names are reviewed with the implementation.
+
+These additive functions and opaque types leave `MAELYS_EGRESS_ABI_VERSION`
+at 3. A bump is required only if implementation changes an existing public
+layout or semantic contract; if that becomes necessary, this proposal must be
+amended before the code relies on it.
 
 ## Compose result
 
@@ -395,8 +420,10 @@ not contain the Egress core or CLI.
 Implementation is incomplete until all of these are automated on Linux and
 macOS:
 
-- byte vectors for the valid request and every response status; wrong magic,
-  both unknown versions and every non-zero reserved field;
+- byte vectors for the valid request and every response status; explicit
+  dispatch of code `2` as bootstrap `BUSY` under `MEBP` and channel `TIMEOUT`
+  under `MECP`; wrong magic, both unknown versions and every non-zero reserved
+  field;
 - one-byte-at-a-time request and response delivery, including a descriptor on
   the first response fragment;
 - zero, one and multiple descriptors on `OK`; a descriptor on every non-`OK`
@@ -410,6 +437,8 @@ macOS:
 - active-client saturation answers `BUSY`; closing one lease admits the next;
 - lease closure during a channel request and with an already returned stream,
   preserving the frozen channel shutdown distinction;
+- lease closure while a connector open is deliberately held pending, while a
+  simultaneous proxy request still progresses on the server owner reactor;
 - broker stop closes every lease and channel and revokes active streams;
 - path symlink, pre-existing socket, wrong owner, wrong mode, writable
   capability directory and replaced-inode refusals;
@@ -430,7 +459,9 @@ continue unchanged. Bootstrap conformance is additional, not a replacement.
    close-on-exec and fault tests in maelys-system.
 3. Add the bootstrap codec and client opaque handle in
    `libmaelys_egress_client`.
-4. Add the broker to the core library, including lease and capacity ownership.
+4. Add the independent broker handle and worker thread to the core library,
+   including lease, destruction and capacity ownership; prove that none of
+   its listener or lease work runs on the server owner reactor.
 5. Declare `channel.broker` and the configuration catalog, handler, lifecycle
    schema, exact `describe` tests and generated references.
 6. Add the Egress-aware Compose example and make its integration test required
@@ -442,13 +473,16 @@ continue unchanged. Bootstrap conformance is additional, not a replacement.
 and inherits it directly, so it needs no bootstrap. A future FD-4 launcher over
 this broker must preserve the lease as well as the channel descriptor.
 
-## Review questions before implementation
+## Review decisions before implementation
 
-1. Do maelys-system and Egress agree that one fixed stream frame, received
-   control-aware across every short read, is the primitive to share rather
-   than generalising datagram semantics onto `SOCK_STREAM`?
-2. Are `0700` same-UID and `2750` capability-group parents the two supported
-   deployment forms, or should v1 require the group form only?
-3. Should the first public core surface be configuration on
-   `maelys_egress_server_t`, as proposed, or an independently embeddable broker
-   handle? The wire, client API and CLI contract do not depend on that choice.
+1. The shared maelys-system primitive is one fixed stream frame, received
+   control-aware across every short read. It does not generalise datagram
+   semantics onto `SOCK_STREAM`; Egress and maelys-system still measure and
+   agree its exact portable API before either contract is frozen.
+2. Both `0700` same-UID and `2750` capability-group parents are supported and
+   tested. Their invariant is identical: the broker owns the parent and the
+   client group can never modify it.
+3. The core surface is an independently embeddable broker handle with its own
+   worker thread, created from a connector. It is not configuration or watches
+   grafted onto `maelys_egress_server_t`. Exact additive function names remain
+   an implementation review; the execution boundary does not.
