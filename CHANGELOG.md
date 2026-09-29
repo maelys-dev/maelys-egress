@@ -1,6 +1,19 @@
 # Changelog
 
-## Unreleased
+## 0.22.4 — 2026-09-29
+
+- Adopt maelys-system 0.10.1 and rebuild the statically linked proxy. Its
+  byte-only Unix socket receive closes attached SCM_RIGHTS instead of letting
+  macOS install them silently. This fixes descriptor exhaustion on the plain
+  Unix proxy listener before authentication and during relay. The integration
+  test attaches fifty descriptors to refused and accepted HTTP requests,
+  relayed data and a SOCKS greeting, and checks the final descriptor count.
+  The optional TLS-provider callbacks use separate I/O and are not covered
+  by this byte-only correction; do not expose TLS-over-Unix to untrusted peers
+  until that path is hardened too. TCP listeners do not carry SCM_RIGHTS.
+- Adopt maelys-release 0.62.2 without runtime changes from the socle. The
+  release hook keeps the shipped Python and Node SDK versions and install
+  examples synchronized with VERSION.
 
 - A runnable Docker Compose example gives an ordinary proxy-aware application
   no ambient network while Egress keeps the only outbound route. A bridge in
