@@ -31,7 +31,10 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 compose config --quiet
-compose up --build -d
+if ! compose up --build -d; then
+    compose logs --no-color
+    exit 1
+fi
 
 app_id=$(compose ps -aq app)
 bridge_id=$(compose ps -aq proxy-bridge)

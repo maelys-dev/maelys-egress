@@ -22,7 +22,9 @@ of the runtime image's built-in user. This lets the socket keep its private
 Authentication remains mandatory: the initializer generates a random token at
 deployment time and writes two owner-only copies, one for Egress and one for
 the separately identified application. No credential is stored in this
-repository or printed in the logs.
+repository or printed in the logs. The initializer also copies the
+configuration to an Egress-owned `0600` inode; a direct bind mount would keep
+the host user's numeric UID on Linux and fail Egress's trusted-file rule.
 
 ## Run it
 

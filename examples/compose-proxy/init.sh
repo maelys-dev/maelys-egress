@@ -9,7 +9,14 @@ app_uid=10002
 app_gid=10002
 
 install -d -o "$egress_uid" -g "$egress_gid" -m 0700 /run/maelys-egress
+install -d -o "$egress_uid" -g "$egress_gid" -m 0700 /run/maelys-config
 install -d -o 0 -g 0 -m 0711 /run/maelys-secrets
+
+# Linux bind mounts preserve the host owner's numeric UID, which is neither
+# root nor the runtime UID on a hosted runner. Materialize a trusted copy so
+# the configuration has the same ownership on Docker Desktop and Linux.
+install -o "$egress_uid" -g "$egress_gid" -m 0600 \
+    /example/egress.conf /run/maelys-config/egress.conf
 
 # Generate one credential at deployment time. Egress and the application get
 # distinct owner-only inodes because the CLI refuses a secret not owned by its

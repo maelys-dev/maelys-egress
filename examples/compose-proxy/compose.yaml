@@ -9,6 +9,8 @@ services:
     entrypoint: ["/bin/sh", "/example/init.sh"]
     volumes:
       - ./init.sh:/example/init.sh:ro
+      - ./egress.conf:/example/egress.conf:ro
+      - egress-config:/run/maelys-config
       - egress-run:/run/maelys-egress
       - egress-secrets:/run/maelys-secrets
     restart: "no"
@@ -22,9 +24,9 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    command: ["serve", "--config", "/etc/maelys-egress.conf", "--non-interactive"]
+    command: ["serve", "--config", "/run/maelys-config/egress.conf", "--non-interactive"]
     volumes:
-      - ./egress.conf:/etc/maelys-egress.conf:ro
+      - egress-config:/run/maelys-config:ro
       - egress-run:/run/maelys-egress
       - egress-secrets:/run/maelys-secrets:ro
     healthcheck:
@@ -68,5 +70,6 @@ services:
     restart: "no"
 
 volumes:
+  egress-config:
   egress-run:
   egress-secrets:
