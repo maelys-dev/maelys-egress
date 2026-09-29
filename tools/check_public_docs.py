@@ -18,6 +18,7 @@ PUBLIC_DOCUMENTS = (
     "SECURITY.md",
     "THIRD_PARTY_NOTICES.md",
     "examples/README.md",
+    "examples/compose-proxy/README.md",
     "sdk/README.md",
     "sdk/python/README.md",
     "sdk/node/README.md",

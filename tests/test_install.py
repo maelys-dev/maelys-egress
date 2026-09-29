@@ -75,6 +75,10 @@ def main():
             assert "Requires" not in client_pc_text, client_pc_text
             assert (stage / "lib/libmaelys_egress_client.a").is_file()
             assert (stage / "include/maelys/egress_client.h").is_file()
+            compose_example = stage / "share/doc/maelys-egress/examples/compose-proxy"
+            assert (compose_example / "compose.yaml").is_file()
+            for script in ("app.sh", "bridge.sh", "init.sh"):
+                assert (compose_example / script).stat().st_mode & 0o777 == 0o755
             assert installed.stat().st_mode & 0o777 == 0o755, oct(installed.stat().st_mode)
             shutil.rmtree(stage)
 

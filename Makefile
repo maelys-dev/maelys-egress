@@ -188,7 +188,8 @@ all: $(STATIC_LIB) $(CLIENT_LIB) $(CLI) $(TEST) $(PC) $(CLIENT_PC) $(MANIFEST)
 	config-reference contract-check lifecycle-contract-check schema-check package-homebrew \
 	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-binaries \
 	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check \
-	public-check reproducible-check install-metadata-check dist client-standalone-check
+	public-check reproducible-check install-metadata-check dist client-standalone-check \
+	compose-proxy-check
 
 ifeq ($(MAELYS_SYSTEM_PREFIX),)
 check-system-contract:
@@ -533,6 +534,11 @@ audit:
 docs-check:
 	python3 tools/check_public_docs.py
 
+# Docker is intentionally not part of the portable `check` target. CI and a
+# developer with Docker use this integration gate for the Compose deployment.
+compose-proxy-check:
+	scripts/test-compose-proxy.sh
+
 # Renders the Homebrew formula for an already-pushed tag (default: VERSION).
 package-homebrew:
 	scripts/render-homebrew-formula.sh v$(VERSION)
@@ -672,6 +678,14 @@ endif
 	install -d $(DESTDIR)$(PREFIX)/share/doc/maelys-egress/examples/c
 	install -m 0644 examples/*.c examples/README.md \
 		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/examples/c/
+	install -d $(DESTDIR)$(PREFIX)/share/doc/maelys-egress/examples/compose-proxy
+	install -m 0644 examples/compose-proxy/README.md \
+		examples/compose-proxy/compose.yaml examples/compose-proxy/egress.conf \
+		examples/compose-proxy/Dockerfile.app examples/compose-proxy/Dockerfile.bridge \
+		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/examples/compose-proxy/
+	install -m 0755 examples/compose-proxy/app.sh examples/compose-proxy/bridge.sh \
+		examples/compose-proxy/init.sh \
+		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/examples/compose-proxy/
 	install -d $(DESTDIR)$(PREFIX)/share/doc/maelys-egress/sdk/python/src/maelys_egress \
 		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/sdk/python/tests \
 		$(DESTDIR)$(PREFIX)/share/doc/maelys-egress/sdk/node/test
@@ -745,8 +759,12 @@ install-metadata-check: all
 		VERSION="$(VERSION)" \
 		MAELYS_DEPENDENCIES_DIR="$(MAELYS_DEPENDENCIES_DIR)" \
 		MAELYS_SYSTEM_DIR="$(MAELYS_SYSTEM_DIR)" \
+		MAELYS_SYSTEM_PIN="$(MAELYS_SYSTEM_PIN)" \
 		MAELYS_SYSTEM_PREFIX="$(MAELYS_SYSTEM_PREFIX)" \
-		MAELYS_CLI_DIR="$(MAELYS_CLI_DIR)"
+		MAELYS_CLI_DIR="$(MAELYS_CLI_DIR)" \
+		MAELYS_CLI_PIN="$(MAELYS_CLI_PIN)" \
+		MAELYS_SPEC_DIR="$(MAELYS_SPEC_DIR)" \
+		MAELYS_SPEC_PIN="$(MAELYS_SPEC_PIN)"
 
 install-check: all
 	@set -e; stage="$$(mktemp -d)"; trap 'rm -rf "$$stage"' EXIT; \

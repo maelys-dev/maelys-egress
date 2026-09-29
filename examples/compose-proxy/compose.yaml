@@ -1,0 +1,75 @@
+name: maelys-egress-proxy-example
+
+services:
+  init:
+    image: ${MAELYS_EGRESS_IMAGE:-maelys-egress-sidecar:local}
+    user: "0:0"
+    network_mode: none
+    read_only: true
+    entrypoint: ["/bin/sh", "/example/init.sh"]
+    volumes:
+      - ./init.sh:/example/init.sh:ro
+      - ./egress.conf:/example/egress.conf:ro
+      - egress-config:/run/maelys-config
+      - egress-run:/run/maelys-egress
+      - egress-secrets:/run/maelys-secrets
+    restart: "no"
+
+  egress:
+    image: ${MAELYS_EGRESS_IMAGE:-maelys-egress-sidecar:local}
+    user: "10001:10001"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command: ["serve", "--config", "/run/maelys-config/egress.conf", "--non-interactive"]
+    volumes:
+      - egress-config:/run/maelys-config:ro
+      - egress-run:/run/maelys-egress
+      - egress-secrets:/run/maelys-secrets:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -S /run/maelys-egress/egress.sock"]
+      interval: 1s
+      timeout: 1s
+      retries: 30
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      TARGET_URL: https://github.com/robots.txt
+    volumes:
+      - egress-secrets:/run/maelys-secrets:ro
+    tmpfs:
+      - /tmp:size=1m,mode=0700,uid=10002,gid=10002
+    restart: "no"
+
+  proxy-bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile.bridge
+    depends_on:
+      egress:
+        condition: service_healthy
+    network_mode: service:app
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - egress-run:/run/maelys-egress:ro
+    restart: "no"
+
+volumes:
+  egress-config:
+  egress-run:
+  egress-secrets:
