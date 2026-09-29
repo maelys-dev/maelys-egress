@@ -943,7 +943,46 @@ static void *unix_upstream_main(void *opaque) {
     return NULL;
 }
 
+static int unix_open_descriptors(void) {
+    int count = 0;
+    for (int fd = 0; fd < 4096; ++fd) if (fcntl(fd, F_GETFD) >= 0) ++count;
+    return count;
+}
+
+/* Exercise the installed System receive through the real proxy. An
+ * AF_UNIX peer can attach rights before authentication or during relay. */
+static int send_with_unwanted_rights(int fd, const void *bytes, size_t length) {
+    int source = open("/dev/null", O_RDONLY);
+    if (source < 0) return 0;
+    int rights[50];
+    for (size_t i = 0; i < 50; ++i) rights[i] = source;
+    union {
+        struct cmsghdr alignment;
+        unsigned char data[CMSG_SPACE(sizeof(rights))];
+    } control;
+    memset(&control, 0, sizeof(control));
+    struct iovec iov = {.iov_base = (void *)(uintptr_t)bytes, .iov_len = length};
+    struct msghdr message;
+    memset(&message, 0, sizeof(message));
+    message.msg_iov = &iov;
+    message.msg_iovlen = 1;
+    message.msg_control = control.data;
+    message.msg_controllen = sizeof(control.data);
+    struct cmsghdr *header = CMSG_FIRSTHDR(&message);
+    header->cmsg_level = SOL_SOCKET;
+    header->cmsg_type = SCM_RIGHTS;
+    header->cmsg_len = CMSG_LEN(sizeof(rights));
+    memcpy(CMSG_DATA(header), rights, sizeof(rights));
+    ssize_t sent;
+    do { sent = sendmsg(fd, &message, 0); } while (sent < 0 && errno == EINTR);
+    (void)close(source);
+    if (sent <= 0) return 0;
+    return (size_t)sent == length ||
+        send_all(fd, (const unsigned char *)bytes + sent, length - (size_t)sent);
+}
+
 static void test_unix_listener(void) {
+    int descriptor_baseline = unix_open_descriptors();
 #if defined(__APPLE__)
     char directory[] = "/private/tmp/maelys-egress-unix-XXXXXX";
 #else
@@ -1073,7 +1112,7 @@ static void test_unix_listener(void) {
         "CONNECT 127.0.0.1:%u HTTP/1.1\r\nHost: 127.0.0.1:%u\r\n"
         "Proxy-Authorization: Bearer fedcba9876543210\r\n\r\n",
         (unsigned int)upstream_port, (unsigned int)upstream_port);
-    CHECK(wrong_length > 0 && send_all(client, wrong_request, (size_t)wrong_length));
+    CHECK(wrong_length > 0 && send_with_unwanted_rights(client, wrong_request, (size_t)wrong_length));
     char denied[512] = {0};
     CHECK(read_http_header(client, denied, sizeof(denied)));
     CHECK(strncmp(denied, "HTTP/1.1 407", 12u) == 0);
@@ -1086,11 +1125,11 @@ static void test_unix_listener(void) {
         "CONNECT 127.0.0.1:%u HTTP/1.1\r\nHost: 127.0.0.1:%u\r\n"
         "Proxy-Authorization: Bearer 0123456789abcdef\r\n\r\n",
         (unsigned int)upstream_port, (unsigned int)upstream_port);
-    CHECK(request_length > 0 && send_all(client, request, (size_t)request_length));
+    CHECK(request_length > 0 && send_with_unwanted_rights(client, request, (size_t)request_length));
     char response[512] = {0};
     CHECK(read_http_header(client, response, sizeof(response)));
     CHECK(strncmp(response, "HTTP/1.1 200", 12u) == 0);
-    CHECK(send_all(client, "ping", 4u));
+    CHECK(send_with_unwanted_rights(client, "ping", 4u));
     char pong[4];
     CHECK(receive_exact(client, pong, sizeof(pong)) && memcmp(pong, "ping", 4u) == 0);
     (void)close(client);
@@ -1099,7 +1138,7 @@ static void test_unix_listener(void) {
     CHECK(client >= 0);
     const unsigned char greeting[] = {5u, 1u, 2u};
     unsigned char small[10];
-    CHECK(send_all(client, greeting, sizeof(greeting)) && receive_exact(client, small, 2u));
+    CHECK(send_with_unwanted_rights(client, greeting, sizeof(greeting)) && receive_exact(client, small, 2u));
     unsigned char auth[25] = {1u, 6u};
     memcpy(auth + 2u, "maelys", 6u);
     auth[8] = 16u;
@@ -1138,6 +1177,7 @@ static void test_unix_listener(void) {
     (void)pthread_cond_destroy(&proxy.condition);
     (void)pthread_mutex_destroy(&proxy.lock);
     CHECK(rmdir(directory) == 0);
+    CHECK(unix_open_descriptors() == descriptor_baseline);
 }
 
 #define RELAY_STRESS_BYTES (256u * 1024u)
