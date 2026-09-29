@@ -94,27 +94,44 @@ in the frozen channel.
 
 The listener is filesystem `AF_UNIX` `SOCK_STREAM`. `SOCK_SEQPACKET` is not a
 portable alternative: Linux provides it for Unix sockets and macOS does not.
-The current maelys-system `fdpass` primitive accepts connected Unix
-`SOCK_DGRAM` sockets only, so implementation depends on a maelys-system
-primitive that passes descriptors with a fixed stream frame and retains the
-same guarantees: every delivered descriptor is observed, surplus descriptors
-are closed, and returned descriptors are `CLOEXEC`.
+The existing maelys-system `fdpass` operations accept Unix `SOCK_DGRAM`
+sockets only. Implementation depends on two additive partial stream I/O
+operations, `maelys_sys_fd_stream_send` and
+`maelys_sys_fd_stream_receive`, in the same standalone `fdpass.o`. They move
+bytes and descriptors, not frames: every delivered descriptor is observed,
+surplus descriptors are closed, and returned descriptors are `CLOEXEC`.
+Egress owns fixed frame sizes, progress, descriptor cardinality, abandonment
+and absolute deadlines. Extending the old datagram functions by relaxing
+their socket-type check is not sufficient: their send has no byte count.
 
 There is one request and one response per accepted connection. Both have fixed
 sizes, so the receiver reads exactly that size across short reads. Every read
 of an untrusted stream is a `recvmsg` with room for every descriptor either
 supported kernel can attach; using `read` for an initial fragment would repeat
 the macOS descriptor-leak class corrected in Egress 0.22.1.
+Neither `read`, `recv` nor `MSG_PEEK` is permitted on the bootstrap or lease.
+Even zero bytes received can carry rights on macOS; discarded surplus must
+remain observable, not become a false EOF. Linux `SO_PASSCRED` can accompany
+EOF with credentials alone, which must not keep a dead lease alive.
 
 The response descriptor is attached to the first response byte. A short
 `sendmsg` may deliver the descriptor with only part of the fixed frame; the
 sender writes the remaining bytes without attaching it again. A receiver does
 not accept the descriptor until the entire response has arrived and validated.
 If the frame ends early, every descriptor already received is closed.
+An unsuccessful send with zero progress retains the descriptor for a retry;
+positive byte progress means the descriptor was queued once, not that the
+peer acknowledged it. Empty rights-bearing sends are refused by the shared
+stream API, since Linux and macOS give them different meanings.
 
 The accepted socket and the listener are nonblocking. Finite absolute
 monotonic deadlines bound connect, request receipt and response delivery;
 signals consume the same interval rather than restarting it.
+The shared stream operations must verify nonblocking mode without changing
+the socket's flags. A macOS blocking send with rights can wait when only part
+of the needed buffer space is free; the observed full-queue `EMSGSIZE` is not
+a guarantee of nonblocking execution. Egress bounds work per reactor turn
+as well as total elapsed time, including control-only records.
 
 ## Messages
 
@@ -198,7 +215,11 @@ side sends another byte. The broker retains all three of:
 
 It closes the copy of the client channel descriptor immediately after the
 response send succeeds or fails. On success, EOF or any byte on the lease
-causes the broker worker to destroy the channel and release the slot. On failed
+causes the broker worker to destroy the channel and release the slot. Any
+rights or unexpected ancillary data on the lease are also a protocol
+violation: the worker receives them through the shared control-aware stream
+operation, closes them and destroys the channel. Polling for readability
+followed by an ordinary byte read is not safe. On failed
 or incomplete response delivery, the worker destroys the channel before
 releasing the accepted connection. A process exit closes both client
 descriptors and therefore reclaims the server-side thread even on a kernel
@@ -316,8 +337,9 @@ This additive opaque type and these new functions leave
 when an existing layout or semantic contract becomes incompatible, not when a
 header only gains symbols. The standalone boundary does not change: the
 archive contains no Egress core and no thread runtime. It may take from
-maelys-system only the new standalone stream descriptor-passing object beside
-the existing `fdpass.o`, with no undefined `maelys_sys_` or `pthread_` symbol.
+maelys-system only the existing member `fdpass.o`, extended with the stream
+operations, with no undefined `maelys_sys_` or `pthread_` symbol. No second
+transport object, thread runtime, clock or frame-state type is added to System.
 
 ## Proposed CLI and configuration surface
 
@@ -430,6 +452,12 @@ macOS:
   status; ancillary truncation; all unexpected descriptors closed;
 - fifty descriptors attached to a valid request, with the process descriptor
   count unchanged after `MALFORMED` on macOS and Linux;
+- rights attached to every fragment and to an idle lease, including macOS
+  zero-byte control-only records; a control-only flood cannot monopolise the
+  worker or extend an absolute deadline;
+- partial sends attach the descriptor exactly once; a zero-progress retry
+  still attaches it; test empty/full queues, `EINTR`, Linux `SO_PASSCRED` and
+  macOS near-full queues, not just a completely full queue;
 - a client that stops mid-request, never reads the response, trickles until the
   deadline, writes after `OK`, or exits while its channel is idle;
 - response delivery failure after channel creation, with no channel thread,
@@ -453,10 +481,14 @@ continue unchanged. Bootstrap conformance is additional, not a replacement.
 
 ## Implementation order
 
-1. Agree this proposal with maelys-system on the fixed-frame Unix-stream
-   descriptor primitive; measure Linux and macOS before freezing it.
-2. Add that standalone primitive and its descriptor-flood, partial-frame,
-   close-on-exec and fault tests in maelys-system.
+1. Fix System's existing byte-only Unix receive independently and rebuild
+   Egress against that patch; static consumers do not inherit a fix merely
+   because an installed System package was upgraded.
+2. Amend System's admission rule explicitly for a transport variant of an
+   already admitted primitive carrying measured kernel divergences. Egress
+   is its one direct consumer; Warden's descriptor inheritance is not a
+   second bootstrap consumer. Agree the two partial operations and add their
+   descriptor-flood, partial-I/O, close-on-exec and fault tests in System.
 3. Add the bootstrap codec and client opaque handle in
    `libmaelys_egress_client`.
 4. Add the independent broker handle and worker thread to the core library,
@@ -475,10 +507,12 @@ this broker must preserve the lease as well as the channel descriptor.
 
 ## Review decisions before implementation
 
-1. The shared maelys-system primitive is one fixed stream frame, received
-   control-aware across every short read. It does not generalise datagram
-   semantics onto `SOCK_STREAM`; Egress and maelys-system still measure and
-   agree its exact portable API before either contract is frozen.
+1. System owns two partial, control-aware Unix-stream operations in
+   `fdpass.o`, with explicit byte counts and descriptor ownership. Egress
+   owns framing, progress and deadlines. There is no public frame-state
+   structure and no exception to Egress's `sendmsg`/`recvmsg` boundary audit.
+   Both kernels' measured behavior and the receive output flags must support
+   descriptor rejection even with zero byte progress before the API freezes.
 2. Both `0700` same-UID and `2750` capability-group parents are supported and
    tested. Their invariant is identical: the broker owns the parent and the
    client group can never modify it.
