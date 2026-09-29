@@ -19,12 +19,14 @@
 #include "maelys/sys/fdpass.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <poll.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 static void set_error(char **out_error, const char *format, ...)
@@ -83,19 +85,52 @@ static const char *transfer_failure(maelys_sys_result_t result) {
     }
 }
 
-/* Waits for the response within the deadline. Returns 1 when readable, 0 on
- * the deadline, -1 on a poll failure. */
+static int elapsed_ms(
+    const struct timespec *started, const struct timespec *now, uint64_t *out_elapsed) {
+    if (now->tv_sec < started->tv_sec ||
+        (now->tv_sec == started->tv_sec && now->tv_nsec < started->tv_nsec)) {
+        errno = EIO;
+        return 0;
+    }
+    uint64_t seconds = (uint64_t)(now->tv_sec - started->tv_sec);
+    long nanoseconds = now->tv_nsec - started->tv_nsec;
+    if (nanoseconds < 0) {
+        --seconds;
+        nanoseconds += 1000000000L;
+    }
+    if (seconds > UINT64_MAX / 1000u) {
+        *out_elapsed = UINT64_MAX;
+    } else {
+        *out_elapsed = seconds * 1000u + (uint64_t)nanoseconds / 1000000u;
+    }
+    return 1;
+}
+
+/* Waits for the response within one monotonic deadline. Returns 1 when
+ * readable, 0 on the deadline, -1 on a clock or poll failure. */
 static int await_response(int channel_fd, uint64_t read_timeout_ms) {
+    struct timespec started = {0};
+    if (read_timeout_ms && clock_gettime(CLOCK_MONOTONIC, &started) != 0) return -1;
     for (;;) {
         struct pollfd descriptor = {.fd = channel_fd, .events = POLLIN};
         int timeout = -1;
         if (read_timeout_ms) {
-            timeout = read_timeout_ms > 0x7fffffffu ? 0x7fffffff : (int)read_timeout_ms;
+            struct timespec now;
+            uint64_t elapsed = 0u;
+            if (clock_gettime(CLOCK_MONOTONIC, &now) != 0 ||
+                !elapsed_ms(&started, &now, &elapsed)) {
+                return -1;
+            }
+            if (elapsed >= read_timeout_ms) return 0;
+            uint64_t remaining = read_timeout_ms - elapsed;
+            timeout = remaining > (uint64_t)INT_MAX ? INT_MAX : (int)remaining;
         }
         int ready = poll(&descriptor, 1u, timeout);
         if (ready < 0 && errno == EINTR) continue;
         if (ready < 0) return -1;
-        return ready > 0;
+        if (ready > 0) return 1;
+        /* A finite wait is split at INT_MAX and is also rechecked against
+         * the monotonic origin in case poll rounded or returned early. */
     }
 }
 

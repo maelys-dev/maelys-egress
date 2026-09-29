@@ -41,12 +41,13 @@ typedef enum maelys_egress_client_result {
  *
  * channel_fd is the client end of a channel, owned by the caller throughout.
  * host is the canonical host of a destination the supervisor's policy allows;
- * port is 1..65535. read_timeout_ms bounds the wait for the answer: choose
- * at least the server's connect deadline, which the supervisor knows; 0 waits
- * without bound. When the deadline passes, the channel is shut down and
- * ERR_UNANSWERED is returned: with one request in flight and no identifier,
- * a late answer would be paired with the wrong request, so a further call
- * on that channel fails with ERR_IO; the caller still closes the descriptor.
+ * port is 1..65535. read_timeout_ms bounds the wait for the answer as one
+ * monotonic interval: signals do not restart it. Choose at least the server's
+ * connect deadline, which the supervisor knows; 0 waits without bound. When
+ * the deadline passes, the channel is shut down and ERR_UNANSWERED is
+ * returned: with one request in flight and no identifier, a late answer
+ * would be paired with the wrong request, so a further call on that channel
+ * fails with ERR_IO; the caller still closes the descriptor.
  *
  * On OK, *out_stream_fd is a blocking CLOEXEC TCP stream: Egress's own end
  * of a private relay, never the upstream socket. Its opening says nothing

@@ -318,9 +318,11 @@ void maelys_egress_session_release(maelys_egress_session_t *session);
  * another address space asks this connector for destinations and receives
  * each stream as a passed descriptor, speaking the protocol of
  * <maelys/egress_channel.h>. A thread serves the channel, one request at a
- * time, in order, from creation until destroy. The connector is retained;
- * every session it opens is bound to the connector's principal, and the
- * request has no field to name another.
+ * time and in order. It ends at destroy, when the peer goes away, or when a
+ * response cannot be queued; the last case closes the channel rather than
+ * let a client that does not read block the worker. The connector is
+ * retained; every session it opens is bound to the connector's principal,
+ * and the request has no field to name another.
  *
  * *out_client_fd is the other end, CLOEXEC, owned by the caller: the
  * supervisor hands it to the confined process, at the descriptor number of

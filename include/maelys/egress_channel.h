@@ -14,8 +14,7 @@ extern "C" {
  * before attaching the stream as ancillary data. This header names bytes
  * only — no descriptor, no socket, no policy — and its codec is compiled into
  * both the server library and the client archive, so the two sides can never
- * disagree on a field. The contract is proposals/egress-channel-v1.md until
- * v1 freezes; it then moves under protocol/.
+ * disagree on a field. The frozen contract is protocol/egress-channel-v1.md.
  *
  * Integers are big-endian. A request is a 10-byte header followed by the
  * host; a response is 8 bytes. Both travel as one datagram each.
