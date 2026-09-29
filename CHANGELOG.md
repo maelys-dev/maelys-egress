@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Adopt maelys-release 0.62.1, which asks nothing of a product: two workflow
+  pins follow.
+
 ## 0.22.2 — 2026-09-28
 
 - Descriptors cross the channel through maelys-system's `fdpass`, adopted
