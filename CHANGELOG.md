@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- A runnable Docker Compose example gives an ordinary proxy-aware application
+  no ambient network while Egress keeps the only outbound route. A bridge in
+  the application's network namespace exposes authenticated HTTP proxying on
+  loopback and relays it to Egress's private Unix socket; deployment-time
+  initialization creates owner-only token copies for the two identities. The
+  integration gate proves that direct access fails, the allowed request
+  succeeds through Egress, and the application and bridge have exactly the
+  intended Docker network modes. The example is installed with the other
+  documentation.
+
 ## 0.22.3 — 2026-09-29
 
 - The native channel server cannot be held inside `sendmsg` by a confined

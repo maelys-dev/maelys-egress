@@ -133,10 +133,16 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Materialize pinned dependencies for the deployment image
+        run: sh scripts/checkout-dependencies.sh "$RUNNER_TEMP/dependencies" >>"$GITHUB_ENV"
       # Measured: a layer cache brings this job from 41 s to 37 s warm and
       # 117 s cold, so the plain build stays.
       - run: docker build -f docker/Dockerfile.test -t maelys-egress-test .
       - run: docker run --rm maelys-egress-test
+      - name: Exercise the networkless Compose deployment
+        env:
+          MAELYS_EGRESS_IMAGE: maelys-egress-sidecar:compose-test
+        run: make compose-proxy-check
 
   package:
     strategy:

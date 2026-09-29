@@ -175,8 +175,10 @@ maelys-egress serve --config /etc/maelys-egress.conf
 ```
 
 Deployment examples are provided as a [systemd unit](packaging/systemd/maelys-egress.service),
-a [launchd service](packaging/launchd/com.maelys.egress.plist) and a
-[container sidecar Dockerfile](docker/Dockerfile.sidecar).
+a [launchd service](packaging/launchd/com.maelys.egress.plist), a
+[container sidecar Dockerfile](docker/Dockerfile.sidecar), and a
+[Docker Compose deployment](examples/compose-proxy/README.md) in which an
+ordinary proxy-aware application has `network_mode: none`.
 
 ### Native connector
 
