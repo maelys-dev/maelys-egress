@@ -10,6 +10,18 @@ static unsigned next_flags;
 static size_t next_bytes;
 static int next_errno;
 static int calls;
+static sa_family_t advertised_family;
+static int address_error;
+
+/* Keep real stream I/O while simulating a family whose usable endpoints
+ * require a VM, such as AF_VSOCK. No VM setup is needed in the default gate. */
+static int test_getsockname(int fd, struct sockaddr *address, socklen_t *length) {
+    if (address_error) { errno = EIO; return -1; }
+    int result = getsockname(fd, address, length);
+    if (result == 0 && advertised_family != AF_UNSPEC)
+        address->sa_family = advertised_family;
+    return result;
+}
 
 maelys_sys_result_t maelys_sys_fd_stream_receive(int fd, void *buffer,
     size_t capacity, size_t *out_received, int *out_fds, size_t fd_capacity,
@@ -24,10 +36,44 @@ maelys_sys_result_t maelys_sys_fd_stream_receive(int fd, void *buffer,
     return next_result;
 }
 
-/* Test the exact production adapter with only its fdpass boundary replaced. */
+/* Test the production adapter with controlled fdpass outcomes and family
+ * discovery; fcntl, SO_TYPE and byte-stream reads still reach the kernel. */
+#define getsockname test_getsockname
 #include "providers/socket_io.c"
+#undef getsockname
+
+static void other_stream_family(void) {
+    int pair[2];
+    fixture_pair(1, pair);
+    int original_flags = fcntl(pair[1], F_GETFL);
+    advertised_family = AF_VSOCK;
+    egress_tls_socket_t transport;
+    REQUIRE(egress_tls_socket_init(&transport, pair[1]) == 0);
+    REQUIRE(!transport.unix_stream && !transport.failed);
+    char bytes[8];
+    int before = calls;
+    REQUIRE(egress_tls_socket_receive(&transport, bytes, sizeof(bytes)) == -1);
+    REQUIRE(errno == EAGAIN || errno == EWOULDBLOCK);
+    REQUIRE(send(pair[0], "x", 1, 0) == 1);
+    fixture_readable(pair[1]);
+    REQUIRE(egress_tls_socket_receive(&transport, bytes, sizeof(bytes)) == 1 && bytes[0] == 'x');
+    REQUIRE(shutdown(pair[0], SHUT_WR) == 0);
+    fixture_readable(pair[1]);
+    REQUIRE(egress_tls_socket_receive(&transport, bytes, sizeof(bytes)) == 0);
+    REQUIRE(calls == before && fcntl(pair[1], F_GETFL) == original_flags);
+
+    /* A failed family lookup must never silently select the byte-only path. */
+    address_error = 1;
+    REQUIRE(egress_tls_socket_init(&transport, pair[1]) == -1);
+    REQUIRE(transport.failed && transport.fd == -1);
+    address_error = 0;
+    advertised_family = AF_UNSPEC;
+    close(pair[0]); close(pair[1]);
+}
 
 int main(void) {
+    fixture_limits();
+    other_stream_family();
     egress_tls_socket_t transport = {.fd = 42, .unix_stream = 1};
     char bytes[8];
     next_result = MAELYS_SYS_OK;

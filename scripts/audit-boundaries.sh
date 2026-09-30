@@ -98,7 +98,7 @@ if grep_tree '(^|[^A-Za-z0-9_.>])(sendmsg|recvmsg)[[:space:]]*\(' src client pro
     exit 1
 fi
 
-# The optional TLS stacks use one transport adapter. Only its proven IP
+# The optional TLS stacks use one transport adapter. Only its proven non-Unix
 # branch may read plain bytes; Unix reads always drain ancillary data.
 if grep_tree '(^|[^A-Za-z0-9_.>])(read|recv|recvfrom|readv)[[:space:]]*\(|MSG_PEEK' \
     --exclude=socket_io.c providers; then

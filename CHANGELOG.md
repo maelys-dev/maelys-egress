@@ -6,7 +6,8 @@
   transports on Unix stream sockets. Their shared receive adapter drains
   ancillary data through System's fdpass, closes every attached descriptor
   and permanently rejects the TLS session on unexpected control data,
-  including macOS control-only messages. TCP keeps its byte-only transport;
+  including macOS control-only messages. Other stream families retain their
+  byte-only transport, including AF_VSOCK as required by the TLS seam;
   providers still borrow sockets without closing or changing their mode.
   This closes the optional TLS-over-Unix gap documented in 0.22.4.
 - Regression tests inject descriptors into genuine TLS handshake and data

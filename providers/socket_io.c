@@ -17,9 +17,7 @@ int egress_tls_socket_init(egress_tls_socket_t *socket, int fd) {
     if (flags < 0 || !(flags & O_NONBLOCK) ||
         getsockopt(fd, SOL_SOCKET, SO_TYPE, &type, &type_length) != 0 ||
         type != SOCK_STREAM ||
-        getsockname(fd, (struct sockaddr *)&address, &address_length) != 0 ||
-        (address.ss_family != AF_UNIX && address.ss_family != AF_INET &&
-         address.ss_family != AF_INET6)) {
+        getsockname(fd, (struct sockaddr *)&address, &address_length) != 0) {
         errno = EINVAL;
         return -1;
     }
@@ -36,7 +34,8 @@ ssize_t egress_tls_socket_receive(
     }
     if (socket->failed) { errno = EPROTO; return -1; }
     if (!socket->unix_stream) {
-        /* Only IP streams reach this branch; they cannot carry SCM_RIGHTS. */
+        /* SCM_RIGHTS belongs to AF_UNIX on Linux/macOS. Other stream
+         * families retain the byte transport promised by the TLS seam. */
         return recv(socket->fd, buffer, capacity, 0);
     }
     size_t received = 0, fd_count = 0;
