@@ -43,7 +43,18 @@ PY
         BUILD=build/mutant test >"$work/$name.log" 2>&1; then
         printf 'survived\n' >"$work/$name.result"
     else
-        printf 'killed\n' >"$work/$name.result"
+        case "$name" in
+        tls-*)
+            # A compile failure or an unrelated suite timeout is not proof
+            # that the TLS regression test detected this transport mutant.
+            if grep -q '^FAIL tests/test_tls_socket' "$work/$name.log"; then
+                printf 'killed\n' >"$work/$name.result"
+            else
+                printf 'invalid (no TLS assertion)\n' >"$work/$name.result"
+                tail -20 "$work/$name.log" >&2
+            fi ;;
+        *) printf 'killed\n' >"$work/$name.result" ;;
+        esac
     fi
 }
 
@@ -69,13 +80,24 @@ run_mutant channel-request-rights src/channel_server.c \
 run_mutant channel-status-denied src/channel_server.c \
     'case MAELYS_EGRESS_ERR_DENIED: return MAELYS_EGRESS_CHANNEL_DENIED;' \
     'case MAELYS_EGRESS_ERR_DENIED: return MAELYS_EGRESS_CHANNEL_OK;' &
+run_mutant tls-ignore-control providers/socket_io.c \
+    'if (flags != 0 || received == 0)' 'if (received == 0)' &
+run_mutant tls-resume-poisoned providers/socket_io.c \
+    'if (socket->failed) { errno = EPROTO; return -1; }' \
+    'socket->failed = 0;' &
+run_mutant tls-raw-unix-read providers/socket_io.c \
+    'if (!socket->unix_stream)' 'if (socket->fd >= 0)' &
+run_mutant tls-stream-family-restriction providers/socket_io.c \
+    'getsockname(fd, (struct sockaddr *)&address, &address_length) != 0)' \
+    'getsockname(fd, (struct sockaddr *)&address, &address_length) != 0 || (address.ss_family != AF_UNIX && address.ss_family != AF_INET && address.ss_family != AF_INET6))' &
 wait
 
 killed=0
 total=0
 for name in sni-host-mismatch authority-mismatch credential-compare \
     destination-port relay-half-close channel-host-bound channel-request-rights \
-    channel-status-denied; do
+    channel-status-denied tls-ignore-control tls-resume-poisoned tls-raw-unix-read \
+    tls-stream-family-restriction; do
     total=$((total + 1))
     result=$(cat "$work/$name.result" 2>/dev/null || printf 'missing')
     if test "$result" = killed; then

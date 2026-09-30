@@ -1,4 +1,5 @@
 #include "maelys/egress_tls_modules.h"
+#include "providers/socket_io.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -36,7 +37,7 @@ typedef struct mbedtls_provider_context {
 
 typedef struct mbedtls_provider_session {
     mbedtls_ssl_context ssl;
-    int fd;
+    egress_tls_socket_t socket;
     char error[192];
 } mbedtls_provider_session_t;
 
@@ -58,12 +59,13 @@ static void set_creation_error(char **out_error, const char *prefix, int code) {
 
 static int socket_send(void *context, const unsigned char *buffer, size_t length) {
     mbedtls_provider_session_t *session = context;
+    if (session->socket.failed) return MBEDTLS_ERR_NET_SEND_FAILED;
     size_t bounded = length > (size_t)INT_MAX ? (size_t)INT_MAX : length;
     int flags = 0;
 #ifdef MSG_NOSIGNAL
     flags = MSG_NOSIGNAL;
 #endif
-    ssize_t sent = send(session->fd, buffer, bounded, flags);
+    ssize_t sent = send(session->socket.fd, buffer, bounded, flags);
     if (sent >= 0) return (int)sent;
     if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
         return MBEDTLS_ERR_SSL_WANT_WRITE;
@@ -74,7 +76,7 @@ static int socket_send(void *context, const unsigned char *buffer, size_t length
 static int socket_receive(void *context, unsigned char *buffer, size_t length) {
     mbedtls_provider_session_t *session = context;
     size_t bounded = length > (size_t)INT_MAX ? (size_t)INT_MAX : length;
-    ssize_t received = recv(session->fd, buffer, bounded, 0);
+    ssize_t received = egress_tls_socket_receive(&session->socket, buffer, bounded);
     if (received >= 0) return (int)received;
     if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
         return MBEDTLS_ERR_SSL_WANT_READ;
@@ -92,6 +94,11 @@ static void remember_error(mbedtls_provider_session_t *session, int code) {
 
 static maelys_egress_tls_step_t translate(
     mbedtls_provider_session_t *session, int result, int zero_is_closed) {
+    if (session->socket.failed) {
+        (void)snprintf(session->error, sizeof(session->error),
+                       "unexpected ancillary data on Unix TLS transport");
+        return MAELYS_EGRESS_TLS_FAILED;
+    }
     if (result > 0 || (result == 0 && !zero_is_closed)) {
         return MAELYS_EGRESS_TLS_COMPLETE;
     }
@@ -120,7 +127,10 @@ static maelys_egress_result_t session_create(
     }
     mbedtls_provider_session_t *session = calloc(1, sizeof(*session));
     if (!session) return MAELYS_EGRESS_ERR_MEMORY;
-    session->fd = fd;
+    if (egress_tls_socket_init(&session->socket, fd) != 0) {
+        free(session);
+        return MAELYS_EGRESS_ERR_ARGUMENT;
+    }
     mbedtls_ssl_init(&session->ssl);
     int result = mbedtls_ssl_setup(&session->ssl,
         role == MAELYS_EGRESS_TLS_SERVER ? &context->server_config :
@@ -142,6 +152,7 @@ static maelys_egress_result_t session_create(
 static maelys_egress_tls_step_t handshake(void *context, void *opaque) {
     (void)context;
     mbedtls_provider_session_t *session = opaque;
+    if (session->socket.failed) return MAELYS_EGRESS_TLS_FAILED;
     return translate(session, mbedtls_ssl_handshake(&session->ssl), 0);
 }
 
@@ -151,8 +162,9 @@ static maelys_egress_tls_step_t tls_read(
     mbedtls_provider_session_t *session = opaque;
     if (out_read) *out_read = 0u;
     if (!session || !buffer || !capacity || !out_read) return MAELYS_EGRESS_TLS_FAILED;
+    if (session->socket.failed) return MAELYS_EGRESS_TLS_FAILED;
     int result = mbedtls_ssl_read(&session->ssl, buffer, capacity);
-    if (result > 0) *out_read = (size_t)result;
+    if (result > 0 && !session->socket.failed) *out_read = (size_t)result;
     return translate(session, result, 1);
 }
 
@@ -163,14 +175,16 @@ static maelys_egress_tls_step_t tls_write(
     mbedtls_provider_session_t *session = opaque;
     if (out_written) *out_written = 0u;
     if (!session || !buffer || !length || !out_written) return MAELYS_EGRESS_TLS_FAILED;
+    if (session->socket.failed) return MAELYS_EGRESS_TLS_FAILED;
     int result = mbedtls_ssl_write(&session->ssl, buffer, length);
-    if (result > 0) *out_written = (size_t)result;
+    if (result > 0 && !session->socket.failed) *out_written = (size_t)result;
     return translate(session, result, 0);
 }
 
 static maelys_egress_tls_step_t tls_shutdown(void *context, void *opaque) {
     (void)context;
     mbedtls_provider_session_t *session = opaque;
+    if (session->socket.failed) return MAELYS_EGRESS_TLS_FAILED;
     return translate(session, mbedtls_ssl_close_notify(&session->ssl), 0);
 }
 
