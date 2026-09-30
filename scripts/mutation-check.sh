@@ -53,6 +53,13 @@ PY
                 printf 'invalid (no TLS assertion)\n' >"$work/$name.result"
                 tail -20 "$work/$name.log" >&2
             fi ;;
+        bootstrap-blocking-destruction)
+            if grep -Eq '^FAIL (\./)?tests/test_broker_faults\.c:' "$work/$name.log"; then
+                printf 'killed\n' >"$work/$name.result"
+            else
+                printf 'invalid (no broker progress assertion)\n' >"$work/$name.result"
+                tail -20 "$work/$name.log" >&2
+            fi ;;
         bootstrap-*)
             if grep -Eq '^FAIL (\./)?tests/(test_(bootstrap_client|operations|broker_faults)\.c|tls_socket_fixture\.h):' "$work/$name.log"; then
                 printf 'killed\n' >"$work/$name.result"
@@ -112,6 +119,9 @@ run_mutant bootstrap-lease-destruction src/channel_broker.c \
 run_mutant bootstrap-early-busy client/channel_open.c \
     'if (io == MAELYS_SYS_ERR_CLOSED || io == MAELYS_SYS_ERR_RESET) break;' \
     'if (io == MAELYS_SYS_ERR_CLOSED || io == MAELYS_SYS_ERR_RESET) goto fail;' &
+run_mutant bootstrap-blocking-destruction src/channel_broker.c \
+    '    egress_channel_stop(slot->channel);' \
+    '    maelys_egress_channel_destroy(slot->channel); reset_slot(slot); return;' &
 wait
 
 killed=0
@@ -120,7 +130,8 @@ for name in sni-host-mismatch authority-mismatch credential-compare \
     destination-port relay-half-close channel-host-bound channel-request-rights \
     channel-status-denied tls-ignore-control tls-resume-poisoned tls-raw-unix-read \
     tls-stream-family-restriction bootstrap-identity-field bootstrap-descriptor-cardinality \
-    bootstrap-capacity-release bootstrap-lease-destruction bootstrap-early-busy; do
+    bootstrap-capacity-release bootstrap-lease-destruction bootstrap-early-busy \
+    bootstrap-blocking-destruction; do
     total=$((total + 1))
     result=$(cat "$work/$name.result" 2>/dev/null || printf 'missing')
     if test "$result" = killed; then

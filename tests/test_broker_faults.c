@@ -13,6 +13,8 @@
 
 static atomic_int send_fault, send_calls, rights_sent, hold_open, entered, release_open, destroying;
 static atomic_int refuse_send, busy_sent;
+static atomic_int destroyed;
+static int fail_worker;
 
 static maelys_sys_result_t partial_send(int socket_fd, const void *bytes,
     size_t length, int passed_fd, size_t *sent) {
@@ -51,12 +53,25 @@ static maelys_egress_result_t held_open(maelys_egress_connector_t *connector,
 #undef maelys_egress_connector_session_open
 
 static void joining_channel(maelys_egress_channel_t *channel) {
+    int present = channel != NULL;
     if (channel && atomic_load(&entered)) atomic_store(&destroying, 1);
     maelys_egress_channel_destroy(channel);
+    if (present) atomic_fetch_add(&destroyed, 1);
+}
+static maelys_sys_result_t failing_worker(const char *name, maelys_sys_thread_fn function,
+    void *context, maelys_sys_thread_t **thread) {
+    if ((fail_worker == 1 && !strcmp(name, "egress-reaper")) ||
+        (fail_worker == 2 && !strcmp(name, "egress-broker"))) {
+        *thread = NULL;
+        return MAELYS_SYS_ERR_OS;
+    }
+    return maelys_sys_thread_create(name, function, context, thread);
 }
 #define maelys_sys_fd_stream_send partial_send
 #define maelys_egress_channel_destroy joining_channel
+#define maelys_sys_thread_create failing_worker
 #include "src/channel_broker.c"
+#undef maelys_sys_thread_create
 #undef maelys_egress_channel_destroy
 #undef maelys_sys_fd_stream_send
 
@@ -99,6 +114,21 @@ static void wait_flag(atomic_int *flag) {
     REQUIRE(atomic_load(flag));
 }
 
+static maelys_egress_client_channel_t *open_when_available(const char *path) {
+    uint64_t deadline = 0u, now = 0u;
+    REQUIRE(maelys_sys_deadline_after(2000u, &deadline) == MAELYS_SYS_OK);
+    maelys_egress_client_channel_t *client = NULL;
+    maelys_egress_client_result_t result;
+    do {
+        result = maelys_egress_client_channel_open(path, 1000u, &client, NULL);
+        if (result != MAELYS_EGRESS_CLIENT_ERR_BUSY) break;
+        struct timespec delay = {.tv_nsec = 1000000L}; nanosleep(&delay, NULL);
+        REQUIRE(maelys_sys_monotonic_ms(&now) == MAELYS_SYS_OK);
+    } while (now < deadline);
+    REQUIRE(result == MAELYS_EGRESS_CLIENT_OK && client);
+    return client;
+}
+
 int main(void) {
     fixture_limits(); int baseline = fixture_fd_count();
     test_server_t test = {0}; atomic_init(&test.ready, 0);
@@ -117,6 +147,12 @@ int main(void) {
     REQUIRE(mkdtemp(template)); char *directory = realpath(template, NULL); REQUIRE(directory);
     char path[104]; REQUIRE(snprintf(path, sizeof(path), "%s/s", directory) > 0);
     maelys_egress_channel_broker_t *broker = NULL;
+    int before_broker = fixture_fd_count();
+    for (fail_worker = 1; fail_worker <= 2; ++fail_worker) {
+        REQUIRE(maelys_egress_channel_broker_create(connector, path, 1000u, 500u, 1u, &broker, NULL) == MAELYS_EGRESS_ERR_IO);
+        REQUIRE(!broker && access(path, F_OK) != 0 && fixture_fd_count() == before_broker);
+    }
+    fail_worker = 0;
     REQUIRE(maelys_egress_channel_broker_create(connector, path, 1000u, 500u, 1u, &broker, NULL) == MAELYS_EGRESS_OK);
     atomic_store(&send_fault, 1);
     maelys_egress_client_channel_t *client = NULL;
@@ -128,6 +164,15 @@ int main(void) {
     REQUIRE(maelys_egress_client_channel_open(path, 1000u, &busy, NULL) == MAELYS_EGRESS_CLIENT_ERR_BUSY);
     REQUIRE(!busy);
     atomic_store(&refuse_send, 0);
+    maelys_egress_client_channel_close(client);
+    REQUIRE(maelys_egress_channel_broker_destroy(broker, NULL) == MAELYS_EGRESS_OK);
+
+    /* Three slots: one held in destruction, one healthy lease, one partial
+     * handshake. A blocked reaper must neither stall the reactor nor release
+     * its capacity early. Keep the first open suspended until all proofs end. */
+    atomic_store(&destroyed, 0);
+    REQUIRE(maelys_egress_channel_broker_create(connector, path, 1000u, 1000u, 3u, &broker, NULL) == MAELYS_EGRESS_OK);
+    client = open_when_available(path);
     atomic_store(&hold_open, 1);
     unsigned char request[MAELYS_EGRESS_CHANNEL_REQUEST_MAX_SIZE];
     size_t length = maelys_egress_channel_encode_request("held.invalid", 443u, request, sizeof(request));
@@ -136,7 +181,39 @@ int main(void) {
     maelys_egress_client_channel_close(client);
     wait_flag(&destroying);
 
-    /* A real HTTP proxy request completes WHILE the broker is joining the
+    maelys_egress_client_channel_t *healthy = NULL, *third = NULL;
+    REQUIRE(maelys_egress_client_channel_open(path, 1000u, &healthy, NULL) == MAELYS_EGRESS_CLIENT_OK);
+    int slow = socket(AF_UNIX, SOCK_STREAM, 0); REQUIRE(slow >= 0);
+    struct sockaddr_un unix_address = {.sun_family = AF_UNIX};
+    strcpy(unix_address.sun_path, path);
+    REQUIRE(connect(slow, (struct sockaddr *)&unix_address, sizeof(unix_address)) == 0);
+    REQUIRE(send(slow, "M", 1u, 0) == 1);
+    REQUIRE(maelys_egress_client_channel_open(path, 1000u, &busy, NULL) == MAELYS_EGRESS_CLIENT_ERR_BUSY);
+    REQUIRE(!busy && !atomic_load(&release_open));
+    fixture_readable(slow);
+    char extra;
+    REQUIRE(recv(slow, &extra, 1u, 0) == 0); close(slow);
+    REQUIRE(!atomic_load(&release_open));
+    REQUIRE(maelys_egress_client_channel_open(path, 1000u, &third, NULL) == MAELYS_EGRESS_CLIENT_OK);
+
+    /* Lease violations are processed even while the first destruction waits.
+     * Observe EOF on both leases, then all three slots are retiring, not free.
+     * The client implementation is included above so these private descriptors
+     * can be observed without a new public accessor. */
+    REQUIRE(send(healthy->lease, "!", 1u, 0) == 1);
+    fixture_readable(healthy->lease);
+    REQUIRE(recv(healthy->lease, &extra, 1u, 0) == 0);
+    REQUIRE(send(third->lease, "!", 1u, 0) == 1);
+    fixture_readable(third->lease);
+    REQUIRE(recv(third->lease, &extra, 1u, 0) == 0);
+    maelys_egress_client_channel_close(healthy);
+    maelys_egress_client_channel_close(third);
+    for (unsigned i = 0u; i < 16u; ++i) {
+        REQUIRE(maelys_egress_client_channel_open(path, 1000u, &busy, NULL) == MAELYS_EGRESS_CLIENT_ERR_BUSY);
+        REQUIRE(!busy && !atomic_load(&destroyed));
+    }
+
+    /* A real HTTP proxy request completes WHILE the reaper is joining the
      * held channel. This would time out if channel destruction ran on the
      * proxy owner reactor. No release flag is set until the proof is complete. */
     int proxy = socket(AF_INET, SOCK_STREAM, 0); REQUIRE(proxy >= 0);
@@ -149,25 +226,47 @@ int main(void) {
     REQUIRE(recv(proxy, response, sizeof(response) - 1u, 0) > 0);
     REQUIRE(strstr(response, "403") && !atomic_load(&release_open)); close(proxy);
     atomic_store(&release_open, 1);
+    maelys_egress_client_channel_t *reused[3];
+    for (size_t i = 0u; i < 3u; ++i) reused[i] = open_when_available(path);
+    REQUIRE(atomic_load(&destroyed) == 3);
+    REQUIRE(maelys_egress_client_channel_open(path, 1000u, &busy, NULL) == MAELYS_EGRESS_CLIENT_ERR_BUSY);
+    int stream = -1;
+    REQUIRE(maelys_egress_client_connect(maelys_egress_client_channel_fd(reused[0]),
+        "forbidden.invalid", 443u, 1000u, &stream, NULL) == MAELYS_EGRESS_CLIENT_ERR_DENIED);
+    REQUIRE(stream == -1);
+    for (size_t i = 0u; i < 3u; ++i) maelys_egress_client_channel_close(reused[i]);
     REQUIRE(maelys_egress_channel_broker_destroy(broker, NULL) == MAELYS_EGRESS_OK);
+    REQUIRE(atomic_load(&destroyed) == 6);
     REQUIRE(access(path, F_OK) != 0);
 
-    /* An idle lease is reclaimed on server stop even if the client remains
-     * alive. The retained connector keeps the control object readable. */
-    REQUIRE(maelys_egress_channel_broker_create(connector, path, 1000u, 500u, 1u, &broker, NULL) == MAELYS_EGRESS_OK);
+    /* Server stop closes idle leases and removes the listener even while the
+     * reaper is still held in an open. The retained connector keeps the
+     * control object readable until both workers have been joined. */
+    atomic_store(&entered, 0); atomic_store(&destroying, 0); atomic_store(&release_open, 0);
+    REQUIRE(maelys_egress_channel_broker_create(connector, path, 1000u, 500u, 2u, &broker, NULL) == MAELYS_EGRESS_OK);
     REQUIRE(maelys_egress_client_channel_open(path, 1000u, &client, NULL) == MAELYS_EGRESS_CLIENT_OK);
+    REQUIRE(maelys_egress_client_channel_open(path, 1000u, &healthy, NULL) == MAELYS_EGRESS_CLIENT_OK);
+    REQUIRE(maelys_sys_fd_send(maelys_egress_client_channel_fd(client), request, length, -1) == MAELYS_SYS_OK);
+    wait_flag(&entered);
+    maelys_egress_client_channel_close(client);
+    wait_flag(&destroying);
     REQUIRE(maelys_egress_server_stop(test.server) == MAELYS_EGRESS_OK);
     REQUIRE(pthread_join(thread, NULL) == 0);
     for (unsigned i = 0; i < 1000u && access(path, F_OK) == 0; ++i) {
         struct timespec delay = {.tv_nsec = 1000000L}; nanosleep(&delay, NULL);
     }
-    REQUIRE(access(path, F_OK) != 0);
+    REQUIRE(access(path, F_OK) != 0 && !atomic_load(&release_open));
+    fixture_readable(healthy->lease);
+    REQUIRE(recv(healthy->lease, &extra, 1u, 0) == 0);
+    REQUIRE(atomic_load(&destroyed) == 6);
+    atomic_store(&release_open, 1);
     REQUIRE(maelys_egress_channel_broker_destroy(broker, NULL) == MAELYS_EGRESS_OK);
-    maelys_egress_client_channel_close(client);
+    REQUIRE(atomic_load(&destroyed) == 8);
+    maelys_egress_client_channel_close(healthy);
     maelys_egress_connector_release(connector);
     maelys_egress_config_destroy(test.config); maelys_egress_policy_destroy(test.policy);
     REQUIRE(rmdir(directory) == 0); free(directory);
     REQUIRE(fixture_fd_count() == baseline);
-    puts("broker faults: partial delivery exactly once, pending-open isolation and server stop passed");
+    puts("broker faults: partial delivery, bounded reaping, broker/proxy progress, deadline/lease isolation and server stop passed");
     return 0;
 }

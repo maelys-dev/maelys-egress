@@ -18,6 +18,8 @@ typedef struct broker_slot {
     maelys_sys_watch_t watch;
     uint64_t token, deadline;
     maelys_egress_channel_t *channel;
+    struct broker_slot *reap_next;
+    atomic_int reaped;
     int passed;
     enum broker_phase phase;
     unsigned status;
@@ -31,6 +33,7 @@ struct maelys_egress_channel_broker {
     maelys_sys_loop_t *loop;
     maelys_sys_wakeup_t *wake;
     maelys_sys_thread_t *thread;
+    maelys_sys_thread_t *reaper;
     maelys_sys_mutex_t *lock;
     maelys_sys_condition_t *condition;
     int armed, armed_ok, parent_fd, owns_path;
@@ -39,6 +42,8 @@ struct maelys_egress_channel_broker {
     uint64_t connect_timeout, handshake_timeout, serial;
     size_t capacity;
     broker_slot_t *slots;
+    broker_slot_t *reap_head, *reap_tail;
+    int reaper_stopping; /* Queue and stop flag are protected by lock. */
     char path[sizeof(((struct sockaddr_un *)0)->sun_path)];
     char parent[sizeof(((struct sockaddr_un *)0)->sun_path)];
     maelys_sys_file_identity_t identity, parent_identity;
@@ -107,14 +112,60 @@ static int create_listener(maelys_egress_channel_broker_t *broker) {
     return 1;
 }
 
-static void drop_slot(maelys_egress_channel_broker_t *broker, broker_slot_t *slot) {
-    if (slot->watch) (void)maelys_sys_loop_unwatch(broker->loop, slot->watch);
-    (void)maelys_sys_fd_close(&slot->passed);
-    /* Only this worker joins channels: never the server owner reactor. */
-    maelys_egress_channel_destroy(slot->channel);
-    (void)maelys_sys_socket_release(&slot->socket);
+static void reset_slot(broker_slot_t *slot) {
     memset(slot, 0, sizeof(*slot));
+    atomic_init(&slot->reaped, 0);
     slot->passed = -1;
+}
+
+static void collect_slot(broker_slot_t *slot) {
+    if (!slot->socket && slot->channel && atomic_load(&slot->reaped)) reset_slot(slot);
+}
+
+static void *reaper_main(void *opaque) {
+    maelys_egress_channel_broker_t *broker = opaque;
+    for (;;) {
+        (void)maelys_sys_mutex_lock(broker->lock);
+        while (!broker->reap_head && !broker->reaper_stopping)
+            (void)maelys_sys_condition_wait(broker->condition, broker->lock);
+        broker_slot_t *slot = broker->reap_head;
+        if (slot) {
+            broker->reap_head = slot->reap_next;
+            if (!broker->reap_head) broker->reap_tail = NULL;
+        }
+        (void)maelys_sys_mutex_unlock(broker->lock);
+        if (!slot) return NULL;
+        /* Never join on either reactor, or with the queue lock held. The
+         * slot stays occupied until this join releases the channel's thread,
+         * descriptors and connector reference. No allocation per retirement. */
+        maelys_egress_channel_destroy(slot->channel);
+        atomic_store(&slot->reaped, 1);
+        /* Do not touch slot again: the broker may now reset/reuse it. */
+    }
+}
+
+static void stop_reaper(maelys_egress_channel_broker_t *broker) {
+    (void)maelys_sys_mutex_lock(broker->lock);
+    broker->reaper_stopping = 1;
+    (void)maelys_sys_condition_broadcast(broker->condition);
+    (void)maelys_sys_mutex_unlock(broker->lock);
+}
+
+static void drop_slot(maelys_egress_channel_broker_t *broker, broker_slot_t *slot) {
+    if (!slot->socket) return; /* Already free or queued for destruction. */
+    if (slot->watch) (void)maelys_sys_loop_unwatch(broker->loop, slot->watch);
+    slot->watch = 0u;
+    (void)maelys_sys_fd_close(&slot->passed);
+    (void)maelys_sys_socket_release(&slot->socket);
+    if (!slot->channel) { reset_slot(slot); return; }
+    egress_channel_stop(slot->channel);
+    (void)maelys_sys_mutex_lock(broker->lock);
+    slot->reap_next = NULL;
+    if (broker->reap_tail) broker->reap_tail->reap_next = slot;
+    else broker->reap_head = slot;
+    broker->reap_tail = slot;
+    (void)maelys_sys_condition_broadcast(broker->condition);
+    (void)maelys_sys_mutex_unlock(broker->lock);
 }
 
 static int retry_io(maelys_sys_result_t result) {
@@ -184,12 +235,15 @@ static void accept_one(maelys_egress_channel_broker_t *broker) {
     if (maelys_sys_socket_accept(broker->listener, NULL, NULL, &socket_handle) != MAELYS_SYS_OK)
         return;
     size_t index = 0u;
-    while (index < broker->capacity && broker->slots[index].socket) ++index;
+    for (; index < broker->capacity; ++index) {
+        collect_slot(&broker->slots[index]);
+        if (!broker->slots[index].socket && !broker->slots[index].channel) break;
+    }
     if (index == broker->capacity) {
         unsigned char response[EGRESS_BOOTSTRAP_RESPONSE_SIZE];
         egress_bootstrap_response(EGRESS_BOOTSTRAP_BUSY, 0u, response);
         size_t sent = 0u;
-        /* No allocation or channel for excess peers. A fresh output queue
+        /* No slot or channel for excess peers. A fresh output queue
          * normally accepts the fixed reply; on failure close, never block. */
         (void)maelys_sys_fd_stream_send(maelys_sys_socket_native_fd(socket_handle),
             response, sizeof(response), -1, &sent);
@@ -233,6 +287,7 @@ static void *broker_main(void *opaque) {
         uint64_t deadline = now + 50u;
         for (size_t i = 0u; i < broker->capacity; ++i) {
             broker_slot_t *slot = &broker->slots[i];
+            collect_slot(slot);
             if (!slot->socket || slot->phase == BROKER_LEASE) continue;
             if (now >= slot->deadline) drop_slot(broker, slot);
             else if (slot->deadline < deadline) deadline = slot->deadline;
@@ -266,6 +321,7 @@ static void *broker_main(void *opaque) {
     (void)maelys_sys_loop_destroy(&broker->loop);
     (void)maelys_sys_socket_release(&broker->listener);
     remove_path(broker);
+    stop_reaper(broker);
     return NULL;
 }
 
@@ -277,6 +333,10 @@ maelys_egress_result_t maelys_egress_channel_broker_destroy(
         atomic_store(&broker->stopping, 1);
         (void)maelys_sys_wakeup_signal(broker->wake);
         (void)maelys_sys_thread_join(&broker->thread, NULL);
+    }
+    if (broker->reaper) {
+        stop_reaper(broker);
+        (void)maelys_sys_thread_join(&broker->reaper, NULL);
     }
     (void)maelys_sys_socket_release(&broker->listener);
     remove_path(broker);
@@ -314,7 +374,7 @@ maelys_egress_result_t maelys_egress_channel_broker_create(
     broker->slots = calloc(max_clients, sizeof(*broker->slots));
     if (!broker->slots) { free(broker); return MAELYS_EGRESS_ERR_MEMORY; }
     broker->capacity = max_clients;
-    for (size_t i = 0u; i < max_clients; ++i) broker->slots[i].passed = -1;
+    for (size_t i = 0u; i < max_clients; ++i) reset_slot(&broker->slots[i]);
     broker->connector = connector;
     maelys_egress_connector_retain(connector);
     strcpy(broker->path, path);
@@ -323,6 +383,7 @@ maelys_egress_result_t maelys_egress_channel_broker_create(
     if (!create_listener(broker) || maelys_sys_wakeup_create(&broker->wake) != MAELYS_SYS_OK ||
         maelys_sys_mutex_create(&broker->lock) != MAELYS_SYS_OK ||
         maelys_sys_condition_create(&broker->condition) != MAELYS_SYS_OK ||
+        maelys_sys_thread_create("egress-reaper", reaper_main, broker, &broker->reaper) != MAELYS_SYS_OK ||
         maelys_sys_thread_create("egress-broker", broker_main, broker, &broker->thread) != MAELYS_SYS_OK)
         goto fail;
     (void)maelys_sys_mutex_lock(broker->lock);
