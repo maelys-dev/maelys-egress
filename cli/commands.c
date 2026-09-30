@@ -195,12 +195,18 @@ int egress_cli_command_config_validate(maelys_cli_context_t *context) {
 
 /* ---- serve ------------------------------------------------------------------ */
 
-int egress_cli_command_serve(maelys_cli_context_t *context) {
+static int command_run(maelys_cli_context_t *context, int broker) {
     const char *path = maelys_cli_option(context, "config");
     egress_cli_settings_t settings;
     maelys_cli_error_t error;
     if (egress_cli_settings_load(path, &settings, &error) != 0) {
         return maelys_cli_fail_error(context, &error);
+    }
+    if (!!settings.channel_listen_unix != broker) {
+        egress_cli_settings_destroy(&settings);
+        return maelys_cli_fail(context, MAELYS_CLI_CODE_VALIDATION_FAILED,
+            "Use channel broker for channel configuration, or serve for proxy configuration.",
+            "configuration mode does not match the command");
     }
     int status = egress_cli_run(&settings, path, 0, &error, NULL);
     egress_cli_settings_destroy(&settings);
@@ -208,3 +214,6 @@ int egress_cli_command_serve(maelys_cli_context_t *context) {
     /* 0: clean stop. 1: a fatal event was already written to the stream. */
     return status == 0 ? MAELYS_CLI_EXIT_OK : MAELYS_CLI_EXIT_FAILURE;
 }
+
+int egress_cli_command_serve(maelys_cli_context_t *context) { return command_run(context, 0); }
+int egress_cli_command_channel_broker(maelys_cli_context_t *context) { return command_run(context, 1); }

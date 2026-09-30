@@ -44,6 +44,13 @@ PY
         printf 'survived\n' >"$work/$name.result"
     else
         case "$name" in
+        native-*)
+            if grep -q '^FAIL tests/test_egress.c:' "$work/$name.log"; then
+                printf 'killed\n' >"$work/$name.result"
+            else
+                printf 'invalid (no native identity assertion)\n' >"$work/$name.result"
+                tail -20 "$work/$name.log" >&2
+            fi ;;
         tls-*)
             # A compile failure or an unrelated suite timeout is not proof
             # that the TLS regression test detected this transport mutant.
@@ -122,6 +129,11 @@ run_mutant bootstrap-early-busy client/channel_open.c \
 run_mutant bootstrap-blocking-destruction src/channel_broker.c \
     '    egress_channel_stop(slot->channel);' \
     '    maelys_egress_channel_destroy(slot->channel); reset_slot(slot); return;' &
+run_mutant native-trusted-scope src/server/connector.c \
+    'server->config.native_only && server->config.native_principal_bound &&' \
+    'server->config.native_only &&' &
+run_mutant native-immutable-binding src/config.c \
+    'config->native_principal_bound = 1;' 'config->native_principal_bound = 0;' &
 wait
 
 killed=0
@@ -131,7 +143,7 @@ for name in sni-host-mismatch authority-mismatch credential-compare \
     channel-status-denied tls-ignore-control tls-resume-poisoned tls-raw-unix-read \
     tls-stream-family-restriction bootstrap-identity-field bootstrap-descriptor-cardinality \
     bootstrap-capacity-release bootstrap-lease-destruction bootstrap-early-busy \
-    bootstrap-blocking-destruction; do
+    bootstrap-blocking-destruction native-trusted-scope native-immutable-binding; do
     total=$((total + 1))
     result=$(cat "$work/$name.result" 2>/dev/null || printf 'missing')
     if test "$result" = killed; then

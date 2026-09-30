@@ -1475,7 +1475,57 @@ static void test_sni_guard_end_to_end(void) {
     (void)pthread_mutex_destroy(&proxy.lock);
 }
 
+static void test_native_principal_binding(void) {
+    maelys_egress_config_t *config = NULL;
+    maelys_egress_policy_t *policy = NULL;
+    maelys_egress_server_t *server = NULL;
+    maelys_egress_connector_t *connector = NULL, *refused = NULL;
+    CHECK(maelys_egress_config_create(&config, NULL) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_set_native_principal(config, "agent", NULL, NULL) == MAELYS_EGRESS_ERR_STATE);
+    CHECK(maelys_egress_config_set_native_only(config, 1, NULL) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_set_native_principal(config, "bad name", NULL, NULL) == MAELYS_EGRESS_ERR_ARGUMENT);
+    CHECK(maelys_egress_config_set_native_principal(config, "agent", "run:42", NULL) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_set_native_principal(config, "other", NULL, NULL) == MAELYS_EGRESS_ERR_STATE);
+    CHECK(maelys_egress_config_set_native_only(config, 0, NULL) == MAELYS_EGRESS_ERR_STATE);
+    CHECK(maelys_egress_config_set_listen(config, "127.0.0.1", 0u, NULL) == MAELYS_EGRESS_ERR_STATE);
+    CHECK(maelys_egress_config_set_listen_unix(config, "/tmp/unused", 11u,
+        MAELYS_EGRESS_UNIX_PEER_AUTHENTICATED, NULL) == MAELYS_EGRESS_ERR_STATE);
+    CHECK(maelys_egress_config_set_authentication(config, "other", "0123456789abcdef", NULL) == MAELYS_EGRESS_ERR_STATE);
+    CHECK(maelys_egress_config_add_principal(config, "other", "0123456789abcdef", NULL, NULL) == MAELYS_EGRESS_ERR_STATE);
+    CHECK(maelys_egress_config_allow_unauthenticated_loopback(config, 1, NULL) == MAELYS_EGRESS_ERR_STATE);
+    CHECK(maelys_egress_config_set_tls_listener(config, NULL, NULL) == MAELYS_EGRESS_ERR_STATE);
+    CHECK(maelys_egress_config_set_principal_quota_v2(config, "agent", 1u, 4096u, 8192u, NULL) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_create(&policy, NULL) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_allow_tcp(policy, "127.0.0.1", 9u, 1, NULL) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_seal(policy, NULL) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_server_create(policy, config, &server, NULL) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_server_port(server) == 0u);
+    CHECK(maelys_egress_server_native_connector_create(server, &connector, NULL) == MAELYS_EGRESS_OK);
+    /* No empty-secret escape hatch through the credential API. */
+    CHECK(maelys_egress_server_connector_create(server, "agent", "", &refused, NULL) == MAELYS_EGRESS_ERR_DENIED);
+    CHECK(!refused);
+    CHECK(maelys_egress_server_stop(server) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_server_native_connector_create(server, &refused, NULL) == MAELYS_EGRESS_ERR_STATE);
+    maelys_egress_server_destroy(server);
+    maelys_egress_connector_release(connector);
+    maelys_egress_config_destroy(config);
+    /* Holding an ordinary server is not permission to bypass its credentials. */
+    CHECK(maelys_egress_config_create(&config, NULL) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_set_authentication(config, "agent", "0123456789abcdef", NULL) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_server_create(policy, config, &server, NULL) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_server_native_connector_create(server, &refused, NULL) == MAELYS_EGRESS_ERR_DENIED);
+    maelys_egress_server_destroy(server);
+    CHECK(maelys_egress_config_set_native_only(config, 1, NULL) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_set_native_principal(config, "agent", NULL, NULL) == MAELYS_EGRESS_ERR_STATE);
+    CHECK(maelys_egress_server_create(policy, config, &server, NULL) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_server_native_connector_create(server, &refused, NULL) == MAELYS_EGRESS_ERR_DENIED);
+    maelys_egress_server_destroy(server);
+    maelys_egress_config_destroy(config);
+    maelys_egress_policy_destroy(policy);
+}
+
 int main(void) {
+    test_native_principal_binding();
     test_version_and_tls_seam();
     test_policy_fail_closed();
     test_address_classification();

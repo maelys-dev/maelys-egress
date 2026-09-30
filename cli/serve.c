@@ -85,17 +85,22 @@ int egress_cli_run(
     maelys_egress_server_t *server = NULL;
     maelys_egress_audit_t *audit = NULL;
     maelys_egress_tls_provider_t *tls_provider = NULL;
+    egress_cli_output_gate_t output_gate = {PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, 0};
     maelys_egress_result_t result = egress_cli_build_policy(settings, &policy, &error);
     const char *failure_code = result != MAELYS_EGRESS_OK ?
         MAELYS_CLI_CODE_POLICY_FAILED : NULL;
     if (result == MAELYS_EGRESS_OK) result = maelys_egress_config_create(&config, &error);
     if (result == MAELYS_EGRESS_OK) {
-        result = settings->listen_unix ? maelys_egress_config_set_listen_unix(
+        result = settings->channel_listen_unix ? maelys_egress_config_set_native_only(config, 1, &error) :
+            settings->listen_unix ? maelys_egress_config_set_listen_unix(
             config, settings->listen_unix, strlen(settings->listen_unix),
             settings->unix_peer, &error) :
             maelys_egress_config_set_listen(config, settings->listen_host,
                 settings->listen_port, &error);
     }
+    if (result == MAELYS_EGRESS_OK && settings->channel_principal) result =
+        maelys_egress_config_set_native_principal(config, settings->channel_principal,
+            settings->channel_invocation_id, &error);
     if (result == MAELYS_EGRESS_OK && settings->tls_cert) {
         const maelys_egress_tls_files_t tls_files = {
             .abi_version = MAELYS_EGRESS_TLS_FILES_ABI_VERSION,
@@ -111,8 +116,9 @@ int egress_cli_run(
     }
     if (result == MAELYS_EGRESS_OK && settings->token_file) result =
         maelys_egress_config_set_authentication(config, "maelys", secret, &error);
-    if (result == MAELYS_EGRESS_OK && settings->token_file) result =
-        maelys_egress_config_set_principal_quota_v2(config, "maelys",
+    if (result == MAELYS_EGRESS_OK && (settings->token_file || settings->channel_principal)) result =
+        maelys_egress_config_set_principal_quota_v2(config,
+            settings->channel_principal ? settings->channel_principal : "maelys",
             settings->quota_connections, settings->quota_bytes,
             settings->quota_total_bytes, &error);
     if (result == MAELYS_EGRESS_OK && settings->unauthenticated_loopback) result =
@@ -142,7 +148,8 @@ int egress_cli_run(
     }
     if (audit_key) { egress_cli_secure_zero(audit_key, audit_key_length); free(audit_key); }
     maelys_egress_audit_release(audit);
-    if (config) maelys_egress_config_set_receipt_sink(config, egress_cli_receipt_sink, NULL);
+    if (config) maelys_egress_config_set_receipt_sink(config, egress_cli_receipt_sink,
+        settings->channel_listen_unix ? &output_gate : NULL);
     if (check_only && result == MAELYS_EGRESS_OK) {
         if (out_digest) {
             (void)snprintf(out_digest, 65u, "%s", maelys_egress_policy_digest_hex(policy));
@@ -150,6 +157,8 @@ int egress_cli_run(
         egress_cli_secure_zero(secret, sizeof(secret));
         maelys_egress_config_destroy(config);
         maelys_egress_policy_destroy(policy);
+        (void)pthread_cond_destroy(&output_gate.condition);
+        (void)pthread_mutex_destroy(&output_gate.mutex);
         return 0;
     }
     if (result == MAELYS_EGRESS_OK) result = maelys_egress_server_create(
@@ -164,6 +173,8 @@ int egress_cli_run(
         maelys_egress_server_destroy(server);
         maelys_egress_config_destroy(config);
         maelys_egress_policy_destroy(policy);
+        (void)pthread_cond_destroy(&output_gate.condition);
+        (void)pthread_mutex_destroy(&output_gate.mutex);
         return -1;
     }
     sigset_t signals;
@@ -172,6 +183,19 @@ int egress_cli_run(
     sigaddset(&signals, SIGTERM);
     sigaddset(&signals, SIGHUP);
     (void)pthread_sigmask(SIG_BLOCK, &signals, NULL);
+    if (settings->channel_listen_unix) {
+        int status = egress_cli_channel_run(server, settings, reload_config_path,
+            &signals, maelys_egress_policy_digest_hex(policy), &output_gate, out_error);
+        maelys_egress_server_destroy(server);
+        maelys_egress_config_destroy(config);
+        maelys_egress_policy_destroy(policy);
+        (void)pthread_cond_destroy(&output_gate.condition);
+        (void)pthread_mutex_destroy(&output_gate.mutex);
+        if (!status) egress_cli_lifecycle_message("stopped", "shutdown complete");
+        return status;
+    }
+    (void)pthread_cond_destroy(&output_gate.condition);
+    (void)pthread_mutex_destroy(&output_gate.mutex);
     signal_context_t signal_context = {
         .server = server,
         .signals = signals,
@@ -190,7 +214,7 @@ int egress_cli_run(
     egress_cli_lifecycle_ready(settings->listen_unix, settings->listen_host,
         maelys_egress_server_port(server), settings->admin_host,
         maelys_egress_server_admin_port(server),
-        maelys_egress_policy_digest_hex(policy));
+        maelys_egress_policy_digest_hex(policy), NULL);
     result = maelys_egress_server_run(server, &error);
     (void)pthread_kill(signal_thread, SIGTERM);
     (void)pthread_join(signal_thread, NULL);

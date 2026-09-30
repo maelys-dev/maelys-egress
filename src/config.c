@@ -37,7 +37,7 @@ maelys_egress_result_t maelys_egress_config_set_listen(
     char **out_error) {
     if (out_error) *out_error = NULL;
     if (!config || !numeric_host) return MAELYS_EGRESS_ERR_ARGUMENT;
-    if (config->unix_principal_bound) {
+    if (config->native_principal_bound || config->unix_principal_bound) {
         egress_set_error(out_error, "endpoint-bound Unix principal is immutable");
         return MAELYS_EGRESS_ERR_STATE;
     }
@@ -136,7 +136,7 @@ maelys_egress_result_t maelys_egress_config_set_listen_unix(
     char **out_error) {
     if (out_error) *out_error = NULL;
     size_t bounded_length = path ? strnlen(path, sizeof(config->unix_path)) : 0u;
-    if (config && config->unix_principal_bound) {
+    if (config && (config->native_principal_bound || config->unix_principal_bound)) {
         egress_set_error(out_error, "endpoint-bound Unix principal is immutable");
         return MAELYS_EGRESS_ERR_STATE;
     }
@@ -210,7 +210,7 @@ maelys_egress_result_t maelys_egress_config_set_unix_principal(
             "endpoint-bound principal requires a private SAME_EUID Unix listener");
         return MAELYS_EGRESS_ERR_DENIED;
     }
-    if (config->unix_principal_bound || config->principal_count != 0u ||
+    if (config->native_principal_bound || config->unix_principal_bound || config->principal_count != 0u ||
         config->authentication_set) {
         egress_set_error(out_error,
             "endpoint-bound Unix listener requires an empty principal namespace");
@@ -237,7 +237,7 @@ maelys_egress_result_t maelys_egress_config_set_native_only(
         egress_set_error(out_error, "native-only mode expects enabled=0 or enabled=1");
         return MAELYS_EGRESS_ERR_ARGUMENT;
     }
-    if (config->unix_principal_bound) {
+    if (config->native_principal_bound || config->unix_principal_bound) {
         egress_set_error(out_error, "endpoint-bound Unix principal is immutable");
         return MAELYS_EGRESS_ERR_STATE;
     }
@@ -253,13 +253,35 @@ maelys_egress_result_t maelys_egress_config_set_native_only(
     return MAELYS_EGRESS_OK;
 }
 
+maelys_egress_result_t maelys_egress_config_set_native_principal(
+    maelys_egress_config_t *config, const char *principal,
+    const char *invocation_id, char **out_error) {
+    if (out_error) *out_error = NULL;
+    if (!config || !canonical_principal_identity(principal, invocation_id)) {
+        egress_set_error(out_error, "canonical native principal and invocation id are required");
+        return MAELYS_EGRESS_ERR_ARGUMENT;
+    }
+    if (!config->native_only || config->listen_unix || config->tls_provider ||
+        config->unauthenticated_loopback || config->principal_count ||
+        config->authentication_set || config->unix_principal_bound || config->native_principal_bound) {
+        egress_set_error(out_error, "native principal requires native-only mode and an empty principal namespace");
+        return MAELYS_EGRESS_ERR_STATE;
+    }
+    (void)snprintf(config->principals[0].username, sizeof(config->principals[0].username), "%s", principal);
+    if (invocation_id) (void)snprintf(config->principals[0].invocation_id,
+        sizeof(config->principals[0].invocation_id), "%s", invocation_id);
+    config->principal_count = 1u;
+    config->native_principal_bound = 1;
+    return MAELYS_EGRESS_OK;
+}
+
 maelys_egress_result_t maelys_egress_config_set_authentication(
     maelys_egress_config_t *config,
     const char *username,
     const char *secret,
     char **out_error) {
     if (!config) return MAELYS_EGRESS_ERR_ARGUMENT;
-    if (config->unix_principal_bound) {
+    if (config->native_principal_bound || config->unix_principal_bound) {
         egress_set_error(out_error, "endpoint-bound Unix principal forbids credential authentication");
         return MAELYS_EGRESS_ERR_STATE;
     }
@@ -288,7 +310,7 @@ maelys_egress_result_t maelys_egress_config_add_principal(
     const char *invocation_id,
     char **out_error) {
     if (out_error) *out_error = NULL;
-    if (config && config->unix_principal_bound) {
+    if (config && (config->native_principal_bound || config->unix_principal_bound)) {
         egress_set_error(out_error, "endpoint-bound Unix principal forbids credential principals");
         return MAELYS_EGRESS_ERR_STATE;
     }
@@ -366,6 +388,7 @@ maelys_egress_result_t maelys_egress_config_allow_unauthenticated_loopback(
     char **out_error) {
     if (out_error) *out_error = NULL;
     if (!config) return MAELYS_EGRESS_ERR_ARGUMENT;
+    if (config->native_principal_bound) return MAELYS_EGRESS_ERR_STATE;
     config->unauthenticated_loopback = enabled != 0;
     return MAELYS_EGRESS_OK;
 }
@@ -407,6 +430,7 @@ maelys_egress_result_t maelys_egress_config_set_tls_listener(
     char **out_error) {
     if (out_error) *out_error = NULL;
     if (!config) return MAELYS_EGRESS_ERR_ARGUMENT;
+    if (config->native_principal_bound) return MAELYS_EGRESS_ERR_STATE;
     if (provider) maelys_egress_tls_provider_retain(provider);
     maelys_egress_tls_provider_release(config->tls_provider);
     config->tls_provider = provider;

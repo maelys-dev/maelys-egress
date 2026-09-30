@@ -352,7 +352,7 @@ export class EgressProcess extends EventEmitter {
           throw new Error("invalid maelys-egress lifecycle event");
         }
         if (event.event === "ready") {
-          if (event.proxy?.transport !== "tcp" || typeof event.proxy.host !== "string" ||
+          if ("channel" in event || event.proxy?.transport !== "tcp" || typeof event.proxy.host !== "string" ||
               !Number.isInteger(event.proxy.port) || !Number.isInteger(event.admin?.port) ||
               typeof event.policy?.digest !== "string") {
             throw new Error("invalid ready lifecycle event");

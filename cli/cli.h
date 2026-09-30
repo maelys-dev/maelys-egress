@@ -27,6 +27,7 @@
 #include <maelys/cli.h>
 
 #include <signal.h>
+#include <pthread.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -68,6 +69,12 @@ typedef struct egress_cli_settings {
     char *tls_key;
     char *tls_ca;
     int require_client_cert;
+    char *channel_listen_unix;
+    char *channel_principal;
+    char *channel_invocation_id;
+    uint64_t channel_connect_timeout_ms;
+    uint64_t channel_handshake_timeout_ms;
+    size_t channel_max_clients;
 } egress_cli_settings_t;
 
 typedef struct signal_context {
@@ -98,7 +105,16 @@ int egress_cli_read_audit_key(
 void egress_cli_lifecycle_message(const char *event, const char *message);
 void egress_cli_lifecycle_ready(
     const char *unix_path, const char *tcp_host, uint16_t tcp_port,
-    const char *admin_host, uint16_t admin_port, const char *policy_digest);
+    const char *admin_host, uint16_t admin_port, const char *policy_digest,
+    const char *channel_path);
+/* A broker starts after the server loop. Receipts must wait for ready (1),
+ * or be suppressed on pre-ready failure (-1), never precede that event. */
+typedef struct egress_cli_output_gate {
+    pthread_mutex_t mutex;
+    pthread_cond_t condition;
+    int state;
+} egress_cli_output_gate_t;
+void egress_cli_output_gate_open(egress_cli_output_gate_t *gate, int state);
 void egress_cli_lifecycle_policy_reloaded(uint64_t generation, const char *digest);
 void egress_cli_receipt_sink(void *context, const maelys_egress_receipt_t *receipt);
 
@@ -128,5 +144,9 @@ int egress_cli_run(
 int egress_cli_command_config_describe(maelys_cli_context_t *context);
 int egress_cli_command_config_validate(maelys_cli_context_t *context);
 int egress_cli_command_serve(maelys_cli_context_t *context);
+int egress_cli_command_channel_broker(maelys_cli_context_t *context);
+int egress_cli_channel_run(maelys_egress_server_t *server,
+    const egress_cli_settings_t *settings, const char *path, const sigset_t *signals,
+    const char *digest, egress_cli_output_gate_t *gate, maelys_cli_error_t *error);
 
 #endif

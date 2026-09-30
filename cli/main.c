@@ -29,6 +29,11 @@ static const maelys_cli_command_t commands[] = {
      "lifecycle JSON Lines stream.",
      egress_cli_command_serve, "maelys-egress-lifecycle/1"),
      MAELYS_CLI_OPTIONS(config_options)},
+    {MAELYS_CLI_PROTOCOL_STREAM("channel.broker", "channel broker",
+     "Serve native channels through a private Unix socket until SIGINT or SIGTERM; "
+     "stdout carries the lifecycle JSON Lines stream.",
+     egress_cli_command_channel_broker, "maelys-egress-lifecycle/1"),
+     MAELYS_CLI_OPTIONS(config_options)},
 };
 
 int main(int argc, char **argv) {
@@ -40,7 +45,7 @@ int main(int argc, char **argv) {
         .commands = commands,
         .command_count = MAELYS_CLI_COUNT(commands),
         .agent_guidance =
-            "'serve' reserves stdout for maelys-egress-lifecycle/1 JSON Lines: "
+            "'serve' and 'channel broker' reserve stdout for maelys-egress-lifecycle/1 JSON Lines: "
             "wait for event == \"ready\", then keep draining receipts and reload "
             "events until the process exits; 'fatal' or a non-zero exit is a "
             "failure. 'config validate' exits 2 when data.valid is false and "

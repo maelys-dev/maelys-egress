@@ -548,6 +548,49 @@
           "protocol": "maelys-egress-lifecycle/1",
           "purpose": "Start mediation and run until SIGINT or SIGTERM; stdout carries the lifecycle JSON Lines stream.",
           "usage": "serve --config FILE"
+        },
+        {
+          "available": true,
+          "effect": "stream",
+          "exitCodes": {
+            "0": "command completed",
+            "1": "execution failed",
+            "2": "valid report with violations"
+          },
+          "external": false,
+          "hidden": false,
+          "id": "channel.broker",
+          "input": {
+            "constraints": [],
+            "operands": [],
+            "options": [
+              {
+                "argument": {
+                  "name": "FILE",
+                  "type": "path"
+                },
+                "conflictsWith": [],
+                "long": "--config",
+                "repeatable": false,
+                "required": true,
+                "requires": [],
+                "summary": "Complete daemon configuration file declaring schema_version = 1."
+              }
+            ],
+            "passthrough": false,
+            "synopsis": "channel broker --config FILE"
+          },
+          "outputMode": "protocol-stream",
+          "outputSchema": {
+            "type": "object"
+          },
+          "pattern": [
+            "channel",
+            "broker"
+          ],
+          "protocol": "maelys-egress-lifecycle/1",
+          "purpose": "Serve native channels through a private Unix socket until SIGINT or SIGTERM; stdout carries the lifecycle JSON Lines stream.",
+          "usage": "channel broker --config FILE"
         }
       ],
       "contract": "agent-cli/v2",

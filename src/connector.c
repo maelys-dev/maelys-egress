@@ -20,22 +20,23 @@ int egress_connector_is_running(const maelys_egress_connector_t *connector) {
     return connector && maelys_egress_server_is_running(connector->server);
 }
 
-maelys_egress_result_t maelys_egress_server_connector_create(
+static maelys_egress_result_t connector_create(
     maelys_egress_server_t *server,
+    int native,
     const char *username,
     const char *secret,
     maelys_egress_connector_t **out_connector,
     char **out_error) {
     if (out_error) *out_error = NULL;
     if (out_connector) *out_connector = NULL;
-    if (!server || !username || !secret || !out_connector) {
+    if (!server || (!native && (!username || !secret)) || !out_connector) {
         egress_set_error(out_error, "server, credentials and output are required");
         return MAELYS_EGRESS_ERR_ARGUMENT;
     }
     maelys_egress_connector_t *connector = calloc(1, sizeof(*connector));
     if (!connector) return MAELYS_EGRESS_ERR_MEMORY;
     maelys_egress_result_t result = egress_server_connector_bind(
-        server, username, secret, &connector->principal_index,
+        server, native, username, secret, &connector->principal_index,
         connector->principal, connector->invocation_id, out_error);
     if (result != MAELYS_EGRESS_OK) {
         free(connector);
@@ -45,6 +46,18 @@ maelys_egress_result_t maelys_egress_server_connector_create(
     connector->server = server;
     *out_connector = connector;
     return MAELYS_EGRESS_OK;
+}
+
+maelys_egress_result_t maelys_egress_server_connector_create(
+    maelys_egress_server_t *server, const char *username, const char *secret,
+    maelys_egress_connector_t **out_connector, char **out_error) {
+    return connector_create(server, 0, username, secret, out_connector, out_error);
+}
+
+maelys_egress_result_t maelys_egress_server_native_connector_create(
+    maelys_egress_server_t *server,
+    maelys_egress_connector_t **out_connector, char **out_error) {
+    return connector_create(server, 1, NULL, NULL, out_connector, out_error);
 }
 
 void maelys_egress_connector_retain(maelys_egress_connector_t *connector) {

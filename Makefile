@@ -120,7 +120,7 @@ SERVER_SOURCES := src/server/server.c src/server/listener.c \
 SOURCES := $(CORE_SOURCES) $(HOST_SOURCES) $(SERVER_SOURCES)
 OBJECTS := $(SOURCES:%.c=$(OBJ)/%.o)
 CLI_COMMON_SOURCES := cli/main.c cli/commands.c cli/config_catalog.c cli/config_file.c \
-	cli/secrets.c cli/serve.c cli/reload.c cli/output.c
+	cli/secrets.c cli/serve.c cli/channel_broker.c cli/reload.c cli/output.c
 CLI_SOURCES := $(CLI_COMMON_SOURCES) cli/tls_listener.c
 CLI_COMMON_OBJECTS := $(CLI_COMMON_SOURCES:%.c=$(OBJ)/%.o)
 CLI_OBJECTS := $(CLI_SOURCES:%.c=$(OBJ)/%.o)
@@ -419,6 +419,10 @@ $(BOOTSTRAP_CLIENT_TEST): tests/test_bootstrap_client.c common/bootstrap.h tests
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(filter-out -pthread,$(CFLAGS)) $(LDFLAGS) $< $(CLIENT_LIB) -o $@
 
+$(BIN)/bootstrap-cli-client: tests/bootstrap_cli_client.c $(CLIENT_LIB)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(filter-out -pthread,$(CFLAGS)) $(LDFLAGS) $< $(CLIENT_LIB) -o $@
+
 $(BROKER_FAULTS_TEST): tests/test_broker_faults.c tests/tls_socket_fixture.h common/bootstrap.h src/channel_broker.c src/channel_server.c client/channel_open.c $(CLIENT_LIB) $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(CLIENT_LIB) $(STATIC_LIB) $(LDLIBS) -o $@
@@ -480,7 +484,7 @@ install-metadata: $(CLI)
 $(PC) $(CLIENT_PC) $(MANIFEST): | install-metadata
 	@test -f $@
 
-test: all $(OPERATIONS_TEST) $(CHANNEL_TEST) $(CLIENT_TEST) $(BOOTSTRAP_CLIENT_TEST) $(BROKER_FAULTS_TEST) $(TLS_SOCKET_TEST) $(TLS_SOCKET_ERRORS_TEST)
+test: all $(OPERATIONS_TEST) $(CHANNEL_TEST) $(CLIENT_TEST) $(BOOTSTRAP_CLIENT_TEST) $(BROKER_FAULTS_TEST) $(TLS_SOCKET_TEST) $(TLS_SOCKET_ERRORS_TEST) $(BIN)/bootstrap-cli-client
 	$(TEST)
 	$(OPERATIONS_TEST)
 	$(CHANNEL_TEST)
@@ -512,13 +516,14 @@ contract-check: $(CLI)
 		{ echo "docs/generated/config-reference.md drifted; run make config-reference" >&2; exit 1; }
 	@echo "contract-check: ok"
 
-lifecycle-contract-check: $(CLI)
+lifecycle-contract-check: $(CLI) $(BIN)/bootstrap-cli-client
 	tests/test_cli.sh $(CLI)
 
 # Every emitted envelope, data object and lifecycle line must conform to the
 # committed schemas; part of `check`.
-schema-check: $(CLI)
+schema-check: $(CLI) $(BIN)/bootstrap-cli-client
 	python3 tools/check_schemas.py --binary $(abspath $(CLI))
+	python3 tests/test_broker_cli.py $(abspath $(CLI))
 
 examples-check: $(EXAMPLE_BINS)
 	$(BIN)/example-policy_reload

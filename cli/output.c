@@ -56,12 +56,17 @@ void egress_cli_lifecycle_message(const char *event, const char *message) {
 
 void egress_cli_lifecycle_ready(
     const char *unix_path, const char *tcp_host, uint16_t tcp_port,
-    const char *admin_host, uint16_t admin_port, const char *policy_digest) {
+    const char *admin_host, uint16_t admin_port, const char *policy_digest,
+    const char *channel_path) {
     maelys_cli_json_writer_t writer;
     event_begin(&writer, "ready");
-    (void)maelys_cli_json_key(&writer, "proxy");
+    (void)maelys_cli_json_key(&writer, channel_path ? "channel" : "proxy");
     (void)maelys_cli_json_begin_object(&writer);
-    if (unix_path) {
+    if (channel_path) {
+        (void)maelys_cli_json_key_string(&writer, "transport", "unix");
+        (void)maelys_cli_json_key_string(&writer, "path", channel_path);
+        (void)maelys_cli_json_key_string(&writer, "protocol", "maelys-egress-channel-bootstrap/1");
+    } else if (unix_path) {
         (void)maelys_cli_json_key_string(&writer, "transport", "unix");
         (void)maelys_cli_json_key_string(&writer, "path", unix_path);
     } else {
@@ -99,8 +104,22 @@ void egress_cli_lifecycle_policy_reloaded(uint64_t generation, const char *diges
     event_end(&writer);
 }
 
+void egress_cli_output_gate_open(egress_cli_output_gate_t *gate, int state) {
+    (void)pthread_mutex_lock(&gate->mutex);
+    gate->state = state;
+    (void)pthread_cond_broadcast(&gate->condition);
+    (void)pthread_mutex_unlock(&gate->mutex);
+}
+
 void egress_cli_receipt_sink(void *context, const maelys_egress_receipt_t *receipt) {
-    (void)context;
+    egress_cli_output_gate_t *gate = context;
+    if (gate) {
+        (void)pthread_mutex_lock(&gate->mutex);
+        while (!gate->state) (void)pthread_cond_wait(&gate->condition, &gate->mutex);
+        int enabled = gate->state > 0;
+        (void)pthread_mutex_unlock(&gate->mutex);
+        if (!enabled) return;
+    }
     maelys_cli_json_writer_t writer;
     event_begin(&writer, "receipt");
     (void)maelys_cli_json_key(&writer, "receipt");

@@ -146,6 +146,7 @@ void egress_open_commands_reject(
 
 maelys_egress_result_t egress_server_connector_bind(
     maelys_egress_server_t *server,
+    int native,
     const char *username,
     const char *secret,
     size_t *out_principal_index,
@@ -153,7 +154,7 @@ maelys_egress_result_t egress_server_connector_bind(
     char out_invocation_id[EGRESS_MAX_INVOCATION_ID + 1u],
     char **out_error) {
     if (out_error) *out_error = NULL;
-    if (!server || !username || !secret || !out_principal_index ||
+    if (!server || (!native && (!username || !secret)) || !out_principal_index ||
         !out_principal || !out_invocation_id) {
         return MAELYS_EGRESS_ERR_ARGUMENT;
     }
@@ -165,8 +166,19 @@ maelys_egress_result_t egress_server_connector_bind(
     }
     size_t principal_index = SIZE_MAX;
     char invocation_id[EGRESS_MAX_INVOCATION_ID + 1u] = {0};
-    int authenticated = egress_credentials_lookup(
-        &server->config, username, secret, invocation_id, &principal_index);
+    int authenticated = 0;
+    if (native) {
+        if (server->config.native_only && server->config.native_principal_bound &&
+            server->config.principal_count == 1u) {
+            authenticated = 1;
+            principal_index = 0u;
+            (void)snprintf(invocation_id, sizeof(invocation_id), "%s",
+                server->config.principals[0].invocation_id);
+        }
+    } else if (!server->config.native_principal_bound) {
+        authenticated = egress_credentials_lookup(
+            &server->config, username, secret, invocation_id, &principal_index);
+    }
     if (!authenticated || principal_index >= server->config.principal_count) {
         (void)atomic_fetch_add(&server->metric_auth_failures, 1u);
         (void)pthread_mutex_unlock(&server->lifecycle_lock);

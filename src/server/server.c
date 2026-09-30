@@ -112,7 +112,13 @@ maelys_egress_result_t maelys_egress_server_create(
         egress_set_error(out_error, "invalid endpoint-bound Unix principal");
         return MAELYS_EGRESS_ERR_DENIED;
     }
-    if (!config->authentication_set && !config->unix_principal_bound &&
+    if (config->native_principal_bound && (!config->native_only || config->listen_unix ||
+        config->principal_count != 1u || config->authentication_set ||
+        config->unix_principal_bound || config->unauthenticated_loopback || config->tls_provider)) {
+        egress_set_error(out_error, "invalid native-only principal binding");
+        return MAELYS_EGRESS_ERR_DENIED;
+    }
+    if (!config->authentication_set && !config->unix_principal_bound && !config->native_principal_bound &&
         (config->listen_unix || !config->unauthenticated_loopback || !loopback)) {
         egress_set_error(out_error,
             "authentication is mandatory unless unauthenticated loopback is explicit");

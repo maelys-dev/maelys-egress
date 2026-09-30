@@ -267,7 +267,7 @@ class EgressProcess:
                     proxy = event.get("proxy")
                     admin = event.get("admin")
                     policy = event.get("policy")
-                    if not isinstance(proxy, dict) or proxy.get("transport") != "tcp" or \
+                    if "channel" in event or not isinstance(proxy, dict) or proxy.get("transport") != "tcp" or \
                             not isinstance(proxy.get("host"), str) or \
                             not isinstance(proxy.get("port"), int) or \
                             not isinstance(admin, dict) or \

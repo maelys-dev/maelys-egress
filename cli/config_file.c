@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 /* Strict configuration file: trusted-file checks, the key = value grammar
@@ -33,6 +34,9 @@ void egress_cli_settings_destroy(egress_cli_settings_t *settings) {
     free(settings->tls_cert);
     free(settings->tls_key);
     free(settings->tls_ca);
+    free(settings->channel_listen_unix);
+    free(settings->channel_principal);
+    free(settings->channel_invocation_id);
     memset(settings, 0, sizeof(*settings));
 }
 
@@ -60,7 +64,13 @@ int egress_cli_settings_control_equal(
         same_text(a->audit_key_id, b->audit_key_id) &&
         same_text(a->tls_cert, b->tls_cert) && same_text(a->tls_key, b->tls_key) &&
         same_text(a->tls_ca, b->tls_ca) &&
-        a->require_client_cert == b->require_client_cert;
+        a->require_client_cert == b->require_client_cert &&
+        same_text(a->channel_listen_unix, b->channel_listen_unix) &&
+        same_text(a->channel_principal, b->channel_principal) &&
+        same_text(a->channel_invocation_id, b->channel_invocation_id) &&
+        a->channel_connect_timeout_ms == b->channel_connect_timeout_ms &&
+        a->channel_handshake_timeout_ms == b->channel_handshake_timeout_ms &&
+        a->channel_max_clients == b->channel_max_clients;
 }
 
 static char *trim(char *value) {
@@ -210,6 +220,43 @@ static const char *apply_value(
         case EGRESS_CLI_KEY_TLS_CA:
             *out_memory = !own_text(&settings->tls_ca, value);
             return NULL;
+        case EGRESS_CLI_KEY_CHANNEL_LISTEN_UNIX: {
+            if (value[0] != '/' || strlen(value) >= sizeof(((struct sockaddr_un *)0)->sun_path))
+                return "channel_listen_unix must be an absolute bounded Unix path";
+            const char *part = value + 1;
+            for (;;) {
+                size_t length = strcspn(part, "/");
+                if (!length || (length == 1u && *part == '.') ||
+                    (length == 2u && !memcmp(part, "..", 2u)))
+                    return "channel_listen_unix must be canonical (no empty, dot or parent components)";
+                part += length;
+                if (!*part) break;
+                ++part;
+            }
+            *out_memory = !own_text(&settings->channel_listen_unix, value);
+            return NULL;
+        }
+        case EGRESS_CLI_KEY_CHANNEL_PRINCIPAL:
+            *out_memory = !own_text(&settings->channel_principal, value);
+            return NULL;
+        case EGRESS_CLI_KEY_CHANNEL_INVOCATION_ID:
+            *out_memory = !own_text(&settings->channel_invocation_id, value);
+            return NULL;
+        case EGRESS_CLI_KEY_CHANNEL_CONNECT_TIMEOUT_MS:
+            if (maelys_cli_parse_u64_decimal(value, 1u, 600000u, &number) != 0)
+                return "channel_connect_timeout_ms must be in 1..600000";
+            settings->channel_connect_timeout_ms = number;
+            return NULL;
+        case EGRESS_CLI_KEY_CHANNEL_HANDSHAKE_TIMEOUT_MS:
+            if (maelys_cli_parse_u64_decimal(value, 1u, 60000u, &number) != 0)
+                return "channel_handshake_timeout_ms must be in 1..60000";
+            settings->channel_handshake_timeout_ms = number;
+            return NULL;
+        case EGRESS_CLI_KEY_CHANNEL_MAX_CLIENTS:
+            if (maelys_cli_parse_u64_decimal(value, 1u, 4096u, &number) != 0)
+                return "channel_max_clients must be in 1..4096";
+            settings->channel_max_clients = (size_t)number;
+            return NULL;
         case EGRESS_CLI_KEY_COUNT:
             break;
     }
@@ -217,10 +264,21 @@ static const char *apply_value(
 }
 
 /* The cross-key constraints published by `config describe`. */
-static const char *check_constraints(const egress_cli_settings_t *s) {
+static const char *check_constraints(const egress_cli_settings_t *s, unsigned int seen) {
+    int broker = s->channel_listen_unix != NULL;
+    unsigned int channel_keys = ~0u << EGRESS_CLI_KEY_CHANNEL_LISTEN_UNIX;
+    unsigned int proxy_keys = (1u << EGRESS_CLI_KEY_LISTEN) |
+        (1u << EGRESS_CLI_KEY_LISTEN_UNIX) | (1u << EGRESS_CLI_KEY_UNIX_PEER) |
+        (1u << EGRESS_CLI_KEY_TOKEN_FILE) | (1u << EGRESS_CLI_KEY_UNAUTHENTICATED_LOOPBACK) |
+        (1u << EGRESS_CLI_KEY_TLS_CERT) | (1u << EGRESS_CLI_KEY_TLS_KEY) |
+        (1u << EGRESS_CLI_KEY_TLS_CA) | (1u << EGRESS_CLI_KEY_REQUIRE_CLIENT_CERT);
+    if ((seen & channel_keys) && (!broker || !s->channel_principal))
+        return "all channel keys require channel_listen_unix and channel_principal";
+    if (broker && (seen & proxy_keys))
+        return "broker mode refuses proxy listener, credential and TLS listener keys";
     if ((s->listen_unix && s->listen_set) || (s->unix_peer_set && !s->listen_unix))
         return "choose exactly one listener; unix_peer requires listen_unix";
-    if (s->destination_count == 0u || (!s->token_file && !s->unauthenticated_loopback))
+    if (s->destination_count == 0u || (!broker && !s->token_file && !s->unauthenticated_loopback))
         return "at least one destination and an explicit authentication mode are required";
     if (s->token_file && s->unauthenticated_loopback)
         return "choose token_file or unauthenticated_loopback, not both";
@@ -262,6 +320,18 @@ int egress_cli_settings_load(
     (void)snprintf(settings->listen_host, sizeof(settings->listen_host), "127.0.0.1");
     settings->unix_peer = MAELYS_EGRESS_UNIX_PEER_AUTHENTICATED;
     settings->max_connections = 128u;
+    size_t spec_count = 0u;
+    const egress_cli_config_spec_t *specs = egress_cli_config_specs(&spec_count);
+    for (size_t i = 0u; i < spec_count; ++i) {
+        if (specs[i].key >= EGRESS_CLI_KEY_CHANNEL_LISTEN_UNIX && specs[i].default_value) {
+            int memory = 0;
+            if (apply_value(settings, &specs[i], specs[i].default_value, &memory) || memory) {
+                maelys_cli_error_set(error, MAELYS_CLI_CODE_UNEXPECTED, NULL,
+                    "invalid channel default in configuration catalog");
+                return -1;
+            }
+        }
+    }
     /* The framework judges the descriptor it opens: regular, not a symbolic
      * link, one hard link, owned by root or the daemon user, not writable by
      * group or world. */
@@ -285,6 +355,7 @@ int egress_cli_settings_load(
                                     sizeof(*settings->destinations));
     int ok = settings->destinations != NULL;
     if (!ok) maelys_cli_error_from_errno(error, MAELYS_CLI_CODE_UNEXPECTED, ENOMEM, path);
+    _Static_assert(EGRESS_CLI_KEY_COUNT <= 32, "configuration presence mask exhausted");
     unsigned int seen = 0u;
     char *line = NULL;
     size_t capacity = 0u;
@@ -367,7 +438,7 @@ int egress_cli_settings_load(
         ok = 0;
     }
     if (ok) {
-        const char *violation = check_constraints(settings);
+        const char *violation = check_constraints(settings, seen);
         if (violation) {
             maelys_cli_error_set(error, MAELYS_CLI_CODE_VALIDATION_FAILED,
                 "Fix the configuration file, then run "
