@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MPL-2.0 */
-/* Private, shared codec. The bootstrap proposal is not a frozen protocol. */
+/* Private, shared codec for protocol/egress-channel-bootstrap-v1.md. */
 #ifndef EGRESS_BOOTSTRAP_H
 #define EGRESS_BOOTSTRAP_H
 #include <stddef.h>

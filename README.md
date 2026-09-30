@@ -3,7 +3,7 @@
 Maelys Egress is a small, policy-enforced forward proxy for sandboxed workloads.
 It accepts HTTP `CONNECT`, single-exchange HTTP/1.1 forward requests and SOCKS5,
 then connects only to exact TCP destinations in a sealed allowlist.
-The experimental `channel broker` command also serves native Egress-aware
+The `channel broker` command also serves native Egress-aware
 clients through a private Unix socket, without a proxy listener or bearer token.
 
 ```sh
@@ -26,8 +26,10 @@ opens it with `maelys_egress_client_channel_open`, keeps that handle alive,
 then passes its borrowed channel descriptor to `maelys_egress_client_connect`.
 It does not receive an upstream socket: the returned stream remains mediated
 by Egress. This does not sandbox the application or remove its other network
-access; the supervisor must enforce that separately. The bootstrap wire
-format is still experimental, pending the native Compose integration gate.
+access; the supervisor must enforce that separately. The
+[bootstrap v1 contract](protocol/egress-channel-bootstrap-v1.md) is frozen;
+the [native Compose example](examples/compose-channel/README.md) demonstrates
+a separate application container with `network_mode: none`.
 Configuration is described by `config describe` and the
 [generated configuration reference](docs/generated/config-reference.md).
 

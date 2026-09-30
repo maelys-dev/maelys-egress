@@ -1,13 +1,19 @@
 # Maelys Egress channel bootstrap, v1
 
-**Status: proposal — library and CLI implemented; Compose implementation under review.
-The wire tables are not frozen.** The
-mediated-connection channel itself remains the frozen
-[`egress-channel-v1`](../protocol/egress-channel-v1.md) contract. This document
-proposes only how a separately started process obtains one such channel from a
-broker by pathname. It moves to `protocol/` only after the library, CLI,
-portable descriptor-passing dependency, vectors and adversarial gate named
-below exist. Until then this is the place to disagree.
+**Status: accepted and implemented — bootstrap v1 frozen for 0.23.0.**
+The normative contract is now
+[`protocol/egress-channel-bootstrap-v1.md`](../protocol/egress-channel-bootstrap-v1.md).
+This document retains the design history and durable 17-criterion evidence
+checklist; its original proposal wording below is not a second contract.
+The mediated-connection channel itself remains the unchanged
+[`egress-channel-v1`](../protocol/egress-channel-v1.md) contract.
+
+The independent pre-freeze review of PR #149 at `160b125` found no blocking
+issue and verified all required checks (18 passed, one intentionally skipped),
+including the required native Compose test, Linux/macOS bootstrap mutation
+and fuzz gates. The tests merged without a tag as `ea30a40`. The two mistaken
+shutdown-test filenames noted in that review are corrected below. The freeze
+changes no runtime logic or wire bytes and keeps ABI 3 (core) and 1 (client).
 
 ## Why
 
@@ -494,7 +500,7 @@ The proof and its permanent replacement below must survive `make clean`.
   under `MECP`; wrong magic, both unknown versions and every non-zero reserved
   field. **Evidence:** `codec_tests` and `exchange` in
   [`test_bootstrap_client.c`](../tests/test_bootstrap_client.c); literal
-  response vectors in `tests/test_channel_broker_shutdown.py`.
+  response vectors in `tests/test_broker_shutdown.py`.
 - [x] one-byte-at-a-time request and response delivery, including a descriptor on
   the first response fragment. **Evidence:** `gate_fragments` in
   [`test_bootstrap_gates.c`](../tests/test_bootstrap_gates.c) forces successful
@@ -562,7 +568,7 @@ The proof and its permanent replacement below must survive `make clean`.
 - [x] broker destruction closes every lease and channel while returned streams
   survive; server stop also revokes those streams. **Evidence:**
   `test_bootstrap_broker`, `test_broker_faults.c` and
-  `tests/test_channel_broker_shutdown.py` (required CLI suite).
+  `tests/test_broker_shutdown.py` (required CLI suite).
 - [x] path symlink, pre-existing socket, wrong owner, wrong mode, writable
   capability directory and replaced-inode refusals. **Evidence:**
   `test_bootstrap_broker` covers existing socket, leaf symlink, both valid

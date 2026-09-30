@@ -73,7 +73,7 @@ reach an allowed destination.
 
 This is the proxy compatibility mode, not the native mediated-connection
 channel. It does not pass file descriptor 4, and the application holds a proxy
-credential. The separate experimental
+credential. The separate
 [native Compose example](../compose-channel/README.md) shows an Egress-aware
 application acquiring a native channel by pathname, without that credential
 or bridge.
