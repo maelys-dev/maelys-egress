@@ -19,6 +19,7 @@ PUBLIC_DOCUMENTS = (
     "THIRD_PARTY_NOTICES.md",
     "examples/README.md",
     "examples/compose-proxy/README.md",
+    "examples/compose-channel/README.md",
     "sdk/README.md",
     "sdk/python/README.md",
     "sdk/node/README.md",

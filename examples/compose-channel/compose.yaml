@@ -1,0 +1,93 @@
+name: maelys-egress-channel-example
+
+services:
+  init:
+    image: ${MAELYS_EGRESS_IMAGE:-maelys-egress-sidecar:local}
+    # Membership preserves setgid on the capability directory without FSETID.
+    user: "0:20000"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, DAC_OVERRIDE]
+    security_opt: [no-new-privileges:true]
+    entrypoint: ["/bin/sh", "/example/init.sh"]
+    volumes:
+      - ./init.sh:/example/init.sh:ro
+      - ./egress.conf:/example/egress.conf:ro
+      - egress-config:/run/maelys-config
+      - channel:/run/maelys-egress
+    restart: "no"
+
+  egress:
+    image: ${MAELYS_EGRESS_IMAGE:-maelys-egress-sidecar:local}
+    user: "10001:20000"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      upstream:
+        condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command: ["channel", "broker", "--config", "/run/maelys-config/egress.conf", "--non-interactive"]
+    environment:
+      MAELYS_CLI_FORMAT: json
+    volumes:
+      - egress-config:/run/maelys-config:ro
+      - channel:/run/maelys-egress
+    healthcheck:
+      test: ["CMD-SHELL", "test -S /run/maelys-egress/channel.sock"]
+      interval: 1s
+      timeout: 1s
+      retries: 30
+    pids_limit: 64
+
+  app:
+    image: ${MAELYS_EGRESS_APP_IMAGE:-maelys-egress-native-app:local}
+    user: "10002:10002"
+    group_add: ["20000"]
+    depends_on:
+      egress:
+        condition: service_healthy
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      # Override Docker client proxy defaults: the native application uses none.
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      all_proxy: ""
+    volumes:
+      - channel:/run/maelys-egress:ro
+    pids_limit: 16
+    restart: "no"
+
+  # Deterministic test destination, not part of Egress. Both ports listen;
+  # policy admits 8080 but rejects 8081. Nothing is published on the host.
+  upstream:
+    image: python:3.13-alpine
+    user: "10003:10003"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    entrypoint: ["python3", "-B", "-u", "/fixture/upstream.py"]
+    volumes:
+      - ./upstream.py:/fixture/upstream.py:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; [socket.create_connection(('127.0.0.1', p), 1).close() for p in (8080, 8081)]"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    pids_limit: 16
+
+networks:
+  default:
+    internal: true
+
+volumes:
+  egress-config:
+  channel:
