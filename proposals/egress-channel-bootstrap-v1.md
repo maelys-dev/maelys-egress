@@ -1,6 +1,7 @@
 # Maelys Egress channel bootstrap, v1
 
-**Status: proposal — not implemented. Nothing here is a contract.** The
+**Status: proposal — library implementation under review; CLI and Compose not implemented.
+The wire tables are not frozen.** The
 mediated-connection channel itself remains the frozen
 [`egress-channel-v1`](../protocol/egress-channel-v1.md) contract. This document
 proposes only how a separately started process obtains one such channel from a
@@ -94,8 +95,8 @@ in the frozen channel.
 
 The listener is filesystem `AF_UNIX` `SOCK_STREAM`. `SOCK_SEQPACKET` is not a
 portable alternative: Linux provides it for Unix sockets and macOS does not.
-The existing maelys-system `fdpass` operations accept Unix `SOCK_DGRAM`
-sockets only. Implementation depends on two additive partial stream I/O
+The original maelys-system `fdpass` operations accept Unix `SOCK_DGRAM`
+sockets only. System 0.11.0 now supplies the two additive partial stream I/O
 operations, `maelys_sys_fd_stream_send` and
 `maelys_sys_fd_stream_receive`, in the same standalone `fdpass.o`. They move
 bytes and descriptors, not frames: every delivered descriptor is observed,
@@ -242,6 +243,13 @@ Closing the lease destroys the channel but does not revoke relay streams that
 were already handed over, preserving channel v1. Stopping the Egress server
 closes all leases, destroys all channels and revokes active streams through the
 existing server-stop semantics.
+
+Destroying the independently embedded broker alone closes its leases and
+channels, but does not stop the shared server or revoke returned streams.
+Only stopping that server revokes them. The library reports socket cleanup
+failures rather than removing a replacement inode. Its worker notices server
+stop at least every 50 ms outside a channel join; a join may wait for a pending
+open, without blocking the server owner reactor.
 
 A conforming client keeps the lease and channel descriptor in one opaque
 handle and closes them together. V1 deliberately offers no `take_fd` operation
@@ -467,7 +475,8 @@ macOS:
   preserving the frozen channel shutdown distinction;
 - lease closure while a connector open is deliberately held pending, while a
   simultaneous proxy request still progresses on the server owner reactor;
-- broker stop closes every lease and channel and revokes active streams;
+- broker destruction closes every lease and channel while returned streams
+  survive; server stop also revokes those streams;
 - path symlink, pre-existing socket, wrong owner, wrong mode, writable
   capability directory and replaced-inode refusals;
 - client open deadline interrupted repeatedly without extending;

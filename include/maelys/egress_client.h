@@ -33,8 +33,30 @@ typedef enum maelys_egress_client_result {
     MAELYS_EGRESS_CLIENT_ERR_CANCELLED,   /* the server is stopping */
     MAELYS_EGRESS_CLIENT_ERR_UNSUPPORTED, /* the server does not speak this version */
     MAELYS_EGRESS_CLIENT_ERR_RESOURCE,    /* the server could not allocate */
-    MAELYS_EGRESS_CLIENT_ERR_INTERNAL     /* the server failed for a reason it keeps */
+    MAELYS_EGRESS_CLIENT_ERR_INTERNAL,    /* the server failed for a reason it keeps */
+    MAELYS_EGRESS_CLIENT_ERR_BUSY         /* bootstrap pending/active capacity exhausted */
 } maelys_egress_client_result_t;
+
+/* Experimental bootstrap surface; wire tables remain in proposals/ until
+ * the CLI and Compose conformance gate land. Additive within client ABI 1.
+ * Open one absolute canonical Unix pathname within one non-zero monotonic
+ * deadline (connect + write + receive). ERR_UNANSWERED is a local deadline;
+ * ERR_BUSY is a broker response, never the channel's ERR_TIMEOUT.
+ * On failure *out_channel is NULL and every received descriptor is closed.
+ * The opaque handle owns BOTH the lifetime lease and the CLOEXEC datagram
+ * channel. Retain it while using its borrowed fd with client_connect; do not
+ * close that fd separately or use it after channel_close. Operations on one
+ * handle must be externally serialized, including close. Closing the handle
+ * does not revoke destination streams already returned by client_connect.
+ * No descriptor number is assigned and no secret is sent by the client. */
+typedef struct maelys_egress_client_channel maelys_egress_client_channel_t;
+maelys_egress_client_result_t maelys_egress_client_channel_open(
+    const char *absolute_path, uint64_t open_timeout_ms,
+    maelys_egress_client_channel_t **out_channel, char **out_error);
+int maelys_egress_client_channel_fd(const maelys_egress_client_channel_t *channel);
+uint64_t maelys_egress_client_channel_connect_timeout_ms(
+    const maelys_egress_client_channel_t *channel);
+void maelys_egress_client_channel_close(maelys_egress_client_channel_t *channel);
 
 /*
  * Ask the channel for one exact TCP destination and receive the stream.

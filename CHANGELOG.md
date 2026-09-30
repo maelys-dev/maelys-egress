@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Add the experimental Unix-path channel bootstrap library and standalone
+  client handle. A private socket authorizes channels from one pre-bound
+  connector; the client retains a lifetime lease and needs no Egress core,
+  thread runtime or proxy credential. A separate broker worker owns bounded
+  handshakes, descriptor delivery, leases and channel destruction. Parent
+  ownership/modes and identity-checked socket cleanup enforce the filesystem
+  capability boundary. ABI numbers stay 3 (core) and 1 (client).
+- Add byte vectors, fragmented/partial I/O and ancillary-data attacks,
+  capacity/deadline/cleanup regressions and a suspended-open test proving
+  proxy progress during channel destruction. The CLI and native Compose
+  example are not implemented; bootstrap wire tables remain a proposal.
+
 ## 0.22.5 — 2026-09-30
 
 - Adopt maelys-system 0.11.0 and harden the optional mbedTLS and wolfSSL

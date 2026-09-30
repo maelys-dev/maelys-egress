@@ -256,6 +256,7 @@ const char *maelys_egress_client_result_string(maelys_egress_client_result_t res
     case MAELYS_EGRESS_CLIENT_ERR_UNSUPPORTED: return "unsupported";
     case MAELYS_EGRESS_CLIENT_ERR_RESOURCE: return "resource";
     case MAELYS_EGRESS_CLIENT_ERR_INTERNAL: return "internal";
+    case MAELYS_EGRESS_CLIENT_ERR_BUSY: return "busy";
     }
     return "unknown";
 }

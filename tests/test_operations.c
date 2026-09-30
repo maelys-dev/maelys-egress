@@ -6,6 +6,9 @@
 #include "maelys/egress_channel.h"
 #include "maelys/egress_client.h"
 #include "src/internal.h"
+#include "common/bootstrap.h"
+#include "maelys/sys/fdpass.h"
+#include "tests/tls_socket_fixture.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -1047,6 +1050,153 @@ static void test_channel_response_backpressure(maelys_egress_connector_t *connec
     CHECK(descriptors_settle_at(baseline));
 }
 
+static int bootstrap_peer(const char *path) {
+    struct sockaddr_un address = {.sun_family = AF_UNIX};
+    REQUIRE(strlen(path) < sizeof(address.sun_path)); strcpy(address.sun_path, path);
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0); REQUIRE(fd >= 0);
+    REQUIRE(connect(fd, (struct sockaddr *)&address, sizeof(address)) == 0);
+    fixture_nonblocking(fd);
+    return fd;
+}
+
+static unsigned bootstrap_read(int peer, int *out_channel) {
+    unsigned char response[16]; size_t offset = 0u;
+    *out_channel = -1;
+    while (offset < sizeof(response)) {
+        fixture_readable(peer);
+        int passed = -1; size_t count = 0u, received = 0u; unsigned flags = 0u;
+        REQUIRE(maelys_sys_fd_stream_receive(peer, response + offset, sizeof(response) - offset,
+            &received, &passed, 1u, &count, &flags) == MAELYS_SYS_OK);
+        REQUIRE(!flags && received);
+        if (count) { REQUIRE(*out_channel < 0); *out_channel = passed; }
+        offset += received;
+    }
+    unsigned status; uint64_t timeout;
+    REQUIRE(egress_bootstrap_decode_response(response, sizeof(response), &status, &timeout));
+    REQUIRE((status == EGRESS_BOOTSTRAP_OK) == (*out_channel >= 0));
+    return status;
+}
+
+static void settle_fds(int expected) {
+    unsigned stable = 0u;
+    for (unsigned i = 0u; i < 3000u; ++i) {
+        if (fixture_fd_count() == expected) { if (++stable == 4u) return; }
+        else stable = 0u;
+        struct timespec delay = {.tv_nsec = 1000000L}; nanosleep(&delay, NULL);
+    }
+    REQUIRE(fixture_fd_count() == expected);
+}
+
+static void test_bootstrap_broker(maelys_egress_connector_t *connector,
+    maelys_egress_server_t *server, uint16_t upstream_port) {
+    char directory_template[] = "/tmp/egress-broker-XXXXXX";
+    REQUIRE(mkdtemp(directory_template));
+    char *directory = realpath(directory_template, NULL); REQUIRE(directory);
+    char path[104]; REQUIRE(snprintf(path, sizeof(path), "%s/s", directory) > 0);
+    int before = fixture_fd_count();
+    maelys_egress_channel_broker_t *broker = NULL;
+    REQUIRE(maelys_egress_channel_broker_create(connector, path, 2000u, 120u, 1u, &broker, NULL) == MAELYS_EGRESS_OK);
+    int idle = fixture_fd_count();
+    struct stat st; REQUIRE(lstat(path, &st) == 0 && (st.st_mode & 0777) == 0600);
+    maelys_egress_channel_broker_t *duplicate = NULL;
+    REQUIRE(maelys_egress_channel_broker_create(connector, path, 2000u, 120u, 1u, &duplicate, NULL) == MAELYS_EGRESS_ERR_IO);
+    REQUIRE(!duplicate && fixture_fd_count() == idle);
+    maelys_egress_client_channel_t *client = NULL, *busy = NULL;
+    REQUIRE(maelys_egress_client_channel_open(path, 1000u, &client, NULL) == MAELYS_EGRESS_CLIENT_OK);
+    REQUIRE(maelys_egress_client_channel_open(path, 1000u, &busy, NULL) == MAELYS_EGRESS_CLIENT_ERR_BUSY);
+    REQUIRE(!busy);
+    int stream = -1;
+    REQUIRE(maelys_egress_client_connect(maelys_egress_client_channel_fd(client),
+        "localhost", upstream_port, 3000u, &stream, NULL) == MAELYS_EGRESS_CLIENT_OK);
+    int denied = -1;
+    REQUIRE(maelys_egress_client_connect(maelys_egress_client_channel_fd(client),
+        "forbidden.invalid", 443u, 3000u, &denied, NULL) == MAELYS_EGRESS_CLIENT_ERR_DENIED);
+    maelys_egress_client_channel_close(client);
+    REQUIRE(send_all(stream, "live", 4u)); char echoed[4]; fixture_readable(stream);
+    REQUIRE(recv(stream, echoed, sizeof(echoed), 0) == 4 && !memcmp(echoed, "live", 4u));
+    close(stream); wait_until_idle(server); settle_fds(idle);
+
+    unsigned char request[8]; egress_bootstrap_request(request);
+    for (size_t split = 1u; split <= 8u; ++split) {
+        int peer = bootstrap_peer(path);
+        REQUIRE(send_all(peer, request, split));
+        for (size_t i = split; i < 8u; ++i) REQUIRE(send_all(peer, request + i, 1u));
+        int channel;
+        REQUIRE(bootstrap_read(peer, &channel) == EGRESS_BOOTSTRAP_OK);
+        close(channel); close(peer); settle_fds(idle);
+    }
+    /* Every fragment is a control boundary. Raw hostile sends bypass System. */
+    for (size_t offset = 0u; offset < 8u; ++offset) {
+        int peer = bootstrap_peer(path);
+        if (offset) REQUIRE(send_all(peer, request, offset));
+        fixture_rights(peer, request + offset, 8u - offset, 50u);
+        int channel; REQUIRE(bootstrap_read(peer, &channel) == EGRESS_BOOTSTRAP_MALFORMED);
+        close(peer); settle_fds(idle);
+    }
+    for (unsigned mutation = 0u; mutation < 8u; ++mutation) {
+        unsigned char bad[8]; memcpy(bad, request, 8u); bad[mutation] ^= 2u;
+        int peer = bootstrap_peer(path); REQUIRE(send_all(peer, bad, 8u)); int channel;
+        REQUIRE(bootstrap_read(peer, &channel) == (mutation == 4u || mutation == 5u ?
+            EGRESS_BOOTSTRAP_UNSUPPORTED : EGRESS_BOOTSTRAP_MALFORMED));
+        close(peer); settle_fds(idle);
+    }
+    for (unsigned attack = 0u; attack < 4u; ++attack) {
+#ifndef __APPLE__
+        if (attack == 3u) continue;
+#endif
+        int peer = bootstrap_peer(path); REQUIRE(send_all(peer, request, 8u)); int channel;
+        REQUIRE(bootstrap_read(peer, &channel) == EGRESS_BOOTSTRAP_OK);
+        if (attack == 0u) REQUIRE(send_all(peer, "x", 1u));
+        if (attack == 1u) fixture_rights(peer, "x", 1u, 50u);
+        if (attack == 2u) REQUIRE(shutdown(peer, SHUT_WR) == 0);
+        if (attack == 3u) fixture_rights(peer, "", 0u, 50u);
+        fixture_readable(peer);
+        unsigned char byte; size_t n = 0u, count = 0u; unsigned flags = 0u;
+        maelys_sys_result_t result = maelys_sys_fd_stream_receive(peer, &byte, 1u, &n, NULL, 0u, &count, &flags);
+        REQUIRE(result == MAELYS_SYS_ERR_CLOSED || result == MAELYS_SYS_ERR_RESET);
+        close(channel); close(peer); settle_fds(idle);
+    }
+    /* Pending handshakes count towards capacity and have one absolute deadline. */
+    int slow = bootstrap_peer(path); REQUIRE(send_all(slow, request, 1u));
+    REQUIRE(maelys_egress_client_channel_open(path, 1000u, &busy, NULL) == MAELYS_EGRESS_CLIENT_ERR_BUSY);
+    fixture_readable(slow); close(slow); settle_fds(idle);
+    /* Early close and response delivery abandonment reclaim channels and slots. */
+    for (unsigned i = 0u; i < 32u; ++i) {
+        int peer = bootstrap_peer(path); REQUIRE(send_all(peer, request, 8u)); close(peer);
+        settle_fds(idle);
+    }
+    REQUIRE(maelys_egress_client_channel_open(path, 1000u, &client, NULL) == MAELYS_EGRESS_CLIENT_OK);
+    REQUIRE(maelys_egress_client_connect(maelys_egress_client_channel_fd(client), "localhost",
+        upstream_port, 3000u, &stream, NULL) == MAELYS_EGRESS_CLIENT_OK);
+    REQUIRE(maelys_egress_channel_broker_destroy(broker, NULL) == MAELYS_EGRESS_OK); broker = NULL;
+    REQUIRE(access(path, F_OK) != 0);
+    REQUIRE(send_all(stream, "kept", 4u)); fixture_readable(stream);
+    REQUIRE(recv(stream, echoed, 4u, 0) == 4 && !memcmp(echoed, "kept", 4u));
+    maelys_egress_client_channel_close(client); close(stream); wait_until_idle(server); settle_fds(before);
+
+    /* Group-capability mode: readable/traversable, never writable by clients. */
+    REQUIRE(chown(directory, (uid_t)-1, getegid()) == 0);
+    REQUIRE(chmod(directory, 02750) == 0);
+    REQUIRE(maelys_egress_channel_broker_create(connector, path, 100u, 100u, 1u, &broker, NULL) == MAELYS_EGRESS_OK);
+    REQUIRE(lstat(path, &st) == 0 && (st.st_mode & 0777) == 0660);
+    struct stat parent; REQUIRE(stat(directory, &parent) == 0 && st.st_gid == parent.st_gid);
+    REQUIRE(maelys_egress_client_channel_open(path, 1000u, &client, NULL) == MAELYS_EGRESS_CLIENT_OK);
+    maelys_egress_client_channel_close(client);
+    REQUIRE(maelys_egress_channel_broker_destroy(broker, NULL) == MAELYS_EGRESS_OK);
+    REQUIRE(chmod(directory, 02770) == 0);
+    REQUIRE(maelys_egress_channel_broker_create(connector, path, 100u, 100u, 1u, &broker, NULL) == MAELYS_EGRESS_ERR_IO);
+    REQUIRE(chmod(directory, 0700) == 0);
+    REQUIRE(symlink("not-a-socket", path) == 0);
+    REQUIRE(maelys_egress_channel_broker_create(connector, path, 100u, 100u, 1u, &broker, NULL) == MAELYS_EGRESS_ERR_IO);
+    REQUIRE(unlink(path) == 0);
+    REQUIRE(maelys_egress_channel_broker_create(connector, path, 100u, 100u, 1u, &broker, NULL) == MAELYS_EGRESS_OK);
+    /* A replaced inode belongs to somebody else and must survive destroy. */
+    REQUIRE(unlink(path) == 0); int planted = open(path, O_CREAT | O_EXCL | O_WRONLY, 0600); REQUIRE(planted >= 0); close(planted);
+    REQUIRE(maelys_egress_channel_broker_destroy(broker, NULL) == MAELYS_EGRESS_ERR_IO);
+    REQUIRE(lstat(path, &st) == 0 && S_ISREG(st.st_mode)); REQUIRE(unlink(path) == 0);
+    settle_fds(before); REQUIRE(rmdir(directory) == 0); free(directory);
+}
+
 
 static void test_channel(void) {
     /* Everything this test opens — upstream, server, channels, streams —
@@ -1234,6 +1384,7 @@ static void test_channel(void) {
     CHECK(descriptors_settle_at(before_second));
 
     test_channel_response_backpressure(connector);
+    test_bootstrap_broker(connector, server.server, upstream_port);
 
     /* Stopping the server ends the stream handed over earlier. */
     (void)close(stream);
@@ -1255,6 +1406,7 @@ static void test_channel(void) {
 }
 
 int main(void) {
+    fixture_limits();
     test_receipt_canonical();
     test_operations();
     test_connector_guard_and_timeout();
