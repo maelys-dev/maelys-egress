@@ -589,7 +589,7 @@
             "broker"
           ],
           "protocol": "maelys-egress-lifecycle/1",
-          "purpose": "Experimental: serve native channels through a private Unix socket until SIGINT or SIGTERM; stdout carries the lifecycle JSON Lines stream.",
+          "purpose": "Serve native channels through a private Unix socket until SIGINT or SIGTERM; stdout carries the lifecycle JSON Lines stream.",
           "usage": "channel broker --config FILE"
         }
       ],

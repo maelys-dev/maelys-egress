@@ -358,8 +358,8 @@ maelys_egress_result_t maelys_egress_channel_create(
     char **out_error);
 void maelys_egress_channel_destroy(maelys_egress_channel_t *channel);
 
-/* Experimental pathname bootstrap, additive within ABI 3. Wire tables remain
- * in proposals/ until the CLI and Compose gate land. The running connector
+/* Pathname bootstrap v1, additive within ABI 3. The wire contract is
+ * protocol/egress-channel-bootstrap-v1.md. The running connector
  * supplies the immutable principal; no client chooses an identity. The broker
  * retains it and owns a reactor and a cleanup worker, both distinct from the
  * server owner reactor. Channel joins never block either reactor.

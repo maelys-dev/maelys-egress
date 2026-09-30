@@ -869,8 +869,9 @@ install-check: all
 	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/cli.md"; \
 	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/cli-contract.json"; \
 	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/generated/config-reference.md"; \
-	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/protocol/egress-lifecycle-v1.schema.json"
-	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/protocol/egress-channel-v1.md"
+	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/protocol/egress-lifecycle-v1.schema.json"; \
+	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/protocol/egress-channel-v1.md"; \
+	test -f "$$stage$(PREFIX)/share/doc/maelys-egress/protocol/egress-channel-bootstrap-v1.md"
 
 dist:
 	@mkdir -p dist

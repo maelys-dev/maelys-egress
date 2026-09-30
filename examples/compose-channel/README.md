@@ -1,11 +1,12 @@
 # Docker Compose: native channel, no application network or secret
 
-This experimental example runs an Egress-aware C application in a separate
+This example runs an Egress-aware C application in a separate
 container with `network_mode: none`. It links only `libmaelys_egress_client`,
 opens a Unix bootstrap socket, keeps the returned handle alive while making
 channel requests, and uses the mediated stream descriptor. There is no HTTP
 proxy bridge, proxy environment, bearer token, Warden dependency or assigned
-descriptor number. The bootstrap wire tables are not frozen yet.
+descriptor number. It uses the frozen
+[bootstrap v1 contract](../../protocol/egress-channel-bootstrap-v1.md).
 
 ```text
 app (UID 10002, supplementary group 20000, network_mode: none)

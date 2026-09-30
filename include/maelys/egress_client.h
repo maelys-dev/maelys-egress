@@ -37,8 +37,8 @@ typedef enum maelys_egress_client_result {
     MAELYS_EGRESS_CLIENT_ERR_BUSY         /* bootstrap pending/active capacity exhausted */
 } maelys_egress_client_result_t;
 
-/* Experimental bootstrap surface; wire tables remain in proposals/ until
- * the CLI and Compose conformance gate land. Additive within client ABI 1.
+/* Bootstrap v1: protocol/egress-channel-bootstrap-v1.md.
+ * Additive within client ABI 1.
  * Open one absolute canonical Unix pathname within one non-zero monotonic
  * deadline (connect + write + receive). ERR_UNANSWERED is a local deadline;
  * ERR_BUSY is a broker response, never the channel's ERR_TIMEOUT.

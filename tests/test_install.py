@@ -75,6 +75,10 @@ def main():
             assert "Requires" not in client_pc_text, client_pc_text
             assert (stage / "lib/libmaelys_egress_client.a").is_file()
             assert (stage / "include/maelys/egress_client.h").is_file()
+            protocol_docs = stage / "share/doc/maelys-egress/protocol"
+            for name in ("egress-channel-v1.md", "egress-channel-bootstrap-v1.md",
+                         "egress-lifecycle-v1.schema.json"):
+                assert digest(protocol_docs / name) == digest(ROOT / "protocol" / name), name
             compose_example = stage / "share/doc/maelys-egress/examples/compose-proxy"
             assert (compose_example / "compose.yaml").is_file()
             for script in ("app.sh", "bridge.sh", "init.sh"):
