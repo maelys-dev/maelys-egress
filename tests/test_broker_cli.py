@@ -94,6 +94,8 @@ def run():
     catalog = invoke("describe", "--summary")["data"]["commands"]
     assert sum(c["id"] == "channel.broker" for c in catalog) == 1
     command = invoke("describe", "channel.broker")["data"]["commands"][0]
+    assert command["purpose"].startswith("Experimental:"), command
+    assert next(c for c in catalog if c["id"] == "channel.broker")["purpose"] == command["purpose"]
     assert command["effect"] == "stream" and command["outputMode"] == "protocol-stream"
     assert command["protocol"] == "maelys-egress-lifecycle/1"
     assert [o["long"] for o in command["input"]["options"]] == ["--config"]

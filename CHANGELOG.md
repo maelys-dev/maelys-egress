@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Add `maelys-egress channel broker --config FILE`: a native-only server and
+- Add experimental `maelys-egress channel broker --config FILE`: a native-only server and
   supervised Unix-path broker, with immutable secret-free principal binding,
   bounded clients/deadlines, quotas, audit and policy-only SIGHUP reload.
   Six channel configuration keys select this mode; proxy/credential/TLS

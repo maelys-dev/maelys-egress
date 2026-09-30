@@ -30,7 +30,7 @@ static const maelys_cli_command_t commands[] = {
      egress_cli_command_serve, "maelys-egress-lifecycle/1"),
      MAELYS_CLI_OPTIONS(config_options)},
     {MAELYS_CLI_PROTOCOL_STREAM("channel.broker", "channel broker",
-     "Serve native channels through a private Unix socket until SIGINT or SIGTERM; "
+     "Experimental: serve native channels through a private Unix socket until SIGINT or SIGTERM; "
      "stdout carries the lifecycle JSON Lines stream.",
      egress_cli_command_channel_broker, "maelys-egress-lifecycle/1"),
      MAELYS_CLI_OPTIONS(config_options)},
