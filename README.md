@@ -3,6 +3,33 @@
 Maelys Egress is a small, policy-enforced forward proxy for sandboxed workloads.
 It accepts HTTP `CONNECT`, single-exchange HTTP/1.1 forward requests and SOCKS5,
 then connects only to exact TCP destinations in a sealed allowlist.
+The experimental `channel broker` command also serves native Egress-aware
+clients through a private Unix socket, without a proxy listener or bearer token.
+
+```sh
+maelys-egress channel broker --config /etc/maelys-egress.conf
+```
+
+A minimal broker configuration is:
+
+```ini
+schema_version = 1
+channel_listen_unix = /run/maelys-egress/agent.sock
+channel_principal = agent-001
+allow = github.com:443
+```
+
+The socket's parent must already exist, belong to the broker's effective UID
+and have mode `0700`, or `2750` with the broker in its capability group. Use
+one socket per principal. The application links `libmaelys_egress_client` and
+opens it with `maelys_egress_client_channel_open`, keeps that handle alive,
+then passes its borrowed channel descriptor to `maelys_egress_client_connect`.
+It does not receive an upstream socket: the returned stream remains mediated
+by Egress. This does not sandbox the application or remove its other network
+access; the supervisor must enforce that separately. The bootstrap wire
+format is still experimental, pending the native Compose integration gate.
+Configuration is described by `config describe` and the
+[generated configuration reference](docs/generated/config-reference.md).
 
 The project owns the `maelys-egress` product and ABI namespace. A release
 contains one canonical binary and symbol family; it does not carry duplicate

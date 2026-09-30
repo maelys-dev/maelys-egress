@@ -21,6 +21,21 @@ from maelys_egress import (
 
 
 class ProcessSdkTest(unittest.TestCase):
+    def test_proxy_sdk_refuses_channel_ready(self) -> None:
+        for include_proxy in (False, True):
+            process = EgressProcess(EgressConfig([Destination("127.0.0.1", 9, allow_private=True)]))
+            event = {"schemaVersion": 1, "contract": "maelys-egress-lifecycle/1", "event": "ready",
+                     "channel": {"transport": "unix", "path": "/private/channel.sock",
+                                 "protocol": "maelys-egress-channel-bootstrap/1"},
+                     "admin": {"host": "127.0.0.1", "port": 1}, "policy": {"digest": "0" * 64}}
+            if include_proxy:
+                event["proxy"] = {"transport": "tcp", "host": "127.0.0.1", "port": 2}
+            process.process = types.SimpleNamespace(stdout=io.BytesIO(json.dumps(event).encode() + b"\n"))
+            process._consume_lifecycle()
+            self.assertIsInstance(process._lifecycle_error, RuntimeError)
+            self.assertEqual(process.proxy_port, 0)
+            process.process = None
+
     def test_ipv6_urls_are_bracketed(self) -> None:
         process = EgressProcess(
             EgressConfig(

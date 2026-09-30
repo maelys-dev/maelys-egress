@@ -42,6 +42,16 @@
         }
       ]
     },
+    "channel": {
+      "type": "object",
+      "required": ["transport", "path", "protocol"],
+      "properties": {
+        "transport": { "const": "unix" },
+        "path": { "type": "string", "minLength": 1, "pattern": "^/" },
+        "protocol": { "const": "maelys-egress-channel-bootstrap/1" }
+      },
+      "additionalProperties": false
+    },
     "admin": {
       "oneOf": [
         { "type": "null" },
@@ -68,5 +78,17 @@
     },
     "receipt": { "type": "object" }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "event": { "const": "ready" } }, "required": ["event"] },
+      "then": {
+        "required": ["admin", "policy"],
+        "oneOf": [
+          { "required": ["proxy"], "not": { "required": ["channel"] } },
+          { "required": ["channel"], "not": { "required": ["proxy"] } }
+        ]
+      }
+    }
+  ]
 }

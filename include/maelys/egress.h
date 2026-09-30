@@ -163,6 +163,14 @@ maelys_egress_result_t maelys_egress_config_set_native_only(
     maelys_egress_config_t *config,
     int enabled,
     char **out_error);
+/* Bind one secret-free principal in native-only mode. Requires an empty
+ * principal namespace; NULL invocation_id means absent. The binding is
+ * immutable: listeners, credentials and unauthenticated mode cannot be
+ * enabled afterwards. Only a trusted in-process holder of the server can
+ * obtain this capability with server_native_connector_create. */
+maelys_egress_result_t maelys_egress_config_set_native_principal(
+    maelys_egress_config_t *config, const char *principal,
+    const char *invocation_id, char **out_error);
 maelys_egress_result_t maelys_egress_config_set_authentication(
     maelys_egress_config_t *config,
     const char *username,
@@ -286,6 +294,13 @@ maelys_egress_result_t maelys_egress_server_connector_create(
     const char *secret,
     maelys_egress_connector_t **out_connector,
     char **out_error);
+/* Trusted embedder only: bind to the sole configured native principal, not
+ * to an identity supplied by a client. Refuses servers without an immutable
+ * native-only principal, including credential-based and Unix proxy modes.
+ * Retention, quotas, receipts and shutdown match the authenticated connector. */
+maelys_egress_result_t maelys_egress_server_native_connector_create(
+    maelys_egress_server_t *server,
+    maelys_egress_connector_t **out_connector, char **out_error);
 void maelys_egress_connector_retain(maelys_egress_connector_t *connector);
 void maelys_egress_connector_release(maelys_egress_connector_t *connector);
 
@@ -372,6 +387,10 @@ maelys_egress_result_t maelys_egress_channel_broker_create(
     maelys_egress_channel_broker_t **out_broker, char **out_error);
 maelys_egress_result_t maelys_egress_channel_broker_destroy(
     maelys_egress_channel_broker_t *broker, char **out_error);
+/* Thread-safe liveness snapshot. False after reactor exit, including fatal
+ * listener failure. Destroy still joins workers and reports cleanup errors.
+ * The handle must remain alive throughout this call. */
+int maelys_egress_channel_broker_is_running(const maelys_egress_channel_broker_t *broker);
 
 uint64_t maelys_egress_receipt_id(const maelys_egress_receipt_t *receipt);
 maelys_egress_protocol_t maelys_egress_receipt_protocol(

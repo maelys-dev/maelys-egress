@@ -1,6 +1,6 @@
 # Maelys Egress channel bootstrap, v1
 
-**Status: proposal — library implementation under review; CLI and Compose not implemented.
+**Status: proposal — library implemented; CLI implementation under review; Compose not implemented.
 The wire tables are not frozen.** The
 mediated-connection channel itself remains the frozen
 [`egress-channel-v1`](../protocol/egress-channel-v1.md) contract. This document
@@ -401,12 +401,13 @@ identity, deadline or limit option. Proposed configuration keys are:
 | `channel_invocation_id` | absent | optional receipt invocation identifier |
 | `channel_connect_timeout_ms` | `5000` | per-destination channel deadline, `1..600000` |
 | `channel_handshake_timeout_ms` | `5000` | complete bootstrap deadline, `1..60000` |
-| `channel_max_clients` | `128` | pending plus active leases, `1..4096` |
+| `channel_max_clients` | `128` | pending handshakes, active leases and retiring channels, `1..4096` |
 
 The configuration grammar stays at schema version 1: these are additive keys.
 `channel_listen_unix` and `channel_principal` require each other. The other
 channel keys require both. Broker mode conflicts with `listen`, `listen_unix`,
-`unix_peer`, `token_file` and `unauthenticated_loopback`; the socket capability
+`unix_peer`, `token_file`, `unauthenticated_loopback` and every TLS listener key,
+including explicitly supplied false/default values; the socket capability
 replaces proxy credentials rather than hiding one in the confined process.
 The existing destination policy, stream `max_connections`, audit settings and
 admin listener remain available. Principal quota keys require either
@@ -423,9 +424,14 @@ implementation adds an independently embeddable opaque broker handle to
 configured principal, retains that connector, and owns a reactor which
 accepts bootstrap clients and watches leases, plus a fixed cleanup worker
 which calls `maelys_egress_channel_destroy`. The listener and lease watches are
-never registered on the server owner reactor. The CLI also needs an additive core
-operation which binds the configured principal without manufacturing a bearer
-secret; exact C names are reviewed with the implementation.
+never registered on the server owner reactor. The CLI sets native-only mode,
+then binds the configured identity with `maelys_egress_config_set_native_principal`.
+`maelys_egress_server_native_connector_create` obtains that sole immutable
+identity without manufacturing a bearer secret. It refuses every other server
+mode; the ordinary credential API cannot authenticate a native bound principal.
+`maelys_egress_channel_broker_is_running` lets the CLI stop with a fatal event
+if its broker reactor fails. Readiness is emitted before any receipt or reload
+event; `ready.channel` and `ready.proxy` are mutually exclusive.
 
 These additive functions and opaque types leave `MAELYS_EGRESS_ABI_VERSION`
 at 3. A bump is required only if implementation changes an existing public

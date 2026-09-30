@@ -8,6 +8,27 @@ import {
   Destination, EgressConfig, EgressProcess, binaryTrustRefusal,
 } from "../index.js";
 
+test("proxy SDK refuses channel-only or ambiguous readiness", async () => {
+  const root = mkdtempSync(join(tmpdir(), "egress-ready-test-"));
+  try {
+    for (const includeProxy of [false, true]) {
+      const event = { schemaVersion: 1, contract: "maelys-egress-lifecycle/1", event: "ready",
+        channel: { transport: "unix", path: "/private/channel.sock", protocol: "maelys-egress-channel-bootstrap/1" },
+        admin: { host: "127.0.0.1", port: 1 }, policy: { digest: "0".repeat(64) } };
+      if (includeProxy) event.proxy = { transport: "tcp", host: "127.0.0.1", port: 2 };
+      const binary = join(root, "peer");
+      writeFileSync(binary, `#!${process.execPath}\nconsole.log(${JSON.stringify(JSON.stringify(event))});\nsetInterval(() => {}, 1000);\n`, { mode: 0o700 });
+      const egress = new EgressProcess(new EgressConfig({
+        destinations: [new Destination("127.0.0.1", 9, { allowPrivate: true })],
+      }), { binary, startupTimeoutMs: 2000 });
+      await assert.rejects(egress.start(), /invalid ready lifecycle event/);
+      assert.equal(egress.child, null);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("IPv6 proxy URLs are bracketed", () => {
   const egress = new EgressProcess(new EgressConfig({
     destinations: [new Destination("127.0.0.1", 9, { allowPrivate: true })],

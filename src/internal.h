@@ -79,6 +79,7 @@ struct maelys_egress_config {
     int authentication_set;
     int unauthenticated_loopback;
     int unix_principal_bound;
+    int native_principal_bound;
     size_t unix_principal_index;
     size_t max_connections;
     size_t buffer_bytes;
@@ -240,6 +241,7 @@ int egress_tls_client_hello_matches(
 
 maelys_egress_result_t egress_server_connector_bind(
     maelys_egress_server_t *server,
+    int native,
     const char *username,
     const char *secret,
     size_t *out_principal_index,

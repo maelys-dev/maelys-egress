@@ -39,6 +39,7 @@ struct maelys_egress_channel_broker {
     int armed, armed_ok, parent_fd, owns_path;
     maelys_egress_result_t result;
     atomic_int stopping;
+    atomic_int running;
     uint64_t connect_timeout, handshake_timeout, serial;
     size_t capacity;
     broker_slot_t *slots;
@@ -278,6 +279,7 @@ static void *broker_main(void *opaque) {
     (void)maelys_sys_mutex_lock(broker->lock);
     broker->result = ready ? MAELYS_EGRESS_OK : MAELYS_EGRESS_ERR_IO;
     broker->armed_ok = ready;
+    atomic_store(&broker->running, ready);
     broker->armed = 1;
     (void)maelys_sys_condition_broadcast(broker->condition);
     (void)maelys_sys_mutex_unlock(broker->lock);
@@ -322,7 +324,12 @@ static void *broker_main(void *opaque) {
     (void)maelys_sys_socket_release(&broker->listener);
     remove_path(broker);
     stop_reaper(broker);
+    atomic_store(&broker->running, 0);
     return NULL;
+}
+
+int maelys_egress_channel_broker_is_running(const maelys_egress_channel_broker_t *broker) {
+    return broker && atomic_load(&broker->running) && !atomic_load(&broker->stopping);
 }
 
 maelys_egress_result_t maelys_egress_channel_broker_destroy(
@@ -371,6 +378,7 @@ maelys_egress_result_t maelys_egress_channel_broker_create(
     broker->parent_fd = -1;
     broker->result = MAELYS_EGRESS_ERR_IO;
     atomic_init(&broker->stopping, 0);
+    atomic_init(&broker->running, 0);
     broker->slots = calloc(max_clients, sizeof(*broker->slots));
     if (!broker->slots) { free(broker); return MAELYS_EGRESS_ERR_MEMORY; }
     broker->capacity = max_clients;

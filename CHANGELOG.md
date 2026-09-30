@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Add experimental `maelys-egress channel broker --config FILE`: a native-only server and
+  supervised Unix-path broker, with immutable secret-free principal binding,
+  bounded clients/deadlines, quotas, audit and policy-only SIGHUP reload.
+  Six channel configuration keys select this mode; proxy/credential/TLS
+  listener keys and the wrong command are refused. `ready.channel` replaces
+  `ready.proxy` in broker mode only. Receipts cannot precede `ready`, and a
+  failed broker stops the command with a fatal event and nonzero exit.
+  Add trusted native-principal/connector and broker liveness APIs within ABI 3.
+  Cross-mode, standalone-client, identity, quota, reload and lifecycle tests
+  accompany generated references. Permanent shutdown tests keep four leases,
+  four streams and a confirmed partial handshake alive across 20 signal stops
+  and a broker failure, checking receipts, closure and socket cleanup.
+  Python/Node process SDKs remain proxy-only
+  and reject channel readiness. Native Compose and bootstrap wire freeze
+  remain separate steps; no release is made by this change.
+
 - Add the experimental Unix-path channel bootstrap library and standalone
   client handle. A private socket authorizes channels from one pre-bound
   connector; the client retains a lifetime lease and needs no Egress core,
@@ -16,7 +32,7 @@
   broker/proxy progress, handshake expiry and lease handling during channel
   destruction, with bounded saturation and full capacity recovery. A mutation
   restores synchronous destruction and must fail the broker progress test.
-  The CLI and native Compose example are not implemented; bootstrap wire
+  The native Compose example is not implemented; bootstrap wire
   tables remain a proposal.
 
 ## 0.22.5 — 2026-09-30

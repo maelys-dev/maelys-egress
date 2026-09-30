@@ -27,6 +27,10 @@ parse HTTP/SOCKS or replace the application's normal networking library. The
 application gives `proxy_url`/`proxyUrl` to a proxy-aware HTTP client, curl, or
 a child process through `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY`.
 
+These process SDKs launch `serve` only. They do not launch `channel broker` or
+implement its descriptor-passing client; channel-only and ambiguous readiness
+events are rejected. Native applications use `libmaelys_egress_client`.
+
 They are also not native bindings: Egress remains a separate process. Use the C
 ABI when the mediator must run inside the application process, needs several
 principals, a receipt callback, custom TLS provider or HSM attestor.
