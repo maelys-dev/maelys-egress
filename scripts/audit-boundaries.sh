@@ -93,8 +93,16 @@ if grep_tree '(^|[^A-Za-z0-9_.>])(socket|accept|accept4|connect|bind|listen|recv
 fi
 # Descriptors cross a process boundary through maelys-system's fdpass, on
 # the server as in the client: no sendmsg or recvmsg of our own anywhere.
-if grep_tree '(^|[^A-Za-z0-9_.>])(sendmsg|recvmsg)[[:space:]]*\(' src client; then
-    echo "Egress passes descriptors through maelys_sys_fd_send and maelys_sys_fd_receive" >&2
+if grep_tree '(^|[^A-Za-z0-9_.>])(sendmsg|recvmsg)[[:space:]]*\(' src client providers; then
+    echo "Egress passes descriptors through maelys-system fdpass" >&2
+    exit 1
+fi
+
+# The optional TLS stacks use one transport adapter. Only its proven IP
+# branch may read plain bytes; Unix reads always drain ancillary data.
+if grep_tree '(^|[^A-Za-z0-9_.>])(read|recv|recvfrom|readv)[[:space:]]*\(|MSG_PEEK' \
+    --exclude=socket_io.c providers; then
+    echo "TLS providers must read through providers/socket_io.c" >&2
     exit 1
 fi
 

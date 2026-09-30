@@ -135,7 +135,9 @@ CLI_SCHEMA_SYMBOLS := $(foreach schema,$(CLI_SCHEMAS),\
 	egress_$(subst -,_,$(basename $(notdir $(schema))))_schema=$(schema))
 CLI_SCHEMA_OBJECT := $(OBJ)/generated/egress_schemas.o
 DEPENDENCIES := $(OBJECTS:.o=.d) $(CLI_OBJECTS:.o=.d) $(CLIENT_OBJECTS:.o=.d) \
-	$(OBJ)/tests/test_egress.d $(OBJ)/tests/test_operations.d
+	$(OBJ)/tests/test_egress.d $(OBJ)/tests/test_operations.d \
+	$(OBJ)/providers/socket_io.d $(OBJ)/providers/tls_mbedtls.d \
+	$(OBJ)/providers/tls_wolfssl.d
 STATIC_LIB := $(LIB)/libmaelys_egress.a
 # The channel client a confined process links: the codec, client/client.c and
 # maelys-system's fdpass. fdpass.o is taken from the pinned libmaelys_sys.a —
@@ -166,6 +168,9 @@ CHANNEL_CODEC := $(OBJ)/src/core/channel.o
 CHANNEL_TEST := $(BIN)/test-channel
 MBEDTLS_TEST := $(BIN)/test-tls-mbedtls
 WOLFSSL_TEST := $(BIN)/test-tls-wolfssl
+TLS_SOCKET_OBJECT := $(OBJ)/providers/socket_io.o
+TLS_SOCKET_TEST := $(BIN)/test-tls-socket
+TLS_SOCKET_ERRORS_TEST := $(BIN)/test-tls-socket-errors
 TLS_TEST_STAMP := $(BUILD)/tls-fixtures/generated
 TLS_TEST_CERT := $(BUILD)/tls-fixtures/tls-cert.pem
 TLS_TEST_KEY := $(BUILD)/tls-fixtures/tls-key.pem
@@ -316,7 +321,7 @@ $(OBJ)/providers/tls_mbedtls.o: providers/tls_mbedtls.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $$(pkg-config --cflags mbedtls) -MMD -MP -c $< -o $@
 
-$(MBEDTLS_LIB): $(OBJ)/providers/tls_mbedtls.o
+$(MBEDTLS_LIB): $(OBJ)/providers/tls_mbedtls.o $(TLS_SOCKET_OBJECT)
 	@mkdir -p $(@D)
 	ar rcs $@ $^
 
@@ -324,7 +329,7 @@ $(OBJ)/providers/tls_wolfssl.o: providers/tls_wolfssl.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $$(pkg-config --cflags wolfssl) -MMD -MP -c $< -o $@
 
-$(WOLFSSL_LIB): $(OBJ)/providers/tls_wolfssl.o
+$(WOLFSSL_LIB): $(OBJ)/providers/tls_wolfssl.o $(TLS_SOCKET_OBJECT)
 	@mkdir -p $(@D)
 	ar rcs $@ $^
 
@@ -423,14 +428,22 @@ $(TLS_TEST_STAMP):
 		-addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' >/dev/null 2>&1
 	@touch $@
 
-$(MBEDTLS_TEST): tests/test_tls_provider.c $(MBEDTLS_LIB) $(STATIC_LIB) $(TLS_TEST_STAMP) | $(MAELYS_SYSTEM_LIB)
+$(TLS_SOCKET_TEST): tests/test_tls_socket.c tests/tls_socket_fixture.h $(TLS_SOCKET_OBJECT) | $(MAELYS_SYSTEM_LIB)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) tests/test_tls_socket.c $(TLS_SOCKET_OBJECT) $(LDLIBS) -o $@
+
+$(TLS_SOCKET_ERRORS_TEST): tests/test_tls_socket_errors.c tests/tls_socket_fixture.h providers/socket_io.c providers/socket_io.h
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) tests/test_tls_socket_errors.c -o $@
+
+$(MBEDTLS_TEST): tests/test_tls_provider.c tests/tls_socket_fixture.h $(MBEDTLS_LIB) $(STATIC_LIB) $(TLS_TEST_STAMP) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) \
 		-DMAELYS_TLS_FACTORY=maelys_egress_tls_mbedtls_create \
 		tests/test_tls_provider.c $(MBEDTLS_LIB) $(STATIC_LIB) \
 		$(LDLIBS) $$(pkg-config --libs mbedtls mbedx509 mbedcrypto) -o $@
 
-$(WOLFSSL_TEST): tests/test_tls_provider.c $(WOLFSSL_LIB) $(STATIC_LIB) $(TLS_TEST_STAMP) | $(MAELYS_SYSTEM_LIB)
+$(WOLFSSL_TEST): tests/test_tls_provider.c tests/tls_socket_fixture.h $(WOLFSSL_LIB) $(STATIC_LIB) $(TLS_TEST_STAMP) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) \
 		-DMAELYS_TLS_FACTORY=maelys_egress_tls_wolfssl_create \
@@ -454,11 +467,13 @@ install-metadata: $(CLI)
 $(PC) $(CLIENT_PC) $(MANIFEST): | install-metadata
 	@test -f $@
 
-test: all $(OPERATIONS_TEST) $(CHANNEL_TEST) $(CLIENT_TEST)
+test: all $(OPERATIONS_TEST) $(CHANNEL_TEST) $(CLIENT_TEST) $(TLS_SOCKET_TEST) $(TLS_SOCKET_ERRORS_TEST)
 	$(TEST)
 	$(OPERATIONS_TEST)
 	$(CHANNEL_TEST)
 	$(CLIENT_TEST)
+	$(TLS_SOCKET_TEST)
+	$(TLS_SOCKET_ERRORS_TEST)
 	tests/test_cli.sh $(CLI)
 
 # The command reference and contract come from the maelys-cli generator; the
@@ -595,7 +610,7 @@ tsan:
 analyze: | $(MAELYS_SYSTEM_LIB)
 	$(CC) --analyze -Xclang -analyzer-output=text -Xclang -analyzer-werror \
 		$(CPPFLAGS) -std=c11 -D_POSIX_C_SOURCE=200809L \
-		-D_XOPEN_SOURCE=700 $(SOURCES) $(CLIENT_SOURCES)
+		-D_XOPEN_SOURCE=700 $(SOURCES) $(CLIENT_SOURCES) providers/socket_io.c
 
 $(BIN)/fuzz-http: tests/fuzz/fuzz_http.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)

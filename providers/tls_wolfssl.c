@@ -1,4 +1,5 @@
 #include "maelys/egress_tls_modules.h"
+#include "providers/socket_io.h"
 
 #include <limits.h>
 #include <errno.h>
@@ -17,14 +18,15 @@ typedef struct wolfssl_provider_context {
 
 typedef struct wolfssl_provider_session {
     WOLFSSL *ssl;
-    int fd;
+    egress_tls_socket_t socket;
     char error[192];
 } wolfssl_provider_session_t;
 
 static int socket_receive(WOLFSSL *ssl, char *buffer, int length, void *opaque) {
     (void)ssl;
     wolfssl_provider_session_t *session = opaque;
-    ssize_t received = recv(session->fd, buffer, (size_t)length, 0);
+    if (length <= 0) return WOLFSSL_CBIO_ERR_GENERAL;
+    ssize_t received = egress_tls_socket_receive(&session->socket, buffer, (size_t)length);
     if (received > 0) return (int)received;
     if (received == 0) return WOLFSSL_CBIO_ERR_CONN_CLOSE;
     if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -36,11 +38,12 @@ static int socket_receive(WOLFSSL *ssl, char *buffer, int length, void *opaque) 
 static int socket_send(WOLFSSL *ssl, char *buffer, int length, void *opaque) {
     (void)ssl;
     wolfssl_provider_session_t *session = opaque;
+    if (session->socket.failed || length <= 0) return WOLFSSL_CBIO_ERR_GENERAL;
     int flags = 0;
 #ifdef MSG_NOSIGNAL
     flags = MSG_NOSIGNAL;
 #endif
-    ssize_t sent = send(session->fd, buffer, (size_t)length, flags);
+    ssize_t sent = send(session->socket.fd, buffer, (size_t)length, flags);
     if (sent >= 0) return (int)sent;
     if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
         return WOLFSSL_CBIO_ERR_WANT_WRITE;
@@ -70,6 +73,11 @@ static void remember_error(wolfssl_provider_session_t *session, int result) {
 
 static maelys_egress_tls_step_t translate(
     wolfssl_provider_session_t *session, int result, int zero_is_closed) {
+    if (session->socket.failed) {
+        (void)snprintf(session->error, sizeof(session->error),
+                       "unexpected ancillary data on Unix TLS transport");
+        return MAELYS_EGRESS_TLS_FAILED;
+    }
     if (result > 0) return MAELYS_EGRESS_TLS_COMPLETE;
     int code = wolfSSL_get_error(session->ssl, result);
     if (code == WOLFSSL_ERROR_WANT_READ) return MAELYS_EGRESS_TLS_WANT_READ;
@@ -97,8 +105,11 @@ static maelys_egress_result_t session_create(
     }
     wolfssl_provider_session_t *session = calloc(1, sizeof(*session));
     if (!session) return MAELYS_EGRESS_ERR_MEMORY;
+    if (egress_tls_socket_init(&session->socket, fd) != 0) {
+        free(session);
+        return MAELYS_EGRESS_ERR_ARGUMENT;
+    }
     session->ssl = wolfSSL_new(selected);
-    session->fd = fd;
     if (!session->ssl ||
         (role == MAELYS_EGRESS_TLS_CLIENT &&
          wolfSSL_check_domain_name(session->ssl, server_name) != WOLFSSL_SUCCESS)) {
@@ -118,6 +129,7 @@ static maelys_egress_result_t session_create(
 static maelys_egress_tls_step_t handshake(void *context, void *opaque) {
     (void)context;
     wolfssl_provider_session_t *session = opaque;
+    if (session->socket.failed) return MAELYS_EGRESS_TLS_FAILED;
     return translate(session, wolfSSL_negotiate(session->ssl), 0);
 }
 
@@ -127,9 +139,10 @@ static maelys_egress_tls_step_t tls_read(
     wolfssl_provider_session_t *session = opaque;
     if (out_read) *out_read = 0u;
     if (!session || !buffer || !capacity || !out_read) return MAELYS_EGRESS_TLS_FAILED;
+    if (session->socket.failed) return MAELYS_EGRESS_TLS_FAILED;
     int bounded = capacity > (size_t)INT_MAX ? INT_MAX : (int)capacity;
     int result = wolfSSL_read(session->ssl, buffer, bounded);
-    if (result > 0) *out_read = (size_t)result;
+    if (result > 0 && !session->socket.failed) *out_read = (size_t)result;
     return translate(session, result, 1);
 }
 
@@ -140,16 +153,19 @@ static maelys_egress_tls_step_t tls_write(
     wolfssl_provider_session_t *session = opaque;
     if (out_written) *out_written = 0u;
     if (!session || !buffer || !length || !out_written) return MAELYS_EGRESS_TLS_FAILED;
+    if (session->socket.failed) return MAELYS_EGRESS_TLS_FAILED;
     int bounded = length > (size_t)INT_MAX ? INT_MAX : (int)length;
     int result = wolfSSL_write(session->ssl, buffer, bounded);
-    if (result > 0) *out_written = (size_t)result;
+    if (result > 0 && !session->socket.failed) *out_written = (size_t)result;
     return translate(session, result, 0);
 }
 
 static maelys_egress_tls_step_t tls_shutdown(void *context, void *opaque) {
     (void)context;
     wolfssl_provider_session_t *session = opaque;
+    if (session->socket.failed) return MAELYS_EGRESS_TLS_FAILED;
     int result = wolfSSL_shutdown(session->ssl);
+    if (session->socket.failed) return translate(session, result, 0);
     if (result == WOLFSSL_SUCCESS) return MAELYS_EGRESS_TLS_COMPLETE;
     if (result == WOLFSSL_SHUTDOWN_NOT_DONE) return MAELYS_EGRESS_TLS_WANT_READ;
     return translate(session, result, 0);

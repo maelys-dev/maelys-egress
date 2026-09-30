@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Adopt maelys-system 0.11.0 and harden the optional mbedTLS and wolfSSL
+  transports on Unix stream sockets. Their shared receive adapter drains
+  ancillary data through System's fdpass, closes every attached descriptor
+  and permanently rejects the TLS session on unexpected control data,
+  including macOS control-only messages. TCP keeps its byte-only transport;
+  providers still borrow sockets without closing or changing their mode.
+  This closes the optional TLS-over-Unix gap documented in 0.22.4.
+- Regression tests inject descriptors into genuine TLS handshake and data
+  records for both roles and both providers, check descriptor counts and
+  failed-session retries, and exercise ordinary Unix/TCP exchanges. The
+  transport tests run without optional TLS dependencies in the default gate.
+  The boundary audit now also refuses native descriptor-passing calls in
+  providers and direct reads outside their shared transport adapter.
+
 ## 0.22.4 — 2026-09-29
 
 - Adopt maelys-system 0.10.1 and rebuild the statically linked proxy. Its
