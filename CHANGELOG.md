@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.22.5 — 2026-09-30
 
 - Adopt maelys-system 0.11.0 and harden the optional mbedTLS and wolfSSL
   transports on Unix stream sockets. Their shared receive adapter drains
