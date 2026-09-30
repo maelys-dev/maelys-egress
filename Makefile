@@ -484,7 +484,10 @@ install-metadata: $(CLI)
 $(PC) $(CLIENT_PC) $(MANIFEST): | install-metadata
 	@test -f $@
 
-test: all $(OPERATIONS_TEST) $(CHANNEL_TEST) $(CLIENT_TEST) $(BOOTSTRAP_CLIENT_TEST) $(BROKER_FAULTS_TEST) $(TLS_SOCKET_TEST) $(TLS_SOCKET_ERRORS_TEST) $(BIN)/bootstrap-cli-client
+.PHONY: test-build
+test-build: all $(OPERATIONS_TEST) $(CHANNEL_TEST) $(CLIENT_TEST) $(BOOTSTRAP_CLIENT_TEST) $(BROKER_FAULTS_TEST) $(TLS_SOCKET_TEST) $(TLS_SOCKET_ERRORS_TEST) $(BIN)/bootstrap-cli-client
+
+test: test-build
 	$(TEST)
 	$(OPERATIONS_TEST)
 	$(CHANNEL_TEST)
