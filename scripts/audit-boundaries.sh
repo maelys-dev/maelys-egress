@@ -65,8 +65,14 @@ if grep -rnE '#include[[:space:]]*"maelys/sys/' client | grep -v '"maelys/sys/fd
     echo "client/ includes nothing of maelys-system but maelys/sys/fdpass.h" >&2
     exit 1
 fi
-if grep -rhoE 'maelys_sys_[a-z_0-9]+' client | grep -vxE 'maelys_sys_(fd_send|fd_receive|result_t)'; then
-    echo "client/ names nothing of maelys-system but maelys_sys_fd_send and maelys_sys_fd_receive" >&2
+if grep -rhoE 'maelys_sys_[a-z_0-9]+' client | grep -vxE 'maelys_sys_(fd_send|fd_receive|fd_stream_send|fd_stream_receive|result_t)'; then
+    echo "client/ names nothing of maelys-system but the fdpass operations" >&2
+    exit 1
+fi
+
+if grep -nE '(^|[^A-Za-z0-9_])(read|recv|recvfrom|readv)[[:space:]]*\(|MSG_PEEK' \
+    client/channel_open.c src/channel_broker.c; then
+    echo "bootstrap and lease reads must observe every descriptor through fdpass" >&2
     exit 1
 fi
 

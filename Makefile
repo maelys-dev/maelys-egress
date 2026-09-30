@@ -112,8 +112,8 @@ endif
 CORE_SOURCES := src/core/common.c src/core/sha256.c src/core/receipt.c \
 	src/core/attestor.c src/core/policy.c src/core/profile.c src/core/tls.c \
 	src/core/clienthello.c src/core/http.c src/core/socks.c \
-	src/core/channel.c
-HOST_SOURCES := src/audit.c src/config.c src/connector.c src/channel_server.c
+	src/core/channel.c src/core/bootstrap_codec.c
+HOST_SOURCES := src/audit.c src/config.c src/connector.c src/channel_server.c src/channel_broker.c
 SERVER_SOURCES := src/server/server.c src/server/listener.c \
 	src/server/connection.c src/server/relay.c src/server/quota.c \
 	src/server/receipt.c src/server/connector.c src/server/admin.c
@@ -147,11 +147,14 @@ STATIC_LIB := $(LIB)/libmaelys_egress.a
 # the library and without -pthread; client-standalone-check refuses any
 # undefined maelys_sys_ or pthread_ symbol in it, and
 # scripts/audit-boundaries.sh keeps client/ to fdpass alone.
-CLIENT_SOURCES := client/client.c
+CLIENT_SOURCES := client/client.c client/channel_open.c
 FDPASS_OBJECT := $(OBJ)/deps/fdpass.o
 CLIENT_OBJECTS := $(CLIENT_SOURCES:%.c=$(OBJ)/%.o)
+DEPENDENCIES += $(CLIENT_OBJECTS:.o=.d)
 CLIENT_LIB := $(LIB)/libmaelys_egress_client.a
 CLIENT_TEST := $(BIN)/test-client
+BOOTSTRAP_CLIENT_TEST := $(BIN)/test-bootstrap-client
+BROKER_FAULTS_TEST := $(BIN)/test-broker-faults
 CLIENT_PC := $(LIB)/pkgconfig/maelys-egress-client.pc
 MBEDTLS_LIB := $(LIB)/libmaelys_egress_tls_mbedtls.a
 WOLFSSL_LIB := $(LIB)/libmaelys_egress_tls_wolfssl.a
@@ -165,6 +168,7 @@ OPERATIONS_TEST := $(BIN)/test-operations
 # link the one object, never the library: a dependency creeping into the
 # codec fails here before it reaches a confined process.
 CHANNEL_CODEC := $(OBJ)/src/core/channel.o
+BOOTSTRAP_CODEC := $(OBJ)/src/core/bootstrap_codec.o
 CHANNEL_TEST := $(BIN)/test-channel
 MBEDTLS_TEST := $(BIN)/test-tls-mbedtls
 WOLFSSL_TEST := $(BIN)/test-tls-wolfssl
@@ -388,8 +392,9 @@ $(FDPASS_OBJECT): $(MAELYS_SYSTEM_LIB)
 	cd $(@D) && ar x $(abspath $(MAELYS_SYSTEM_LIB)) fdpass.o
 	@touch $@
 
-$(CLIENT_LIB): $(CLIENT_OBJECTS) $(CHANNEL_CODEC) $(FDPASS_OBJECT)
+$(CLIENT_LIB): $(CLIENT_OBJECTS) $(CHANNEL_CODEC) $(BOOTSTRAP_CODEC) $(FDPASS_OBJECT)
 	@mkdir -p $(@D)
+	rm -f $@
 	ZERO_AR_DATE=1 ar rcs $@ $^
 
 # The client archive must not reach into maelys-system or the thread runtime
@@ -409,6 +414,14 @@ client-standalone-check: $(CLIENT_LIB)
 $(CLIENT_TEST): tests/test_client.c $(CLIENT_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
+
+$(BOOTSTRAP_CLIENT_TEST): tests/test_bootstrap_client.c common/bootstrap.h tests/tls_socket_fixture.h $(CLIENT_LIB)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(filter-out -pthread,$(CFLAGS)) $(LDFLAGS) $< $(CLIENT_LIB) -o $@
+
+$(BROKER_FAULTS_TEST): tests/test_broker_faults.c tests/tls_socket_fixture.h common/bootstrap.h src/channel_broker.c src/channel_server.c client/channel_open.c $(CLIENT_LIB) $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(CLIENT_LIB) $(STATIC_LIB) $(LDLIBS) -o $@
 
 $(BIN)/example-%: examples/%.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
@@ -467,11 +480,13 @@ install-metadata: $(CLI)
 $(PC) $(CLIENT_PC) $(MANIFEST): | install-metadata
 	@test -f $@
 
-test: all $(OPERATIONS_TEST) $(CHANNEL_TEST) $(CLIENT_TEST) $(TLS_SOCKET_TEST) $(TLS_SOCKET_ERRORS_TEST)
+test: all $(OPERATIONS_TEST) $(CHANNEL_TEST) $(CLIENT_TEST) $(BOOTSTRAP_CLIENT_TEST) $(BROKER_FAULTS_TEST) $(TLS_SOCKET_TEST) $(TLS_SOCKET_ERRORS_TEST)
 	$(TEST)
 	$(OPERATIONS_TEST)
 	$(CHANNEL_TEST)
 	$(CLIENT_TEST)
+	$(BOOTSTRAP_CLIENT_TEST)
+	$(BROKER_FAULTS_TEST)
 	$(TLS_SOCKET_TEST)
 	$(TLS_SOCKET_ERRORS_TEST)
 	tests/test_cli.sh $(CLI)
@@ -627,7 +642,7 @@ $(BIN)/fuzz-clienthello: tests/fuzz/fuzz_clienthello.c $(STATIC_LIB) | $(MAELYS_
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/fuzz-channel: tests/fuzz/fuzz_channel.c $(CHANNEL_CODEC)
+$(BIN)/fuzz-channel: tests/fuzz/fuzz_channel.c $(CHANNEL_CODEC) $(BOOTSTRAP_CODEC)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
 

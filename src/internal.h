@@ -247,6 +247,8 @@ maelys_egress_result_t egress_server_connector_bind(
     char out_invocation_id[EGRESS_MAX_INVOCATION_ID + 1u],
     char **out_error);
 void egress_server_connector_release(maelys_egress_server_t *server);
+int egress_connector_is_running(const maelys_egress_connector_t *connector);
+void egress_channel_stop(maelys_egress_channel_t *channel);
 maelys_egress_result_t egress_server_open_stream(
     maelys_egress_server_t *server,
     size_t principal_index,

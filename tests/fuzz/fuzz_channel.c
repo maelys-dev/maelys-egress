@@ -4,6 +4,7 @@
  * the codec object alone.
  */
 #include "maelys/egress_channel.h"
+#include "common/bootstrap.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -13,6 +14,18 @@
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size);
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (egress_bootstrap_decode_request(data, size) == EGRESS_BOOTSTRAP_OK) {
+        unsigned char encoded[EGRESS_BOOTSTRAP_REQUEST_SIZE];
+        egress_bootstrap_request(encoded);
+        if (size != sizeof(encoded) || memcmp(data, encoded, size)) abort();
+    }
+    unsigned bootstrap_status; uint64_t timeout;
+    if (egress_bootstrap_decode_response(data, size, &bootstrap_status, &timeout) &&
+        data[5] <= EGRESS_BOOTSTRAP_INTERNAL && data[6] == 1u) {
+        unsigned char encoded[EGRESS_BOOTSTRAP_RESPONSE_SIZE];
+        egress_bootstrap_response(bootstrap_status, timeout, encoded);
+        if (size != sizeof(encoded) || memcmp(data, encoded, size)) abort();
+    }
     maelys_egress_channel_request_t request;
     const char *reason = NULL;
     if (maelys_egress_channel_decode_request(data, size, &request, &reason) ==
@@ -53,6 +66,15 @@ int main(int argc, char **argv) {
     (void)LLVMFuzzerTestOneInput(empty, sizeof(empty) - 1u);
     (void)LLVMFuzzerTestOneInput(request, sizeof(request) - 1u);
     (void)LLVMFuzzerTestOneInput(response, sizeof(response) - 1u);
+    unsigned char bootstrap_request[8], bootstrap_response[16];
+    egress_bootstrap_request(bootstrap_request);
+    for (size_t split = 0u; split <= sizeof(bootstrap_request); ++split)
+        (void)LLVMFuzzerTestOneInput(bootstrap_request, split);
+    for (unsigned status = 0u; status < 256u; ++status) {
+        egress_bootstrap_response(status, 5000u, bootstrap_response);
+        for (size_t split = 0u; split <= sizeof(bootstrap_response); ++split)
+            (void)LLVMFuzzerTestOneInput(bootstrap_response, split);
+    }
     unsigned char bytes[300];
     for (size_t i = 0; i < sizeof(bytes); ++i) bytes[i] = (unsigned char)i;
     for (size_t length = 0; length <= sizeof(bytes); ++length) {

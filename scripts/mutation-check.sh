@@ -53,6 +53,20 @@ PY
                 printf 'invalid (no TLS assertion)\n' >"$work/$name.result"
                 tail -20 "$work/$name.log" >&2
             fi ;;
+        bootstrap-blocking-destruction)
+            if grep -Eq '^FAIL (\./)?tests/test_broker_faults\.c:' "$work/$name.log"; then
+                printf 'killed\n' >"$work/$name.result"
+            else
+                printf 'invalid (no broker progress assertion)\n' >"$work/$name.result"
+                tail -20 "$work/$name.log" >&2
+            fi ;;
+        bootstrap-*)
+            if grep -Eq '^FAIL (\./)?tests/(test_(bootstrap_client|operations|broker_faults)\.c|tls_socket_fixture\.h):' "$work/$name.log"; then
+                printf 'killed\n' >"$work/$name.result"
+            else
+                printf 'invalid (no bootstrap assertion)\n' >"$work/$name.result"
+                tail -20 "$work/$name.log" >&2
+            fi ;;
         *) printf 'killed\n' >"$work/$name.result" ;;
         esac
     fi
@@ -90,6 +104,24 @@ run_mutant tls-raw-unix-read providers/socket_io.c \
 run_mutant tls-stream-family-restriction providers/socket_io.c \
     'getsockname(fd, (struct sockaddr *)&address, &address_length) != 0)' \
     'getsockname(fd, (struct sockaddr *)&address, &address_length) != 0 || (address.ss_family != AF_UNIX && address.ss_family != AF_INET && address.ss_family != AF_INET6))' &
+run_mutant bootstrap-identity-field src/core/bootstrap_codec.c \
+    'memcmp(bytes, "MEBQ", 4u) || bytes[6] || bytes[7])' \
+    'memcmp(bytes, "MEBQ", 4u))' &
+run_mutant bootstrap-descriptor-cardinality client/channel_open.c \
+    'int malformed = flags || !received ||' \
+    'int malformed = !received ||' &
+run_mutant bootstrap-capacity-release src/channel_broker.c \
+    'memset(slot, 0, sizeof(*slot));' \
+    'memset(slot, 0, sizeof(*slot)); slot->phase = BROKER_LEASE;' &
+run_mutant bootstrap-lease-destruction src/channel_broker.c \
+    'if (!request) return 0; /* No post-request data or control, even zero-byte rights. */' \
+    'if (!request) return 1; /* Mutant ignores lease violations. */' &
+run_mutant bootstrap-early-busy client/channel_open.c \
+    'if (io == MAELYS_SYS_ERR_CLOSED || io == MAELYS_SYS_ERR_RESET) break;' \
+    'if (io == MAELYS_SYS_ERR_CLOSED || io == MAELYS_SYS_ERR_RESET) goto fail;' &
+run_mutant bootstrap-blocking-destruction src/channel_broker.c \
+    '    egress_channel_stop(slot->channel);' \
+    '    maelys_egress_channel_destroy(slot->channel); reset_slot(slot); return;' &
 wait
 
 killed=0
@@ -97,7 +129,9 @@ total=0
 for name in sni-host-mismatch authority-mismatch credential-compare \
     destination-port relay-half-close channel-host-bound channel-request-rights \
     channel-status-denied tls-ignore-control tls-resume-poisoned tls-raw-unix-read \
-    tls-stream-family-restriction; do
+    tls-stream-family-restriction bootstrap-identity-field bootstrap-descriptor-cardinality \
+    bootstrap-capacity-release bootstrap-lease-destruction bootstrap-early-busy \
+    bootstrap-blocking-destruction; do
     total=$((total + 1))
     result=$(cat "$work/$name.result" 2>/dev/null || printf 'missing')
     if test "$result" = killed; then

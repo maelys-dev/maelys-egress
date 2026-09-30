@@ -343,6 +343,36 @@ maelys_egress_result_t maelys_egress_channel_create(
     char **out_error);
 void maelys_egress_channel_destroy(maelys_egress_channel_t *channel);
 
+/* Experimental pathname bootstrap, additive within ABI 3. Wire tables remain
+ * in proposals/ until the CLI and Compose gate land. The running connector
+ * supplies the immutable principal; no client chooses an identity. The broker
+ * retains it and owns a reactor and a cleanup worker, both distinct from the
+ * server owner reactor. Channel joins never block either reactor.
+ * absolute_path must not exist. Its canonical parent (no symbolic links) must
+ * belong to the effective UID and be exactly 0700 or 2750; the latter requires
+ * membership in its group. The socket is respectively 0600 or 0660.
+ * connect_timeout_ms: 1..600000, handshake_timeout_ms: 1..60000,
+ * max_clients: 1..4096, bounding pending handshakes, active leases AND channels
+ * awaiting destruction. A slot is reusable only after its channel is joined;
+ * completed cleanup is collected at least every 50 ms. A pending open may
+ * delay cleanup, but not other handshakes, lease closures or deadlines.
+ * The server must already be running. Server stop is polled every 50 ms and
+ * closes leases and requests channel stop; callers must still destroy the
+ * broker handle to join all workers. Destroy may wait for pending opens and
+ * must NOT run on the server owner thread:
+ * it joins channel workers, whose pending opens need that reactor to progress.
+ * Destroy closes leases/channels, NOT already returned destination streams;
+ * server_stop revokes those. Call destroy once, with no concurrent use. It
+ * frees the handle even on failure and reports a replaced/missing socket path
+ * instead of removing a different inode. NULL destruction is a success. */
+typedef struct maelys_egress_channel_broker maelys_egress_channel_broker_t;
+maelys_egress_result_t maelys_egress_channel_broker_create(
+    maelys_egress_connector_t *connector, const char *absolute_path,
+    uint64_t connect_timeout_ms, uint64_t handshake_timeout_ms, size_t max_clients,
+    maelys_egress_channel_broker_t **out_broker, char **out_error);
+maelys_egress_result_t maelys_egress_channel_broker_destroy(
+    maelys_egress_channel_broker_t *broker, char **out_error);
+
 uint64_t maelys_egress_receipt_id(const maelys_egress_receipt_t *receipt);
 maelys_egress_protocol_t maelys_egress_receipt_protocol(
     const maelys_egress_receipt_t *receipt);

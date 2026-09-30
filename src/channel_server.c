@@ -237,10 +237,14 @@ fail:
     return result;
 }
 
+void egress_channel_stop(maelys_egress_channel_t *channel) {
+    if (channel && channel->thread) (void)maelys_sys_wakeup_signal(channel->wakeup);
+}
+
 void maelys_egress_channel_destroy(maelys_egress_channel_t *channel) {
     if (!channel) return;
     if (channel->thread) {
-        (void)maelys_sys_wakeup_signal(channel->wakeup);
+        egress_channel_stop(channel);
         (void)maelys_sys_thread_join(&channel->thread, NULL);
     }
     maelys_sys_condition_destroy(channel->condition);

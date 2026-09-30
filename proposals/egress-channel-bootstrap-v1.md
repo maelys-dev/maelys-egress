@@ -1,6 +1,7 @@
 # Maelys Egress channel bootstrap, v1
 
-**Status: proposal — not implemented. Nothing here is a contract.** The
+**Status: proposal — library implementation under review; CLI and Compose not implemented.
+The wire tables are not frozen.** The
 mediated-connection channel itself remains the frozen
 [`egress-channel-v1`](../protocol/egress-channel-v1.md) contract. This document
 proposes only how a separately started process obtains one such channel from a
@@ -34,9 +35,9 @@ way to inject descriptor 4 into an already running process.
 Egress owns:
 
 - this versioned bootstrap protocol;
-- an independently embeddable broker whose own worker thread manages the
-  listener, leases and channel destruction, bound at creation to one execution
-  principal;
+- an independently embeddable broker with a reactor for the listener and
+  leases, and a separate bounded cleanup worker for channel destruction,
+  bound at creation to one execution principal;
 - the client open operation in `libmaelys_egress_client`;
 - the lifetime lease joining a broker-owned channel to its remote holder;
 - the codec, vectors, cross-platform conformance and adversarial tests;
@@ -94,8 +95,8 @@ in the frozen channel.
 
 The listener is filesystem `AF_UNIX` `SOCK_STREAM`. `SOCK_SEQPACKET` is not a
 portable alternative: Linux provides it for Unix sockets and macOS does not.
-The existing maelys-system `fdpass` operations accept Unix `SOCK_DGRAM`
-sockets only. Implementation depends on two additive partial stream I/O
+The original maelys-system `fdpass` operations accept Unix `SOCK_DGRAM`
+sockets only. System 0.11.0 now supplies the two additive partial stream I/O
 operations, `maelys_sys_fd_stream_send` and
 `maelys_sys_fd_stream_receive`, in the same standalone `fdpass.o`. They move
 bytes and descriptors, not frames: every delivered descriptor is observed,
@@ -215,23 +216,29 @@ side sends another byte. The broker retains all three of:
 
 It closes the copy of the client channel descriptor immediately after the
 response send succeeds or fails. On success, EOF or any byte on the lease
-causes the broker worker to destroy the channel and release the slot. Any
+causes the broker reactor to close the lease, request channel stop and enqueue
+its destruction. A separate, fixed cleanup worker joins the channel thread;
+only completed destruction releases the slot. Any
 rights or unexpected ancillary data on the lease are also a protocol
 violation: the worker receives them through the shared control-aware stream
-operation, closes them and destroys the channel. Polling for readability
-followed by an ordinary byte read is not safe. On failed
-or incomplete response delivery, the worker destroys the channel before
-releasing the accepted connection. A process exit closes both client
-descriptors and therefore reclaims the server-side thread even on a kernel
+operation, closes them and retires the channel in the same way. Polling for
+readability followed by an ordinary byte read is not safe. On failed
+or incomplete response delivery, the worker closes the accepted connection
+and retires the channel without waiting for its thread. A process exit closes
+both client descriptors and therefore reclaims the server-side thread even on a kernel
 where closing the peer of a datagram pair is not observable while idle.
 
 The worker is not the Egress server owner thread. Channel destruction waits
 for the channel thread, and that thread may be waiting for a connector command
 which only the server owner reactor can complete. Destruction on the owner
 reactor would therefore stop all proxy and connector progress until the open
-deadline. The broker may wait in its own execution domain, while the server
-reactor remains free to complete or cancel the command. This separation is a
-required implementation invariant, not an optimization.
+deadline. Joining on the broker reactor would instead stop new handshakes,
+lease processing and enforcement of their deadlines. Neither reactor may
+join a channel thread: the cleanup worker waits without holding the queue
+lock, while both reactors continue to progress. The queue is bounded by the
+existing capacity slots; there is no allocation or new thread per retirement.
+These separations and the capacity accounting are required implementation
+invariants, not optimizations.
 
 The lease is necessary. Channel v1 records that idle datagram-pair peer closure
 is not reported consistently by Linux and macOS; a broker that passed the
@@ -242,6 +249,16 @@ Closing the lease destroys the channel but does not revoke relay streams that
 were already handed over, preserving channel v1. Stopping the Egress server
 closes all leases, destroys all channels and revokes active streams through the
 existing server-stop semantics.
+
+Destroying the independently embedded broker alone closes its leases and
+channels, but does not stop the shared server or revoke returned streams.
+Only stopping that server revokes them. The library reports socket cleanup
+failures rather than removing a replacement inode. Its worker notices server
+stop every 50 ms independently of channel joins. It closes all leases, requests
+all channel stops and removes the listener before any pending cleanup finishes.
+Destroying the broker handle joins both workers and may wait for pending opens;
+it must not run on the server owner reactor. Cleanup does not delay remaining
+handshakes or leases while the broker is running.
 
 A conforming client keeps the lease and channel descriptor in one opaque
 handle and closes them together. V1 deliberately offers no `take_fd` operation
@@ -278,12 +295,17 @@ that numeric value a deployment fact rather than a portable identity.
 
 ## Bounds and failure behaviour
 
-The broker has one finite combined bound for pending handshakes and active
-leases. A connection occupies a slot from `accept()` until its lease closes or
-the handshake fails. It creates no channel until a complete valid request is
+The broker has one finite combined bound for pending handshakes, active leases
+and channels queued for or undergoing destruction. A connection occupies a
+slot from `accept()` until its handshake fails without a channel, or its channel
+has been fully destroyed after lease closure or delivery failure. It creates
+no channel until a complete valid request is
 present and a slot has been reserved. A client that trickles bytes, never reads
 its response, or holds an idle lease consumes at most one bounded slot until
-its deadline or closure.
+its deadline or closure; if it has a channel, the slot remains charged until
+cleanup completes. Saturation including retiring channels returns `BUSY`, not
+an unbounded cleanup backlog. Completed cleanup is collected on acceptance and
+at least every 50 ms in the running reactor.
 
 The handshake deadline covers accept-to-complete-response as one monotonic
 interval. The client has its own finite open deadline covering socket creation,
@@ -294,9 +316,9 @@ Failure paths close, in order where applicable:
 
 1. every descriptor received unexpectedly;
 2. the broker's copy of the client channel end;
-3. the channel server handle;
-4. the accepted lease;
-5. the reserved capacity slot.
+3. the accepted lease, then request channel stop and enqueue destruction;
+4. the channel server handle, on the cleanup worker;
+5. the reserved capacity slot, only after destruction completes.
 
 Diagnostics and lifecycle events never contain a credential. The bootstrap has
 none to disclose.
@@ -398,10 +420,10 @@ or second spelling is introduced.
 The core library must expose the same capability, not leave it in the CLI. The
 implementation adds an independently embeddable opaque broker handle to
 `libmaelys_egress`. It is created from one connector already bound to the
-configured principal, retains that connector, and owns a worker thread which
-accepts bootstrap clients, watches leases and calls
-`maelys_egress_channel_destroy`. The listener and lease watches are never
-registered on the server owner reactor. The CLI also needs an additive core
+configured principal, retains that connector, and owns a reactor which
+accepts bootstrap clients and watches leases, plus a fixed cleanup worker
+which calls `maelys_egress_channel_destroy`. The listener and lease watches are
+never registered on the server owner reactor. The CLI also needs an additive core
 operation which binds the configured principal without manufacturing a bearer
 secret; exact C names are reviewed with the implementation.
 
@@ -462,18 +484,25 @@ macOS:
   deadline, writes after `OK`, or exits while its channel is idle;
 - response delivery failure after channel creation, with no channel thread,
   connector reference, descriptor or capacity slot left behind;
-- active-client saturation answers `BUSY`; closing one lease admits the next;
+- active-client saturation answers `BUSY`; completing cleanup after a lease
+  closes admits the next;
 - lease closure during a channel request and with an already returned stream,
   preserving the frozen channel shutdown distinction;
 - lease closure while a connector open is deliberately held pending, while a
-  simultaneous proxy request still progresses on the server owner reactor;
-- broker stop closes every lease and channel and revokes active streams;
+  simultaneous proxy request still progresses on the server owner reactor,
+  another bootstrap client opens, a partial handshake expires, and other
+  leases close before the held open is released; retiring channels still count
+  towards saturation, all capacity returns after cleanup, and descriptors,
+  channel threads and connector references are released;
+- broker destruction closes every lease and channel while returned streams
+  survive; server stop also revokes those streams;
 - path symlink, pre-existing socket, wrong owner, wrong mode, writable
   capability directory and replaced-inode refusals;
 - client open deadline interrupted repeatedly without extending;
 - fuzzing both fixed-frame decoders and every split point of the stream frame;
 - a mutation gate holding identity absence, descriptor cardinality, capacity
-  release and the lease-to-channel destruction edge;
+  release, the lease-to-channel destruction edge and broker progress during
+  pending channel destruction;
 - the Compose example as a CI job, including exact network-mode assertions.
 
 The existing channel vectors, fuzz target and adversarial operations tests
@@ -491,9 +520,10 @@ continue unchanged. Bootstrap conformance is additional, not a replacement.
    descriptor-flood, partial-I/O, close-on-exec and fault tests in System.
 3. Add the bootstrap codec and client opaque handle in
    `libmaelys_egress_client`.
-4. Add the independent broker handle and worker thread to the core library,
-   including lease, destruction and capacity ownership; prove that none of
-   its listener or lease work runs on the server owner reactor.
+4. Add the independent broker handle, reactor and bounded cleanup worker to
+   the core library, including lease, destruction and capacity ownership;
+   prove that neither reactor joins channels and that retiring channels
+   retain their capacity until destruction finishes.
 5. Declare `channel.broker` and the configuration catalog, handler, lifecycle
    schema, exact `describe` tests and generated references.
 6. Add the Egress-aware Compose example and make its integration test required
@@ -517,6 +547,7 @@ this broker must preserve the lease as well as the channel descriptor.
    tested. Their invariant is identical: the broker owns the parent and the
    client group can never modify it.
 3. The core surface is an independently embeddable broker handle with its own
-   worker thread, created from a connector. It is not configuration or watches
-   grafted onto `maelys_egress_server_t`. Exact additive function names remain
+   reactor and bounded cleanup worker, created from a connector. Neither the
+   broker reactor nor the server owner reactor joins channel threads. It is
+   not configuration or watches grafted onto `maelys_egress_server_t`. Exact additive function names remain
    an implementation review; the execution boundary does not.

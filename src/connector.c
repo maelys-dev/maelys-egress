@@ -16,6 +16,10 @@ struct maelys_egress_session {
     int fd;
 };
 
+int egress_connector_is_running(const maelys_egress_connector_t *connector) {
+    return connector && maelys_egress_server_is_running(connector->server);
+}
+
 maelys_egress_result_t maelys_egress_server_connector_create(
     maelys_egress_server_t *server,
     const char *username,
