@@ -147,6 +147,8 @@ jobs:
         env:
           MAELYS_EGRESS_IMAGE: maelys-egress-sidecar:compose-test
         run: make compose-proxy-check
+      - name: Exercise the networkless native channel deployment
+        run: make compose-channel-check
 
   package:
     strategy:

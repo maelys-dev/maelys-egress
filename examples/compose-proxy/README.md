@@ -73,5 +73,7 @@ reach an allowed destination.
 
 This is the proxy compatibility mode, not the native mediated-connection
 channel. It does not pass file descriptor 4, and the application holds a proxy
-credential. A separate bootstrap protocol is still required for an Egress-aware
-application in another container to acquire a native channel by pathname.
+credential. The separate experimental
+[native Compose example](../compose-channel/README.md) shows an Egress-aware
+application acquiring a native channel by pathname, without that credential
+or bridge.

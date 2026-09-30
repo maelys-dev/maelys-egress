@@ -205,13 +205,16 @@ Deployment examples are provided as a [systemd unit](packaging/systemd/maelys-eg
 a [launchd service](packaging/launchd/com.maelys.egress.plist), a
 [container sidecar Dockerfile](docker/Dockerfile.sidecar), and a
 [Docker Compose deployment](examples/compose-proxy/README.md) in which an
-ordinary proxy-aware application has `network_mode: none`.
+ordinary proxy-aware application has `network_mode: none`. The separate
+[native Compose example](examples/compose-channel/README.md) gives an
+Egress-aware application a mediated channel through a read-only socket volume,
+with a distinct UID, no ambient network and no secret. Its integration test
+proves allowed access, direct-network failure and policy refusal.
 
 ### Native connector
 
 The proxy listeners are one way in. The other is the native connector of the
-library, which the configuration file and the CLI do not expose: an embedder
-creates an authenticated in-process connector with
+library: an embedder creates an authenticated in-process connector with
 `maelys_egress_server_connector_create`, admits one exact TCP destination per
 `maelys_egress_connector_session_open`, and receives a blocking `CLOEXEC` TCP
 stream. That stream is Egress's own client end of a private relay, never the

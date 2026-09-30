@@ -1,6 +1,6 @@
 # Maelys Egress channel bootstrap, v1
 
-**Status: proposal — library implemented; CLI implementation under review; Compose not implemented.
+**Status: proposal — library and CLI implemented; Compose implementation under review.
 The wire tables are not frozen.** The
 mediated-connection channel itself remains the frozen
 [`egress-channel-v1`](../protocol/egress-channel-v1.md) contract. This document
@@ -464,6 +464,13 @@ client retry. The application image links `libmaelys_egress_client`, opens the
 bootstrap path, proves a direct network attempt fails, then reaches one allowed
 destination through the returned native channel. It receives no token and does
 not contain the Egress core or CLI.
+
+The [native Compose implementation](../examples/compose-channel/README.md)
+adds an initializer and a local two-port fixture to those two workloads.
+Its `compose-channel-check` gate runs in the required Docker CI job and checks
+actual container isolation, same-target direct failure, policy refusal and
+receipts. This integration does not by itself freeze the wire tables: the
+complete Linux/macOS conformance gate below still needs its final review.
 
 ## Conformance and adversarial gate
 

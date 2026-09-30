@@ -20,6 +20,12 @@
   child links `libmaelys_egress_client` alone and asks for one destination.
   Without arguments the supervisor serves a loopback echo, so the round trip
   needs no network.
+- [compose-channel](compose-channel/README.md) runs an Egress-aware C client
+  in a separate networkless container. It acquires the channel by pathname,
+  uses only the client archive, and proves allowed access, policy refusal and
+  failure of direct access without a secret or proxy bridge. Its C consumer
+  is compiled by `make examples-check`; its deployment runs with
+  `make compose-channel-check` and in the required Docker CI job.
 
 Run `make examples-check`. Installed examples live under
 `share/doc/maelys-egress/examples/c`.

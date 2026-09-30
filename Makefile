@@ -198,7 +198,7 @@ all: $(STATIC_LIB) $(CLIENT_LIB) $(CLI) $(TEST) $(PC) $(CLIENT_PC) $(MANIFEST)
 	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-provider-mutation-check tls-binaries \
 	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check \
 	public-check reproducible-check install-metadata-check dist client-standalone-check \
-	compose-proxy-check
+	compose-proxy-check compose-channel-check
 
 ifeq ($(MAELYS_SYSTEM_PREFIX),)
 check-system-contract:
@@ -437,6 +437,12 @@ $(BIN)/example-channel_client: examples/channel_client.c $(CLIENT_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
+# Compile the container consumer on every host, without the core or pthread.
+# Its deployment assertions are executed by compose-channel-check on Linux.
+$(BIN)/example-compose-channel-client: examples/compose-channel/app.c $(CLIENT_LIB)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(filter-out -pthread,$(CFLAGS)) $(LDFLAGS) $^ -o $@
+
 $(TLS_TEST_STAMP):
 	@mkdir -p $(@D)
 	openssl req -x509 -newkey rsa:2048 -nodes \
@@ -528,7 +534,7 @@ schema-check: $(CLI) $(BIN)/bootstrap-cli-client
 	python3 tools/check_schemas.py --binary $(abspath $(CLI))
 	python3 tests/test_broker_cli.py $(abspath $(CLI))
 
-examples-check: $(EXAMPLE_BINS)
+examples-check: $(EXAMPLE_BINS) $(BIN)/example-compose-channel-client
 	$(BIN)/example-policy_reload
 	$(BIN)/example-metrics_snapshot
 	$(BIN)/example-custom_attestor
@@ -579,6 +585,9 @@ docs-check:
 # developer with Docker use this integration gate for the Compose deployment.
 compose-proxy-check:
 	scripts/test-compose-proxy.sh
+
+compose-channel-check:
+	python3 scripts/test-compose-channel.py
 
 # Renders the Homebrew formula for an already-pushed tag (default: VERSION).
 package-homebrew:

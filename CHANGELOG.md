@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add the experimental native Compose example and required Docker CI gate.
+  A distinct-UID, networkless application links only the client archive and
+  obtains its channel through a read-only socket volume without credentials.
+  A local fixture proves allowed mediation, same-target direct-network
+  failure, explicit policy refusal, stream lifetime and identity receipts.
+  The test checks live Docker state and cleans only its private project.
+  No bootstrap wire freeze or release is made by this change.
+
 - Add experimental `maelys-egress channel broker --config FILE`: a native-only server and
   supervised Unix-path broker, with immutable secret-free principal binding,
   bounded clients/deadlines, quotas, audit and policy-only SIGHUP reload.
@@ -15,8 +23,8 @@
   four streams and a confirmed partial handshake alive across 20 signal stops
   and a broker failure, checking receipts, closure and socket cleanup.
   Python/Node process SDKs remain proxy-only
-  and reject channel readiness. Native Compose and bootstrap wire freeze
-  remain separate steps; no release is made by this change.
+  and reject channel readiness. Bootstrap wire freeze remains a separate
+  step; no release is made by this change.
 
 - Add the experimental Unix-path channel bootstrap library and standalone
   client handle. A private socket authorizes channels from one pre-bound
@@ -32,8 +40,7 @@
   broker/proxy progress, handshake expiry and lease handling during channel
   destruction, with bounded saturation and full capacity recovery. A mutation
   restores synchronous destruction and must fail the broker progress test.
-  The native Compose example is not implemented; bootstrap wire
-  tables remain a proposal.
+  Bootstrap wire tables remain a proposal.
 
 ## 0.22.5 — 2026-09-30
 
