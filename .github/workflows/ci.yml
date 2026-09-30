@@ -22,8 +22,8 @@ jobs:
       sanitizer_command: ""
       # Both targets run there since 0.25.1 gave that job the compiler
       # runtime: the corpus replay, then the bounded run the conventions
-      # place in CI. Nothing fuzzes below any more.
-      fuzz_command: make fuzz-smoke fuzz
+      # place in CI. A focused bootstrap gate also runs on macOS below.
+      fuzz_command: make fuzz-smoke fuzz bootstrap-fuzz-check
 
   native:
     strategy:
@@ -65,6 +65,14 @@ jobs:
       - name: Require arm64 archive
         if: runner.os == 'macOS'
         run: test "$(lipo -archs build/release/lib/libmaelys_egress.a)" = arm64
+      - name: Bootstrap-only mutation and fuzz gate on macOS
+        if: matrix.os == 'macos-15'
+        run: |
+          # Apple Clang does not ship libFuzzer; use LLVM only for this target.
+          brew install llvm
+          make bootstrap-mutation-check
+          make bootstrap-fuzz-check BOOTSTRAP_FUZZ_CC="$(brew --prefix llvm)/bin/clang" \
+            BOOTSTRAP_FUZZ_CXX="$(brew --prefix llvm)/bin/clang++"
 
   sanitizers:
     runs-on: ubuntu-24.04

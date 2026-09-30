@@ -475,48 +475,123 @@ complete Linux/macOS conformance gate below still needs its final review.
 ## Conformance and adversarial gate
 
 Implementation is incomplete until all of these are automated on Linux and
-macOS:
+macOS. The checkboxes record executable coverage, not acceptance or a wire
+freeze. Before freezing, review the results of the required CI checks on the
+exact candidate commit, including the focused macOS gate and Compose.
 
-- byte vectors for the valid request and every response status; explicit
+Audit baseline: at `ec4a309` (PR #148), eight criteria were covered locally,
+one relied on the pinned System's cross-kernel evidence, and eight were
+partial. In particular, resetting the handshake deadline after each fragment
+survived `make check`. A separate 120 ms / 75 ms trickle probe refused the
+correct implementation after two bytes (160 ms observed), but the mutant
+accepted all eight bytes after 544 ms. This demonstrated a missing regression
+test, not a defect in the unmodified implementation. An eight-byte request
+bounds that particular extension; it does not alone imply an infinite lease.
+The proof and its permanent replacement below must survive `make clean`.
+
+- [x] byte vectors for the valid request and every response status; explicit
   dispatch of code `2` as bootstrap `BUSY` under `MEBP` and channel `TIMEOUT`
   under `MECP`; wrong magic, both unknown versions and every non-zero reserved
-  field;
-- one-byte-at-a-time request and response delivery, including a descriptor on
-  the first response fragment;
-- zero, one and multiple descriptors on `OK`; a descriptor on every non-`OK`
-  status; ancillary truncation; all unexpected descriptors closed;
-- fifty descriptors attached to a valid request, with the process descriptor
-  count unchanged after `MALFORMED` on macOS and Linux;
-- rights attached to every fragment and to an idle lease, including macOS
+  field. **Evidence:** `codec_tests` and `exchange` in
+  [`test_bootstrap_client.c`](../tests/test_bootstrap_client.c); literal
+  response vectors in `tests/test_channel_broker_shutdown.py`.
+- [x] one-byte-at-a-time request and response delivery, including a descriptor on
+  the first response fragment. **Evidence:** `gate_fragments` in
+  [`test_bootstrap_gates.c`](../tests/test_bootstrap_gates.c) forces successful
+  reads to one byte, injects `WOULD_BLOCK` and `EINTR`, and asserts exactly
+  8/16 bytes and the corresponding call counts. Kernel write coalescing cannot
+  turn this into a whole-frame test. Existing split-write tests remain.
+- [x] zero, one and multiple descriptors on `OK`; a descriptor on every non-`OK`
+  status; ancillary truncation; all unexpected descriptors closed.
+  **Evidence:** `exchange` tests zero/one/fifty rights and every refusal;
+  `gate_fragments` injects `CONTROL_TRUNCATED` into the broker and client
+  state machines, both on the first descriptor byte and after client ownership
+  transfer. Both truncation mutants must fail; descriptor counts return to baseline.
+- [x] fifty descriptors attached to a valid request, with the process descriptor
+  count unchanged after `MALFORMED` on macOS and Linux.
+  **Evidence:** `test_bootstrap_broker` in
+  [`test_operations.c`](../tests/test_operations.c), with attachment at each byte offset.
+- [x] rights attached to every fragment and to an idle lease, including macOS
   zero-byte control-only records; a control-only flood cannot monopolise the
-  worker or extend an absolute deadline;
-- partial sends attach the descriptor exactly once; a zero-progress retry
+  worker or extend an absolute deadline. **Evidence:** `test_bootstrap_broker`
+  covers request offsets and lease rights. `gate_fairness` continuously
+  reconnects rejected control-bearing peers (zero-byte control-only on macOS),
+  while a healthy negotiation completes and a stalled request expires on time.
+  It also keeps a non-reading peer alive throughout; all descriptors settle.
+- [x] partial sends attach the descriptor exactly once; a zero-progress retry
   still attaches it; test empty/full queues, `EINTR`, Linux `SO_PASSCRED` and
-  macOS near-full queues, not just a completely full queue;
-- a client that stops mid-request, never reads the response, trickles until the
-  deadline, writes after `OK`, or exits while its channel is idle;
-- response delivery failure after channel creation, with no channel thread,
-  connector reference, descriptor or capacity slot left behind;
-- active-client saturation answers `BUSY`; completing cleanup after a lease
-  closes admits the next;
-- lease closure during a channel request and with an already returned stream,
-  preserving the frozen channel shutdown distinction;
-- lease closure while a connector open is deliberately held pending, while a
+  macOS near-full queues, not just a completely full queue.
+  **Evidence:** [`test_broker_faults.c`](../tests/test_broker_faults.c) forces
+  `WOULD_BLOCK`, `EINTR`, then sixteen one-byte sends: eighteen calls, one
+  descriptor transfer. Kernel behavior remains owned by pinned maelys-system
+  v0.11.0 (`c7d13e5`): `tests/test_fdpass_stream.c` and
+  `tests/test_fdpass_faults.c` cover full/near-full queues, partial delivery,
+  credentials, truncation and OS errors. Its
+  [cross-host CI evidence](https://github.com/maelys-dev/maelys-system/actions/runs/36627566454)
+  is used rather than implementing or remeasuring descriptor passing here.
+- [x] a client that stops mid-request, never reads the response, trickles until the
+  deadline, writes after `OK`, or exits while its channel is idle.
+  **Evidence:** `gate_trickle` waits for actual consumption of successive
+  fragments; the original absolute deadline must close the peer while another
+  handshake succeeds. `gate_fairness` covers a non-reading peer; a spawned
+  process signals its live idle lease before `SIGKILL`, then `gate_idle` and
+  a new admission prove recovery. Existing operations cover post-`OK` writes.
+- [x] response delivery failure after channel creation, with no channel thread,
+  connector reference, descriptor or capacity slot left behind.
+  **Evidence:** `gate_delivery` observes successful creation before hard failure,
+  hard failure after the first descriptor byte, and permanent `WOULD_BLOCK`
+  after that byte until the absolute deadline. `gate_idle` checks successful
+  joins, destructions, connector reference count and descriptor baseline;
+  a subsequent successful open reclaims the sole slot.
+- [x] active-client saturation answers `BUSY`; completing cleanup after a lease
+  closes admits the next. **Evidence:** `test_bootstrap_broker`, bounded
+  retiring-slot and early-`EPIPE` cases in `test_broker_faults.c`, and the
+  Compose example's one-slot reacquisition.
+- [x] lease closure during a channel request and with an already returned stream,
+  preserving the frozen channel shutdown distinction. **Evidence:**
+  `test_broker_faults.c`, `test_bootstrap_broker` and the Compose consumer.
+- [x] lease closure while a connector open is deliberately held pending, while a
   simultaneous proxy request still progresses on the server owner reactor,
   another bootstrap client opens, a partial handshake expires, and other
   leases close before the held open is released; retiring channels still count
   towards saturation, all capacity returns after cleanup, and descriptors,
-  channel threads and connector references are released;
-- broker destruction closes every lease and channel while returned streams
-  survive; server stop also revokes those streams;
-- path symlink, pre-existing socket, wrong owner, wrong mode, writable
-  capability directory and replaced-inode refusals;
-- client open deadline interrupted repeatedly without extending;
-- fuzzing both fixed-frame decoders and every split point of the stream frame;
-- a mutation gate holding identity absence, descriptor cardinality, capacity
+  channel threads and connector references are released.
+  **Evidence:** the deliberately suspended connector open in
+  `test_broker_faults.c`; `bootstrap-blocking-destruction` must fail on its
+  progress assertion, not a build failure or suite timeout.
+- [x] broker destruction closes every lease and channel while returned streams
+  survive; server stop also revokes those streams. **Evidence:**
+  `test_bootstrap_broker`, `test_broker_faults.c` and
+  `tests/test_channel_broker_shutdown.py` (required CLI suite).
+- [x] path symlink, pre-existing socket, wrong owner, wrong mode, writable
+  capability directory and replaced-inode refusals. **Evidence:**
+  `test_bootstrap_broker` covers existing socket, leaf symlink, both valid
+  permission modes, writable group and replaced inode. `test_bootstrap_gates.c`
+  adds immediate-parent and ancestor symlinks, and a test-only expected-UID
+  substitution on an otherwise valid owned `0700` directory; no privilege
+  or accidental mode failure stands in for the owner check.
+- [x] client open deadline interrupted repeatedly without extending.
+  **Evidence:** `exchange` attack 7 in `test_bootstrap_client.c`, repeated
+  `SIGALRM` during an 80 ms deadline, with a 180 ms upper bound.
+- [x] fuzzing both fixed-frame decoders and every split point of the stream frame.
+  **Evidence:** [`fuzz_bootstrap.c`](../tests/fuzz/fuzz_bootstrap.c) decodes every
+  prefix and checks successful round trips. `gate_fragments` covers actual
+  reassembly at every byte boundary. Reviewed `MEBQ`/`MEBP` seeds in
+  [`corpus/bootstrap`](../tests/fuzz/corpus/bootstrap) are stored as hex and
+  materialized as exact 8/16-byte binary frames (not ASCII hex) for both replay
+  and the 10,000-run ASan/UBSan fuzz gate.
+- [x] a mutation gate holding identity absence, descriptor cardinality, capacity
   release, the lease-to-channel destruction edge and broker progress during
-  pending channel destruction;
-- the Compose example as a CI job, including exact network-mode assertions.
+  pending channel destruction, plus absolute deadlines and request/response
+  control truncation. **Evidence:** `scripts/mutation-check.sh` requires a
+  test assertion, not compilation failure, for each bootstrap mutant. Linux
+  runs the full gate; the already-required `native (macos-15, clang, clang++)`
+  job runs only `bootstrap-mutation-check` and `bootstrap-fuzz-check` in
+  addition to ordinary `make check`. No new optional job replaces protection.
+- [x] the Compose example as a CI job, including exact network-mode assertions.
+  **Evidence:** the required `docker` job runs
+  [`test-compose-channel.py`](../scripts/test-compose-channel.py), inspecting
+  actual network mode, mounts, UID/GID, mediation, refusal and surviving streams.
 
 The existing channel vectors, fuzz target and adversarial operations tests
 continue unchanged. Bootstrap conformance is additional, not a replacement.
