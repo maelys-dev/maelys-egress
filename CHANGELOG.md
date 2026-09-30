@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.23.0 — 2026-09-30
 
 - Freeze the implemented channel bootstrap v1 contract for publication under
   `protocol/egress-channel-bootstrap-v1.md`, following the independent review
