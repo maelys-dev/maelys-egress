@@ -5,6 +5,14 @@
 # Compilation has its own deadline: it must not consume the test budget or
 # count as evidence that a regression assertion detected the mutation.
 set -eu
+scope=${1:-all}
+case "$scope" in all|bootstrap) ;; *) echo "expected all or bootstrap" >&2; exit 1 ;; esac
+build_target=test-build
+test_target=test
+if test "$scope" = bootstrap; then
+    build_target=bootstrap-test-build
+    test_target=bootstrap-test
+fi
 
 root=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
 temp_base=$(printenv TMPDIR || printf '%s' /tmp)
@@ -41,7 +49,7 @@ PY
         MAELYS_SYSTEM_DIR="$system_dir" MAELYS_CLI_DIR="$cli_dir" \
         MAELYS_SYSTEM_BUILD="$deps/deps/maelys-system" \
         MAELYS_CLI_BUILD="$deps/deps/maelys-cli" \
-        BUILD=build/mutant test-build >"$work/$name-build.log" 2>&1; then
+        BUILD=build/mutant "$build_target" >"$work/$name-build.log" 2>&1; then
         printf 'invalid (build failed)\n' >"$work/$name.result"
         tail -20 "$work/$name-build.log" >&2
         return
@@ -50,7 +58,7 @@ PY
         MAELYS_SYSTEM_DIR="$system_dir" MAELYS_CLI_DIR="$cli_dir" \
         MAELYS_SYSTEM_BUILD="$deps/deps/maelys-system" \
         MAELYS_CLI_BUILD="$deps/deps/maelys-cli" \
-        BUILD=build/mutant test >"$work/$name.log" 2>&1; then
+        BUILD=build/mutant "$test_target" >"$work/$name.log" 2>&1; then
         printf 'survived\n' >"$work/$name.result"
     else
         case "$name" in
@@ -77,8 +85,16 @@ PY
                 printf 'invalid (no broker progress assertion)\n' >"$work/$name.result"
                 tail -20 "$work/$name.log" >&2
             fi ;;
+        bootstrap-sliding-deadline|bootstrap-request-truncation|bootstrap-response-truncation)
+            if grep -Eq '^FAIL (\./)?tests/test_bootstrap_gates\.c:' "$work/$name.log"; then
+                printf 'killed\n' >"$work/$name.result"
+                grep -E '^FAIL ' "$work/$name.log" | sed "s/^/$name: /"
+            else
+                printf 'invalid (no new bootstrap regression assertion)\n' >"$work/$name.result"
+                tail -20 "$work/$name.log" >&2
+            fi ;;
         bootstrap-*)
-            if grep -Eq '^FAIL (\./)?tests/(test_(bootstrap_client|operations|broker_faults)\.c|tls_socket_fixture\.h):' "$work/$name.log"; then
+            if grep -Eq '^FAIL (\./)?tests/(test_(bootstrap_client|bootstrap_gates|operations|broker_faults)\.c|tls_socket_fixture\.h):' "$work/$name.log"; then
                 printf 'killed\n' >"$work/$name.result"
             else
                 printf 'invalid (no bootstrap assertion)\n' >"$work/$name.result"
@@ -90,7 +106,10 @@ PY
 }
 
 queued=0
+selected=''
 schedule_mutant() {
+    case "$scope:$1" in bootstrap:bootstrap-*|all:*) ;; *) return ;; esac
+    selected="$selected $1"
     run_mutant "$@" &
     queued=$((queued + 1))
     if test "$queued" -eq 4; then
@@ -149,6 +168,15 @@ schedule_mutant bootstrap-early-busy client/channel_open.c \
 schedule_mutant bootstrap-blocking-destruction src/channel_broker.c \
     '    egress_channel_stop(slot->channel);' \
     '    maelys_egress_channel_destroy(slot->channel); reset_slot(slot); return;'
+schedule_mutant bootstrap-sliding-deadline src/channel_broker.c \
+    '            slot->progress += received;' \
+    '            if (maelys_sys_deadline_after(broker->handshake_timeout, &slot->deadline) != MAELYS_SYS_OK) { return 0; } slot->progress += received;'
+schedule_mutant bootstrap-request-truncation src/channel_broker.c \
+    'if (flags || !received) return answer(broker, slot, EGRESS_BOOTSTRAP_MALFORMED);' \
+    'if ((flags & ~(unsigned)MAELYS_SYS_FDPASS_CONTROL_TRUNCATED) || !received) return answer(broker, slot, EGRESS_BOOTSTRAP_MALFORMED);'
+schedule_mutant bootstrap-response-truncation client/channel_open.c \
+    'int malformed = flags || !received ||' \
+    'int malformed = (flags & ~(unsigned)MAELYS_SYS_FDPASS_CONTROL_TRUNCATED) || !received ||'
 schedule_mutant native-trusted-scope src/server/connector.c \
     'server->config.native_only && server->config.native_principal_bound &&' \
     'server->config.native_only &&'
@@ -158,12 +186,7 @@ wait
 
 killed=0
 total=0
-for name in sni-host-mismatch authority-mismatch credential-compare \
-    destination-port relay-half-close channel-host-bound channel-request-rights \
-    channel-status-denied tls-ignore-control tls-resume-poisoned tls-raw-unix-read \
-    tls-stream-family-restriction bootstrap-identity-field bootstrap-descriptor-cardinality \
-    bootstrap-capacity-release bootstrap-lease-destruction bootstrap-early-busy \
-    bootstrap-blocking-destruction native-trusted-scope native-immutable-binding; do
+for name in $selected; do
     total=$((total + 1))
     result=$(cat "$work/$name.result" 2>/dev/null || printf 'missing')
     if test "$result" = killed; then

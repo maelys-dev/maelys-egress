@@ -155,6 +155,7 @@ CLIENT_LIB := $(LIB)/libmaelys_egress_client.a
 CLIENT_TEST := $(BIN)/test-client
 BOOTSTRAP_CLIENT_TEST := $(BIN)/test-bootstrap-client
 BROKER_FAULTS_TEST := $(BIN)/test-broker-faults
+BOOTSTRAP_GATES_TEST := $(BIN)/test-bootstrap-gates
 CLIENT_PC := $(LIB)/pkgconfig/maelys-egress-client.pc
 MBEDTLS_LIB := $(LIB)/libmaelys_egress_tls_mbedtls.a
 WOLFSSL_LIB := $(LIB)/libmaelys_egress_tls_wolfssl.a
@@ -427,6 +428,10 @@ $(BROKER_FAULTS_TEST): tests/test_broker_faults.c tests/tls_socket_fixture.h com
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(CLIENT_LIB) $(STATIC_LIB) $(LDLIBS) -o $@
 
+$(BOOTSTRAP_GATES_TEST): tests/test_bootstrap_gates.c tests/tls_socket_fixture.h common/bootstrap.h src/connector.c src/channel_broker.c src/channel_server.c client/channel_open.c $(CLIENT_LIB) $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(CLIENT_LIB) $(STATIC_LIB) $(LDLIBS) -o $@
+
 $(BIN)/example-%: examples/%.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
@@ -491,7 +496,7 @@ $(PC) $(CLIENT_PC) $(MANIFEST): | install-metadata
 	@test -f $@
 
 .PHONY: test-build
-test-build: all $(OPERATIONS_TEST) $(CHANNEL_TEST) $(CLIENT_TEST) $(BOOTSTRAP_CLIENT_TEST) $(BROKER_FAULTS_TEST) $(TLS_SOCKET_TEST) $(TLS_SOCKET_ERRORS_TEST) $(BIN)/bootstrap-cli-client
+test-build: all $(OPERATIONS_TEST) $(CHANNEL_TEST) $(CLIENT_TEST) $(BOOTSTRAP_CLIENT_TEST) $(BROKER_FAULTS_TEST) $(BOOTSTRAP_GATES_TEST) $(TLS_SOCKET_TEST) $(TLS_SOCKET_ERRORS_TEST) $(BIN)/bootstrap-cli-client
 
 test: test-build
 	$(TEST)
@@ -500,6 +505,7 @@ test: test-build
 	$(CLIENT_TEST)
 	$(BOOTSTRAP_CLIENT_TEST)
 	$(BROKER_FAULTS_TEST)
+	$(BOOTSTRAP_GATES_TEST)
 	$(TLS_SOCKET_TEST)
 	$(TLS_SOCKET_ERRORS_TEST)
 	tests/test_cli.sh $(CLI)
@@ -624,6 +630,16 @@ check: test examples-check sdk-check audit docs-check system-integration-check c
 mutation-check:
 	scripts/mutation-check.sh
 
+.PHONY: bootstrap-test-build bootstrap-test bootstrap-mutation-check bootstrap-fuzz-check
+bootstrap-test-build: $(BOOTSTRAP_CLIENT_TEST) $(BROKER_FAULTS_TEST) $(BOOTSTRAP_GATES_TEST) $(OPERATIONS_TEST)
+bootstrap-test: bootstrap-test-build
+	$(BOOTSTRAP_GATES_TEST)
+	$(BOOTSTRAP_CLIENT_TEST)
+	$(BROKER_FAULTS_TEST)
+	$(OPERATIONS_TEST)
+bootstrap-mutation-check:
+	sh scripts/mutation-check.sh bootstrap
+
 asan-ubsan:
 	$(MAKE) clean
 	$(MAKE) BUILD_PROFILE=asan-ubsan CC=clang CXX=clang++ \
@@ -662,6 +678,30 @@ $(BIN)/fuzz-clienthello: tests/fuzz/fuzz_clienthello.c $(STATIC_LIB) | $(MAELYS_
 $(BIN)/fuzz-channel: tests/fuzz/fuzz_channel.c $(CHANNEL_CODEC) $(BOOTSTRAP_CODEC)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
+
+$(BIN)/fuzz-bootstrap: tests/fuzz/fuzz_bootstrap.c $(BOOTSTRAP_CODEC)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
+
+# A bounded bootstrap-only gate on macOS as well as Linux. Do not clean the
+# other profiles: this follows make check in an already required native job.
+BOOTSTRAP_FUZZ_CC ?= clang
+BOOTSTRAP_FUZZ_CXX ?= clang++
+BOOTSTRAP_FUZZ_LDFLAGS ?=
+bootstrap-fuzz-check:
+	python3 scripts/bootstrap-corpus.py build/bootstrap-seeds
+	$(MAKE) BUILD_PROFILE=bootstrap-smoke CC=$(BOOTSTRAP_FUZZ_CC) CXX=$(BOOTSTRAP_FUZZ_CXX) \
+		CFLAGS='-O1 -g -DMAELYS_FUZZ_STANDALONE' \
+		LDFLAGS='$(BOOTSTRAP_FUZZ_LDFLAGS)' \
+		SANITIZE_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' \
+		build/bootstrap-smoke/bin/fuzz-bootstrap
+	build/bootstrap-smoke/bin/fuzz-bootstrap build/bootstrap-seeds
+	$(MAKE) BUILD_PROFILE=bootstrap-fuzz CC=$(BOOTSTRAP_FUZZ_CC) CXX=$(BOOTSTRAP_FUZZ_CXX) CFLAGS='-O1 -g' \
+		LDFLAGS='$(BOOTSTRAP_FUZZ_LDFLAGS)' \
+		SANITIZE_FLAGS='-fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer' \
+		build/bootstrap-fuzz/bin/fuzz-bootstrap
+	@mkdir -p build/bootstrap-fuzz/corpus
+	build/bootstrap-fuzz/bin/fuzz-bootstrap build/bootstrap-fuzz/corpus build/bootstrap-seeds -runs=10000
 
 # The committed seeds carry the structure each parser looks for, so a run
 # spends its budget on the boundaries instead of rediscovering that a request

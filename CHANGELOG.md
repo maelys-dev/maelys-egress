@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Complete the bootstrap pre-freeze test evidence: forced short reads and
+  control-truncation injection, absolute trickle deadlines, post-creation
+  delivery failures with ownership/join/slot recovery, control-flood fairness,
+  non-reading peers, process death and owner/ancestor-symlink refusals. Add
+  bootstrap-only mutation and seeded fuzz gates to a required macOS job,
+  alongside Linux, and retain the 17-criterion checklist in the proposal.
+  No public API, CLI, wire contract, version or protocol-freeze change.
+
 - Add the experimental native Compose example and required Docker CI gate.
   A distinct-UID, networkless application links only the client archive and
   obtains its channel through a read-only socket volume without credentials.
