@@ -687,14 +687,17 @@ $(BIN)/fuzz-bootstrap: tests/fuzz/fuzz_bootstrap.c $(BOOTSTRAP_CODEC)
 # other profiles: this follows make check in an already required native job.
 BOOTSTRAP_FUZZ_CC ?= clang
 BOOTSTRAP_FUZZ_CXX ?= clang++
+BOOTSTRAP_FUZZ_LDFLAGS ?=
 bootstrap-fuzz-check:
 	python3 scripts/bootstrap-corpus.py build/bootstrap-seeds
 	$(MAKE) BUILD_PROFILE=bootstrap-smoke CC=$(BOOTSTRAP_FUZZ_CC) CXX=$(BOOTSTRAP_FUZZ_CXX) \
 		CFLAGS='-O1 -g -DMAELYS_FUZZ_STANDALONE' \
+		LDFLAGS='$(BOOTSTRAP_FUZZ_LDFLAGS)' \
 		SANITIZE_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' \
 		build/bootstrap-smoke/bin/fuzz-bootstrap
 	build/bootstrap-smoke/bin/fuzz-bootstrap build/bootstrap-seeds
 	$(MAKE) BUILD_PROFILE=bootstrap-fuzz CC=$(BOOTSTRAP_FUZZ_CC) CXX=$(BOOTSTRAP_FUZZ_CXX) CFLAGS='-O1 -g' \
+		LDFLAGS='$(BOOTSTRAP_FUZZ_LDFLAGS)' \
 		SANITIZE_FLAGS='-fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer' \
 		build/bootstrap-fuzz/bin/fuzz-bootstrap
 	@mkdir -p build/bootstrap-fuzz/corpus

@@ -68,11 +68,14 @@ jobs:
       - name: Bootstrap-only mutation and fuzz gate on macOS
         if: matrix.os == 'macos-15'
         run: |
-          # Apple Clang does not ship libFuzzer; use LLVM only for this target.
-          brew install llvm
+          # Apple Clang does not ship libFuzzer. Use the matching LLVM linker
+          # too: Xcode 16's ld cannot link LLVM 23 sanitizer-coverage objects.
+          # This toolchain is confined to fuzz, never the product build.
+          brew install llvm lld
           make bootstrap-mutation-check
           make bootstrap-fuzz-check BOOTSTRAP_FUZZ_CC="$(brew --prefix llvm)/bin/clang" \
-            BOOTSTRAP_FUZZ_CXX="$(brew --prefix llvm)/bin/clang++"
+            BOOTSTRAP_FUZZ_CXX="$(brew --prefix llvm)/bin/clang++" \
+            BOOTSTRAP_FUZZ_LDFLAGS="--ld-path=$(brew --prefix lld)/bin/ld64.lld"
 
   sanitizers:
     runs-on: ubuntu-24.04
