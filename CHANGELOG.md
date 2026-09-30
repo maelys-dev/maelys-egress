@@ -11,7 +11,10 @@
   failed broker stops the command with a fatal event and nonzero exit.
   Add trusted native-principal/connector and broker liveness APIs within ABI 3.
   Cross-mode, standalone-client, identity, quota, reload and lifecycle tests
-  accompany generated references. Python/Node process SDKs remain proxy-only
+  accompany generated references. Permanent shutdown tests keep four leases,
+  four streams and a confirmed partial handshake alive across 20 signal stops
+  and a broker failure, checking receipts, closure and socket cleanup.
+  Python/Node process SDKs remain proxy-only
   and reject channel readiness. Native Compose and bootstrap wire freeze
   remain separate steps; no release is made by this change.
 
