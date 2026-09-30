@@ -43,6 +43,25 @@ static void rights(size_t count, size_t length) {
     close(pair[0]); close(pair[1]);
 }
 
+static void repeated_attacks(void) {
+    int baseline = fixture_fd_count();
+    for (size_t attempt = 0; attempt < 128; ++attempt) {
+        int pair[2];
+        fixture_pair(0, pair);
+        egress_tls_socket_t transport;
+        REQUIRE(egress_tls_socket_init(&transport, pair[1]) == 0);
+        /* The second transfer is still queued when the first one poisons
+         * the session. Closing the borrowed socket must clean that up too. */
+        fixture_rights(pair[0], "a", 1, 50);
+        fixture_rights(pair[0], "b", 1, 50);
+        char byte;
+        REQUIRE(egress_tls_socket_receive(&transport, &byte, 1) == -1 && errno == EPROTO);
+        REQUIRE(fixture_fd_count() == baseline + 2);
+        close(pair[0]); close(pair[1]);
+        REQUIRE(fixture_fd_count() == baseline);
+    }
+}
+
 #ifdef __linux__
 static void credentials(void) {
     for (int eof = 0; eof < 2; ++eof) {
@@ -81,6 +100,7 @@ int main(void) {
     ordinary(1);
     rights(1, 3);
     rights(50, 3);
+    repeated_attacks();
 #ifdef __APPLE__
     rights(254, 3);
     rights(50, 0);

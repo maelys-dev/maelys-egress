@@ -87,13 +87,17 @@ run_mutant tls-resume-poisoned providers/socket_io.c \
     'socket->failed = 0;' &
 run_mutant tls-raw-unix-read providers/socket_io.c \
     'if (!socket->unix_stream)' 'if (socket->fd >= 0)' &
+run_mutant tls-stream-family-restriction providers/socket_io.c \
+    'getsockname(fd, (struct sockaddr *)&address, &address_length) != 0)' \
+    'getsockname(fd, (struct sockaddr *)&address, &address_length) != 0 || (address.ss_family != AF_UNIX && address.ss_family != AF_INET && address.ss_family != AF_INET6))' &
 wait
 
 killed=0
 total=0
 for name in sni-host-mismatch authority-mismatch credential-compare \
     destination-port relay-half-close channel-host-bound channel-request-rights \
-    channel-status-denied tls-ignore-control tls-resume-poisoned tls-raw-unix-read; do
+    channel-status-denied tls-ignore-control tls-resume-poisoned tls-raw-unix-read \
+    tls-stream-family-restriction; do
     total=$((total + 1))
     result=$(cat "$work/$name.result" 2>/dev/null || printf 'missing')
     if test "$result" = killed; then

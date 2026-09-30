@@ -191,7 +191,7 @@ all: $(STATIC_LIB) $(CLIENT_LIB) $(CLI) $(TEST) $(PC) $(CLIENT_PC) $(MANIFEST)
 .PHONY: all clean check test examples-check sdk-check audit docs-check check-system-contract check-cli-contract \
 	system-integration-check mutation-check check-spec-contract conformance-check \
 	config-reference contract-check lifecycle-contract-check schema-check package-homebrew \
-	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-binaries \
+	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-provider-mutation-check tls-binaries \
 	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check \
 	public-check reproducible-check install-metadata-check dist client-standalone-check \
 	compose-proxy-check
@@ -540,6 +540,9 @@ tls-wolfssl-check: $(WOLFSSL_TEST)
 		$(WOLFSSL_TEST)
 
 tls-providers-check: tls-mbedtls-check tls-wolfssl-check
+
+tls-provider-mutation-check:
+	sh scripts/tls-provider-mutation-check.sh
 
 tls-binaries: $(MBEDTLS_CLI) $(WOLFSSL_CLI)
 

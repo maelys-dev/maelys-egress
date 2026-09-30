@@ -120,6 +120,8 @@ jobs:
         if: runner.os == 'macOS'
         run: test "$(uname -m)" = arm64
       - run: make tls-providers-check tls-binaries CC=clang CXX=clang++
+      - name: Require provider tests to catch the original Unix receive bypass
+        run: make tls-provider-mutation-check CC=clang CXX=clang++
       - name: Sanitize TLS providers and adversarial Unix transport tests
         run: make BUILD_PROFILE=tls-sanitized SANITIZE_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' tls-providers-check CC=clang CXX=clang++
       - name: Verify optional installation surface

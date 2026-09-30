@@ -16,6 +16,13 @@
   transport tests run without optional TLS dependencies in the default gate.
   The boundary audit now also refuses native descriptor-passing calls in
   providers and direct reads outside their shared transport adapter.
+- The security regression gate now checks 128 repeated Unix attacks with
+  queued descriptor transfers, rights attached at four TLS record boundaries,
+  maximum-size descriptor batches, and continued traffic on a healthy session
+  sharing the attacked provider. Provider mutation tests restore the original
+  raw Unix receive in each TLS stack and require an actual assertion failure
+  after a passing unmodified control. The default mutation gate also restores
+  the former stream-family restriction to prove its regression test detects it.
 
 ## 0.22.4 — 2026-09-29
 

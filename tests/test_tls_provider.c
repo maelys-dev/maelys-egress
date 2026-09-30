@@ -125,7 +125,7 @@ static void ordinary(maelys_egress_tls_provider_t *provider, int tcp) {
     pair_release(&pair);
 }
 
-static void assert_failed(tls_pair_t *pair, size_t receiver, int established) {
+static void assert_failed(tls_pair_t *pair, size_t receiver, int established, int expected_fds) {
     void *session = pair->session[receiver];
     maelys_egress_tls_provider_t *provider = pair->provider;
     char bytes[128];
@@ -133,9 +133,13 @@ static void assert_failed(tls_pair_t *pair, size_t receiver, int established) {
     maelys_egress_tls_step_t step = established
         ? provider->ops.read(provider->context, session, bytes, sizeof(bytes), &count)
         : provider->ops.handshake(provider->context, session);
+    /* Check the leak itself before disposition: restoring plain recv on
+     * macOS must fail here, even if a TLS decoder also rejects the input. */
+    REQUIRE(fixture_fd_count() == expected_fds);
     REQUIRE(step == MAELYS_EGRESS_TLS_FAILED);
     if (established) REQUIRE(count == 0);
-    REQUIRE(provider->ops.last_error(provider->context, session) != NULL);
+    const char *error = provider->ops.last_error(provider->context, session);
+    REQUIRE(error != NULL && error[0] != '\0');
     /* A retry cannot resurrect a poisoned session, drain buffered plaintext
      * or emit more ciphertext after the violation. */
     REQUIRE(provider->ops.handshake(provider->context, session) == MAELYS_EGRESS_TLS_FAILED);
@@ -149,7 +153,8 @@ static void assert_failed(tls_pair_t *pair, size_t receiver, int established) {
 /* Feed a genuine ClientHello/server flight/application record with attached
  * rights: refusing invalid TLS syntax alone cannot make this test pass. */
 static void attack(maelys_egress_tls_provider_t *provider, size_t receiver,
-                   int established, int control_only) {
+                   int established, int position, size_t rights_count) {
+    int before_connection = fixture_fd_count();
     tls_pair_t pair;
     pair_create(&pair, provider, 0);
     if (established) {
@@ -168,17 +173,24 @@ static void attack(maelys_egress_tls_provider_t *provider, size_t receiver,
     }
     unsigned char ciphertext[16384];
     ssize_t length = recv(pair.relay[1 - receiver], ciphertext, sizeof(ciphertext), 0);
-    REQUIRE(length > 1);
+    REQUIRE(length > 5);
+    size_t record_length = 5u + (size_t)ciphertext[3] * 256u + ciphertext[4];
+    REQUIRE(record_length > 5u && record_length <= (size_t)length);
     int baseline = fixture_fd_count();
-    if (control_only) fixture_rights(pair.relay[receiver], ciphertext, 0, 50);
+    if (position == 4) fixture_rights(pair.relay[receiver], ciphertext, 0, rights_count);
     else {
-        /* Fragment the TLS header before the rights-bearing byte. */
-        send_bytes(pair.relay[receiver], ciphertext, 1);
-        fixture_rights(pair.relay[receiver], ciphertext + 1, (size_t)length - 1, 50);
+        /* First byte, split header, body boundary, and last byte of the first
+         * record: control cannot hide behind a preceding short read. */
+        const size_t offsets[] = {0, 1, 5, record_length - 1u};
+        size_t offset = offsets[position];
+        send_bytes(pair.relay[receiver], ciphertext, offset);
+        fixture_rights(pair.relay[receiver], ciphertext + offset,
+            (size_t)length - offset, rights_count);
     }
-    assert_failed(&pair, receiver, established);
+    assert_failed(&pair, receiver, established, baseline);
     REQUIRE(fixture_fd_count() == baseline);
     pair_release(&pair);
+    REQUIRE(fixture_fd_count() == before_connection);
 }
 
 int main(void) {
@@ -202,14 +214,33 @@ int main(void) {
     int baseline = fixture_fd_count();
     ordinary(provider, 0);
     ordinary(provider, 1);
+    tls_pair_t healthy;
+    pair_create(&healthy, provider, 0);
+    handshake(&healthy);
     for (size_t receiver = 0; receiver < 2; ++receiver) {
         for (int established = 0; established < 2; ++established) {
-            attack(provider, receiver, established, 0);
+            for (int position = 0; position < 4; ++position) {
+                attack(provider, receiver, established, position, 50);
+                /* Rejecting one attacker must not poison other sessions
+                 * sharing the provider context. */
+                write_record(&healthy, receiver);
+                pump(&healthy);
+                read_record(&healthy, 1 - receiver);
+            }
 #ifdef __APPLE__
-            attack(provider, receiver, established, 1);
+            attack(provider, receiver, established, 0, 254);
+            attack(provider, receiver, established, 4, 50);
+#else
+            attack(provider, receiver, established, 0, 253);
 #endif
         }
     }
+    for (size_t sender = 0; sender < 2; ++sender) {
+        write_record(&healthy, sender);
+        pump(&healthy);
+        read_record(&healthy, 1 - sender);
+    }
+    pair_release(&healthy);
     REQUIRE(fixture_fd_count() == baseline);
     maelys_egress_tls_provider_release(provider);
     maelys_egress_error_free(error);
