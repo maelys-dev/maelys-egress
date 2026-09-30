@@ -138,9 +138,14 @@ maelys_egress_client_result_t maelys_egress_client_channel_open(
             request + progress, sizeof(request) - progress, -1, &sent);
         if (io == MAELYS_SYS_ERR_WOULD_BLOCK || (io == MAELYS_SYS_ERR_OS && errno == EINTR))
             continue;
+        /* A saturated broker may queue BUSY and close before this write.
+         * Linux can then report EPIPE although the refusal is readable. Do
+         * not discard it; accept only a refusal if the request was partial. */
+        if (io == MAELYS_SYS_ERR_CLOSED || io == MAELYS_SYS_ERR_RESET) break;
         if (io != MAELYS_SYS_OK || !sent) goto fail;
         progress += sent;
     }
+    int request_complete = progress == sizeof(request);
     unsigned char response[EGRESS_BOOTSTRAP_RESPONSE_SIZE];
     progress = 0u;
     while (progress < sizeof(response)) {
@@ -169,6 +174,7 @@ maelys_egress_client_result_t maelys_egress_client_channel_open(
     result = MAELYS_EGRESS_CLIENT_ERR_PROTOCOL;
     if (!egress_bootstrap_decode_response(response, sizeof(response), &status,
             &channel->connect_timeout_ms) ||
+        (status == EGRESS_BOOTSTRAP_OK && !request_complete) ||
         ((status == EGRESS_BOOTSTRAP_OK) != (channel->channel >= 0))) goto fail;
     result = status_result(status);
     if (result != MAELYS_EGRESS_CLIENT_OK) goto fail;

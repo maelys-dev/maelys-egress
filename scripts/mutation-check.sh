@@ -109,6 +109,9 @@ run_mutant bootstrap-capacity-release src/channel_broker.c \
 run_mutant bootstrap-lease-destruction src/channel_broker.c \
     'if (!request) return 0; /* No post-request data or control, even zero-byte rights. */' \
     'if (!request) return 1; /* Mutant ignores lease violations. */' &
+run_mutant bootstrap-early-busy client/channel_open.c \
+    'if (io == MAELYS_SYS_ERR_CLOSED || io == MAELYS_SYS_ERR_RESET) break;' \
+    'if (io == MAELYS_SYS_ERR_CLOSED || io == MAELYS_SYS_ERR_RESET) goto fail;' &
 wait
 
 killed=0
@@ -117,7 +120,7 @@ for name in sni-host-mismatch authority-mismatch credential-compare \
     destination-port relay-half-close channel-host-bound channel-request-rights \
     channel-status-denied tls-ignore-control tls-resume-poisoned tls-raw-unix-read \
     tls-stream-family-restriction bootstrap-identity-field bootstrap-descriptor-cardinality \
-    bootstrap-capacity-release bootstrap-lease-destruction; do
+    bootstrap-capacity-release bootstrap-lease-destruction bootstrap-early-busy; do
     total=$((total + 1))
     result=$(cat "$work/$name.result" 2>/dev/null || printf 'missing')
     if test "$result" = killed; then

@@ -419,7 +419,7 @@ $(BOOTSTRAP_CLIENT_TEST): tests/test_bootstrap_client.c common/bootstrap.h tests
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(filter-out -pthread,$(CFLAGS)) $(LDFLAGS) $< $(CLIENT_LIB) -o $@
 
-$(BROKER_FAULTS_TEST): tests/test_broker_faults.c tests/tls_socket_fixture.h common/bootstrap.h src/channel_broker.c src/channel_server.c $(CLIENT_LIB) $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
+$(BROKER_FAULTS_TEST): tests/test_broker_faults.c tests/tls_socket_fixture.h common/bootstrap.h src/channel_broker.c src/channel_server.c client/channel_open.c $(CLIENT_LIB) $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(CLIENT_LIB) $(STATIC_LIB) $(LDLIBS) -o $@
 

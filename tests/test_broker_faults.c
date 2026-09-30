@@ -12,6 +12,7 @@
 #include <time.h>
 
 static atomic_int send_fault, send_calls, rights_sent, hold_open, entered, release_open, destroying;
+static atomic_int refuse_send, busy_sent;
 
 static maelys_sys_result_t partial_send(int socket_fd, const void *bytes,
     size_t length, int passed_fd, size_t *sent) {
@@ -24,6 +25,9 @@ static maelys_sys_result_t partial_send(int socket_fd, const void *bytes,
     }
     maelys_sys_result_t result = maelys_sys_fd_stream_send(socket_fd, bytes, length, passed_fd, sent);
     if (result == MAELYS_SYS_OK && *sent && passed_fd >= 0) atomic_fetch_add(&rights_sent, 1);
+    if (result == MAELYS_SYS_OK && *sent == 16u &&
+        !memcmp(bytes, "MEBP", 4u) && ((const unsigned char *)bytes)[5] == 2u)
+        atomic_store(&busy_sent, 1);
     return result;
 }
 
@@ -54,6 +58,22 @@ static void joining_channel(maelys_egress_channel_t *channel) {
 #define maelys_egress_channel_destroy joining_channel
 #include "src/channel_broker.c"
 #undef maelys_egress_channel_destroy
+#undef maelys_sys_fd_stream_send
+
+static maelys_sys_result_t closed_request_send(int fd, const void *bytes,
+    size_t length, int passed, size_t *sent) {
+    if (!atomic_load(&refuse_send)) return maelys_sys_fd_stream_send(fd, bytes, length, passed, sent);
+    for (unsigned i = 0u; i < 2000u && !atomic_load(&busy_sent); ++i) {
+        struct timespec delay = {.tv_nsec = 1000000L}; nanosleep(&delay, NULL);
+    }
+    REQUIRE(atomic_load(&busy_sent));
+    *sent = 0u;
+    return MAELYS_SYS_ERR_CLOSED;
+}
+/* Force the Linux race: the peer has queued BUSY before the request write
+ * reports EPIPE. The real response decoder must still return ERR_BUSY. */
+#define maelys_sys_fd_stream_send closed_request_send
+#include "client/channel_open.c"
 #undef maelys_sys_fd_stream_send
 
 typedef struct test_server {
@@ -97,12 +117,17 @@ int main(void) {
     REQUIRE(mkdtemp(template)); char *directory = realpath(template, NULL); REQUIRE(directory);
     char path[104]; REQUIRE(snprintf(path, sizeof(path), "%s/s", directory) > 0);
     maelys_egress_channel_broker_t *broker = NULL;
-    REQUIRE(maelys_egress_channel_broker_create(connector, path, 1000u, 500u, 2u, &broker, NULL) == MAELYS_EGRESS_OK);
+    REQUIRE(maelys_egress_channel_broker_create(connector, path, 1000u, 500u, 1u, &broker, NULL) == MAELYS_EGRESS_OK);
     atomic_store(&send_fault, 1);
     maelys_egress_client_channel_t *client = NULL;
     REQUIRE(maelys_egress_client_channel_open(path, 1000u, &client, NULL) == MAELYS_EGRESS_CLIENT_OK);
     REQUIRE(atomic_load(&rights_sent) == 1 && atomic_load(&send_calls) == 18);
     atomic_store(&send_fault, 0);
+    atomic_store(&refuse_send, 1);
+    maelys_egress_client_channel_t *busy = NULL;
+    REQUIRE(maelys_egress_client_channel_open(path, 1000u, &busy, NULL) == MAELYS_EGRESS_CLIENT_ERR_BUSY);
+    REQUIRE(!busy);
+    atomic_store(&refuse_send, 0);
     atomic_store(&hold_open, 1);
     unsigned char request[MAELYS_EGRESS_CHANNEL_REQUEST_MAX_SIZE];
     size_t length = maelys_egress_channel_encode_request("held.invalid", 443u, request, sizeof(request));
