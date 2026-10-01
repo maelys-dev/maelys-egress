@@ -130,11 +130,12 @@ int main(int argc, char **argv) {
         char *left[] = {argv[0], linger, stream_text, argv[4], NULL};
         posix_spawn_file_actions_t actions;
         pid_t child = 0;
-        if (fcntl(stream, F_SETFD, 0) != 0 || posix_spawn_file_actions_init(&actions) != 0 ||
-            posix_spawn_file_actions_addclose(&actions, STDOUT_FILENO) != 0 ||
-            posix_spawn_file_actions_addclose(&actions, STDERR_FILENO) != 0 ||
-            posix_spawn(&child, argv[0], &actions, NULL, left, environ) != 0) return 4;
-        return 7;
+        if (fcntl(stream, F_SETFD, 0) != 0 || posix_spawn_file_actions_init(&actions) != 0) return 4;
+        int spawned = posix_spawn_file_actions_addclose(&actions, STDOUT_FILENO) == 0 &&
+            posix_spawn_file_actions_addclose(&actions, STDERR_FILENO) == 0 &&
+            posix_spawn(&child, argv[0], &actions, NULL, left, environ) == 0;
+        (void)posix_spawn_file_actions_destroy(&actions);
+        return spawned ? 7 : 4;
     }
     if (!strcmp(mode, "linger") && argc == 4) {
         /* It loses its connection when the launcher destroys the server. */
