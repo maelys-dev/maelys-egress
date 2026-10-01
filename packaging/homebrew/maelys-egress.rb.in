@@ -41,7 +41,7 @@ class MaelysEgress < Formula
     sys = Formula["libmaelys-sys"]
     (testpath/"smoke.c").write <<~EOS
       #include <maelys/egress.h>
-      int main(void) { return MAELYS_EGRESS_ABI_VERSION == 3u ? 0 : 1; }
+      int main(void) { return MAELYS_EGRESS_ABI_COMPATIBLE_SINCE <= 3u && 3u <= MAELYS_EGRESS_ABI_VERSION ? 0 : 1; }
     EOS
     system ENV.cc, "-std=c11", "smoke.c", "-I#{include}", "-I#{sys.opt_include}",
            "-L#{lib}", "-L#{sys.opt_lib}", "-lmaelys_egress", "-lmaelys_sys",
@@ -49,7 +49,7 @@ class MaelysEgress < Formula
     system "./smoke"
     (testpath/"client-smoke.c").write <<~EOS
       #include <maelys/egress_client.h>
-      int main(void) { return maelys_egress_client_abi_version() == 1u ? 0 : 1; }
+      int main(void) { return maelys_egress_client_abi_compatible_since() <= 1u && 1u <= maelys_egress_client_abi_version() ? 0 : 1; }
     EOS
     system ENV.cc, "-std=c11", "client-smoke.c", "-I#{include}", "-L#{lib}",
            "-lmaelys_egress_client", "-o", "client-smoke"

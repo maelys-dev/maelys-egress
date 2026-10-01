@@ -18,7 +18,18 @@ extern "C" {
  * process that is being confined, and the archive links alone, without
  * -pthread. The contract is protocol/egress-channel-v1.md.
  */
-#define MAELYS_EGRESS_CLIENT_ABI_VERSION 1u
+/*
+ * Two numbers, as in <maelys/egress.h>: MAELYS_EGRESS_CLIENT_ABI_VERSION is
+ * the revision of this interface and rises with every change of this header
+ * or of <maelys/egress_channel.h>; MAELYS_EGRESS_CLIENT_ABI_COMPATIBLE_SINCE
+ * is the oldest revision whose declarations all still hold, and rises only
+ * on a break. A consumer written for revision N is served when
+ * COMPATIBLE_SINCE <= N <= ABI_VERSION. Revision 1 is 0.22.0; 0.23.0 added
+ * the bootstrap and ERR_BUSY under the same number; revision 2 is that
+ * interface. tests/public/abi-client-1.h holds the floor.
+ */
+#define MAELYS_EGRESS_CLIENT_ABI_VERSION 2u
+#define MAELYS_EGRESS_CLIENT_ABI_COMPATIBLE_SINCE 1u
 
 /*
  * One enumeration serves both calls of this header, and it may gain
@@ -57,7 +68,7 @@ typedef enum maelys_egress_client_result {
 } maelys_egress_client_result_t;
 
 /* Bootstrap v1: protocol/egress-channel-bootstrap-v1.md.
- * Additive within client ABI 1.
+ * Added in 0.23.0 without breaking client revision 1.
  * Open one absolute canonical Unix pathname within one non-zero monotonic
  * deadline (connect + write + receive). ERR_UNANSWERED is a local deadline;
  * ERR_BUSY is a broker response, never the channel's ERR_TIMEOUT.
@@ -110,6 +121,7 @@ maelys_egress_client_result_t maelys_egress_client_connect(
 const char *maelys_egress_client_result_string(maelys_egress_client_result_t result);
 void maelys_egress_client_error_free(char *error);
 unsigned int maelys_egress_client_abi_version(void);
+unsigned int maelys_egress_client_abi_compatible_since(void);
 
 #ifdef __cplusplus
 }

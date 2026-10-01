@@ -378,6 +378,8 @@ static void test_arguments(void) {
     (void)close(channel[0]);
     (void)close(channel[1]);
     CHECK(maelys_egress_client_abi_version() == MAELYS_EGRESS_CLIENT_ABI_VERSION);
+    CHECK(maelys_egress_client_abi_version() == 2u);
+    CHECK(maelys_egress_client_abi_compatible_since() == 1u);
     CHECK(strcmp(maelys_egress_client_result_string(MAELYS_EGRESS_CLIENT_ERR_UNANSWERED),
                  "unanswered") == 0);
     CHECK(strcmp(maelys_egress_client_result_string((maelys_egress_client_result_t)99),

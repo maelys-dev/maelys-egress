@@ -26,6 +26,9 @@ int main(void) {
     CHECK(maelys_egress_version_string() != NULL);
     CHECK(maelys_egress_version_string()[0] != '\0');
     CHECK(maelys_egress_abi_version() == MAELYS_EGRESS_ABI_VERSION);
+    /* A consumer written for revision 3 is served by this library: the
+     * interval a consumer of an installed library is asked to test. */
+    CHECK(maelys_egress_abi_compatible_since() <= 3u && 3u <= maelys_egress_abi_version());
     CHECK(maelys_egress_result_string(MAELYS_EGRESS_OK) != NULL);
     CHECK(maelys_egress_result_string(MAELYS_EGRESS_OK)[0] != '\0');
 

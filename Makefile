@@ -198,7 +198,7 @@ all: $(STATIC_LIB) $(CLIENT_LIB) $(CLI) $(TEST) $(PC) $(CLIENT_PC) $(MANIFEST)
 	config-reference contract-check lifecycle-contract-check schema-check package-homebrew \
 	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-provider-mutation-check tls-binaries \
 	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check \
-	public-check reproducible-check install-metadata-check dist client-standalone-check consumer-source-check \
+	public-check reproducible-check install-metadata-check dist client-standalone-check consumer-source-check abi-floor-check \
 	compose-proxy-check compose-channel-check
 
 ifeq ($(MAELYS_SYSTEM_PREFIX),)
@@ -411,6 +411,21 @@ consumer-source-check:
 		  echo "  If intended: add it to tests/public/frozen_results.c, re-freeze the release named there," >&2; \
 		  echo "  and write a 'Consumer notice' line in CHANGELOG.md (AGENTS.md)." >&2; exit 1; }
 	@echo "consumer-source-check: the frozen consumer still compiles"
+
+# The floor each ABI_COMPATIBLE_SINCE macro names, held by the compiler:
+# tests/public/abi-core-3.h and abi-client-1.h declare again everything the
+# floor revisions declared, and check that the current headers still name
+# each of them. An addition passes; a removed or changed declaration, a
+# moved enumerator, a changed macro or structure layout does not. That is a
+# break: it raises the macro and regenerates the fragment in one change.
+abi-floor-check:
+	@$(CC) -Iinclude -Itests/public -std=c11 -Wall -Wextra -Wpedantic -Werror \
+		-fsyntax-only tests/public/abi_floor.c || \
+		{ echo "abi-floor-check: a declaration of the floor revision no longer holds." >&2; \
+		  echo "  This is a break. If intended: raise ..._ABI_COMPATIBLE_SINCE to the new" >&2; \
+		  echo "  ..._ABI_VERSION, regenerate the fragment with tools/freeze_abi.py at the tag that" >&2; \
+		  echo "  first carries it, and name the break in CHANGELOG.md (AGENTS.md)." >&2; exit 1; }
+	@echo "abi-floor-check: every declaration of the floor revisions still holds"
 
 # The client archive must not reach into maelys-system or the thread runtime
 # for anything it does not hold: every maelys_sys_ or pthread_ symbol an
@@ -637,7 +652,7 @@ conformance-check: $(CLI) check-spec-contract
 
 check: test examples-check sdk-check audit docs-check system-integration-check contract-check schema-check \
 	conformance-check public-check reproducible-check install-metadata-check \
-	client-standalone-check consumer-source-check
+	client-standalone-check consumer-source-check abi-floor-check
 	$(CXX) -Iinclude -std=c++17 -Wall -Wextra -Wpedantic -Werror \
 		tests/header_cpp.cpp -c -o $(BUILD)/header-cpp.o
 

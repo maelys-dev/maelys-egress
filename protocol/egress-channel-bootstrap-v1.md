@@ -182,8 +182,10 @@ as well, for the complete child lifetime.
 
 The client archive needs neither Egress core nor a thread runtime. It includes
 only System's standalone `fdpass.o`, with no unresolved `maelys_sys_` or
-`pthread_` symbol. These additive opaque APIs retain core ABI 3 and client
-ABI 1; the public headers specify their C signatures.
+`pthread_` symbol. These opaque APIs were added without breaking core
+revision 3 or client revision 1; the public headers specify their C
+signatures and number the interface (core revision 4, client revision 2,
+since the release that adopted two ABI numbers).
 
 ## Filesystem capability and bounds
 
