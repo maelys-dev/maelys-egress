@@ -2,8 +2,10 @@
  * The supervising side of the mediated-connection channel: an Egress server
  * that opens no port (native_only), a connector bound to one principal, a
  * channel on that connector, and a child process that receives the channel's
- * client end on a descriptor number the supervisor chose. The child links
- * the client archive alone; this program is the one that links the library.
+ * client end on a descriptor number the supervisor chose and names in
+ * MAELYS_EGRESS_CHANNEL_FD. The child links the client archive alone; this
+ * program is the one that links the library. `maelys-egress channel exec` is
+ * this supervisor as a command, for a program that needs no embedder.
  *
  *   example-channel_supervisor /absolute/path/to/example-channel_client [HOST PORT]
  *
@@ -176,12 +178,16 @@ int main(int argc, char **argv) {
                 error ? error : thread_context.error ? thread_context.error : "failed");
     } else {
         /* The child gets the channel's client end on CHILD_CHANNEL_FD and
-         * nothing else of ours: every other descriptor is CLOEXEC. */
+         * nothing else of ours: every other descriptor is CLOEXEC. It learns
+         * the number and the connect bound from its environment, the same
+         * two variables `maelys-egress channel exec` sets. */
         char port_text[8];
         (void)snprintf(port_text, sizeof(port_text), "%u", (unsigned int)port);
         char fd_text[8];
         (void)snprintf(fd_text, sizeof(fd_text), "%d", CHILD_CHANNEL_FD);
-        char *child_argv[] = {(char *)child_path, fd_text, (char *)host, port_text, NULL};
+        (void)setenv("MAELYS_EGRESS_CHANNEL_FD", fd_text, 1);
+        (void)setenv("MAELYS_EGRESS_CHANNEL_CONNECT_TIMEOUT_MS", "5000", 1);
+        char *child_argv[] = {(char *)child_path, (char *)host, port_text, NULL};
         pid_t child = fork();
         if (child == 0) {
             if (dup2(client_fd, CHILD_CHANNEL_FD) != CHILD_CHANNEL_FD) _exit(127);

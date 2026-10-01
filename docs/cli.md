@@ -17,6 +17,7 @@ Common contract: `agent-cli/v2`. For the machine-readable detail run
 | config.validate | `config validate --config FILE` | read | json-envelope | Validate a complete configuration without opening listeners; exit 2 reports violations in data. |
 | serve | `serve --config FILE` | stream | protocol-stream (maelys-egress-lifecycle/1) | Start mediation and run until SIGINT or SIGTERM; stdout carries the lifecycle JSON Lines stream. |
 | channel.broker | `channel broker --config FILE` | stream | protocol-stream (maelys-egress-lifecycle/1) | Serve native channels through a private Unix socket until SIGINT or SIGTERM; stdout carries the lifecycle JSON Lines stream. |
+| channel.exec | `channel exec program [argument...] --config FILE` | stream | protocol-stream | Start one program with a native channel on an inherited descriptor and exit with its status, 128 + signal if a signal ended it; stdout and stderr are the program's. Not a sandbox: the program keeps its own network access. |
 
 Global options:
 

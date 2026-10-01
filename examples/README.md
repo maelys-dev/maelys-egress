@@ -16,10 +16,18 @@
 - `channel_supervisor.c` and `channel_client.c` are the two sides of the
   [mediated-connection channel](../protocol/egress-channel-v1.md): the
   supervisor runs Egress with no port, binds a channel to a connector and
-  hands its client end to a child on a descriptor number of its choosing; the
-  child links `libmaelys_egress_client` alone and asks for one destination.
-  Without arguments the supervisor serves a loopback echo, so the round trip
-  needs no network.
+  hands its client end to a child on a descriptor number of its choosing,
+  named in `MAELYS_EGRESS_CHANNEL_FD`; the child links
+  `libmaelys_egress_client` alone and asks for one destination. Without
+  arguments the supervisor serves a loopback echo, so the round trip needs no
+  network. The same client runs under the command that replaces a hand-written
+  supervisor, with a configuration in exec mode (`channel_principal` and no
+  `channel_listen_unix`):
+
+  ```sh
+  maelys-egress channel exec --config egress.conf -- \
+      /absolute/path/to/example-channel_client example.org 443
+  ```
 - [compose-channel](compose-channel/README.md) runs an Egress-aware C client
   in a separate networkless container. It acquires the channel by pathname,
   uses only the client archive, and proves allowed access, policy refusal and

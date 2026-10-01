@@ -14,8 +14,11 @@
  *   config_file.c     strict key = value loader producing typed settings
  *   secrets.c         owner-only token and audit-key files
  *   serve.c           typed settings to sealed policy and running daemon
- *   reload.c          SIGHUP policy reload thread
- *   output.c          the only writer of the lifecycle JSON Lines stream
+ *   channel_broker.c  coordinator of `channel broker`
+ *   channel_exec.c    coordinator of `channel exec`: one channel, one program
+ *   reload.c          signal thread: SIGHUP policy reload, stop or forwarding
+ *   output.c          the only writer of the lifecycle JSON Lines stream, and
+ *                     of the diagnostics `channel exec` keeps on stderr
  *   tls_listener.c    the only file that knows which TLS module, if any, is
  *                     linked into this binary
  */
@@ -28,6 +31,7 @@
 
 #include <signal.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -75,14 +79,42 @@ typedef struct egress_cli_settings {
     uint64_t channel_connect_timeout_ms;
     uint64_t channel_handshake_timeout_ms;
     size_t channel_max_clients;
+    int channel_fd;
 } egress_cli_settings_t;
 
+/* What a configuration file is for, named by what it has: no
+ * channel_principal is a proxy, channel_principal with channel_listen_unix
+ * a broker, channel_principal alone the launcher of `channel exec`. Each
+ * command accepts its own mode; `config validate` accepts the three. */
+typedef enum egress_cli_mode {
+    EGRESS_CLI_MODE_PROXY = 0,
+    EGRESS_CLI_MODE_BROKER,
+    EGRESS_CLI_MODE_EXEC
+} egress_cli_mode_t;
+egress_cli_mode_t egress_cli_settings_mode(const egress_cli_settings_t *settings);
+
+/* program is set by `channel exec` only. With it, SIGINT and SIGTERM are
+ * forwarded to the program and the server is left running; the thread ends
+ * on the first signal that follows `stopping`. There the server may be
+ * destroyed while the program still runs: server is then read under
+ * server_lock and is NULL once it is gone. */
 typedef struct signal_context {
     maelys_egress_server_t *server;
     sigset_t signals;
     const char *config_path;
     const egress_cli_settings_t *baseline;
+    maelys_cli_process_t *program;
+    pthread_mutex_t *server_lock;
+    atomic_int stopping;
 } signal_context_t;
+
+/* The program `channel exec` starts: argv[0] is its absolute path. Once
+ * started is set, exit_code is the program's own and nothing replaces it. */
+typedef struct egress_cli_exec {
+    char **argv;
+    int started;
+    int exit_code;
+} egress_cli_exec_t;
 
 /* config_file.c. Loading returns 0, or -1 with a framework error whose code
  * is NOT_FOUND, ACCESS_DENIED or IO_FAILED for the file itself, and
@@ -117,6 +149,13 @@ typedef struct egress_cli_output_gate {
 void egress_cli_output_gate_open(egress_cli_output_gate_t *gate, int state);
 void egress_cli_lifecycle_policy_reloaded(uint64_t generation, const char *digest);
 void egress_cli_receipt_sink(void *context, const maelys_egress_receipt_t *receipt);
+/* One line on stderr, prefixed `maelys-egress: `. The only thing `channel
+ * exec` writes once its program has started: stdout is the program's. */
+void egress_cli_diagnostic(const char *format, ...)
+#if defined(__GNUC__) || defined(__clang__)
+    __attribute__((format(printf, 1, 2)))
+#endif
+    ;
 
 /* reload.c */
 void *egress_cli_signal_main(void *opaque);
@@ -135,16 +174,26 @@ maelys_egress_result_t egress_cli_build_policy(
 /* Returns 0 when validation succeeded (out_digest filled) or the daemon
  * stopped cleanly, 1 when the daemon reported a fatal lifecycle event, and
  * -1 with a framework error when nothing was started. reload_config_path
- * enables SIGHUP reload; check_only stops after sealing the policy. */
+ * enables SIGHUP reload; check_only stops after sealing the policy. With
+ * exec, the settings are in exec mode: 0 means the program started and
+ * exec->exit_code is its status, -1 that it never did. */
 int egress_cli_run(
     const egress_cli_settings_t *settings, const char *reload_config_path,
-    int check_only, maelys_cli_error_t *out_error, char out_digest[65]);
+    int check_only, maelys_cli_error_t *out_error, char out_digest[65],
+    egress_cli_exec_t *exec);
 
 /* commands.c */
 int egress_cli_command_config_describe(maelys_cli_context_t *context);
 int egress_cli_command_config_validate(maelys_cli_context_t *context);
 int egress_cli_command_serve(maelys_cli_context_t *context);
 int egress_cli_command_channel_broker(maelys_cli_context_t *context);
+int egress_cli_command_channel_exec(maelys_cli_context_t *context);
+/* channel_exec.c. Runs the server on the calling thread until the program
+ * has exited, and destroys the server: the caller no longer owns it. Same
+ * return as egress_cli_run with exec. */
+int egress_cli_exec_run(maelys_egress_server_t *server,
+    const egress_cli_settings_t *settings, const char *path, const sigset_t *signals,
+    egress_cli_exec_t *exec, maelys_cli_error_t *error);
 int egress_cli_channel_run(maelys_egress_server_t *server,
     const egress_cli_settings_t *settings, const char *path, const sigset_t *signals,
     const char *digest, egress_cli_output_gate_t *gate, maelys_cli_error_t *error);

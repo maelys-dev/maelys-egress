@@ -591,6 +591,62 @@
           "protocol": "maelys-egress-lifecycle/1",
           "purpose": "Serve native channels through a private Unix socket until SIGINT or SIGTERM; stdout carries the lifecycle JSON Lines stream.",
           "usage": "channel broker --config FILE"
+        },
+        {
+          "available": true,
+          "effect": "stream",
+          "exitCodes": {
+            "0": "command completed",
+            "1": "execution failed",
+            "2": "valid report with violations"
+          },
+          "external": false,
+          "hidden": false,
+          "id": "channel.exec",
+          "input": {
+            "constraints": [],
+            "operands": [
+              {
+                "name": "program",
+                "required": true,
+                "summary": "Absolute path of the program to start.",
+                "type": "absolute-path",
+                "variadic": false
+              },
+              {
+                "name": "argument",
+                "required": false,
+                "summary": "Argument passed to the program, verbatim.",
+                "variadic": true
+              }
+            ],
+            "options": [
+              {
+                "argument": {
+                  "name": "FILE",
+                  "type": "path"
+                },
+                "conflictsWith": [],
+                "long": "--config",
+                "repeatable": false,
+                "required": true,
+                "requires": [],
+                "summary": "Complete daemon configuration file declaring schema_version = 1."
+              }
+            ],
+            "passthrough": false,
+            "synopsis": "channel exec program [argument...] --config FILE"
+          },
+          "outputMode": "protocol-stream",
+          "outputSchema": {
+            "type": "object"
+          },
+          "pattern": [
+            "channel",
+            "exec"
+          ],
+          "purpose": "Start one program with a native channel on an inherited descriptor and exit with its status, 128 + signal if a signal ended it; stdout and stderr are the program's. Not a sandbox: the program keeps its own network access.",
+          "usage": "channel exec program [argument...] --config FILE"
         }
       ],
       "contract": "agent-cli/v2",
