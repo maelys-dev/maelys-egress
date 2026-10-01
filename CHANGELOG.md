@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.24.1 — 2026-10-01
+
+- 0.24.0 was never published; this release carries everything its entry
+  below describes. The signed tag `v0.24.0` was placed on the commit before
+  the version change, where `VERSION` still read 0.23.0, and the release
+  workflow refused it at its first step: no archive, no package and no
+  formula exist under that name. A published tag is never moved or
+  recreated, so `v0.24.0` stays where it is and must not be pinned. The tag
+  was cut by a script that did not check, after merging the version, that
+  the commit it was about to sign was the merged one.
+
 ## 0.24.0 — 2026-10-01
 
 - Consumer notice: the interface is now numbered twice.
