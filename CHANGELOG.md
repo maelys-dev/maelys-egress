@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.25.0 — 2026-10-02
 
 - **New command `maelys-egress channel exec --config FILE -- /absolute/program
   [ARGUMENT...]`.** It starts one program that speaks the mediated-connection
