@@ -10,6 +10,13 @@ extern "C" {
 
 #define MAELYS_EGRESS_ABI_VERSION 3u
 
+/*
+ * The public enumerations of Egress may gain enumerators in a later release.
+ * Existing enumerators keep their values. A switch over one of them
+ * therefore needs a default that treats an unknown value as a failure, never
+ * as success. A release that adds an enumerator says so in a "Consumer
+ * notice" of its changelog.
+ */
 typedef enum maelys_egress_result {
     MAELYS_EGRESS_OK = 0,
     MAELYS_EGRESS_ERR_ARGUMENT,

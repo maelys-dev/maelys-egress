@@ -385,7 +385,52 @@ static void test_arguments(void) {
     maelys_egress_client_error_free(NULL);
 }
 
+/*
+ * The consumer this header asks for: a switch with a default that fails
+ * closed. Whatever the library returns one day, a value this consumer was
+ * not compiled to know must read as a failure with nothing usable, never
+ * as success.
+ */
+static int consumer_may_use_stream(maelys_egress_client_result_t result) {
+    switch (result) {
+    case MAELYS_EGRESS_CLIENT_OK: return 1;
+    default: return 0;
+    }
+}
+
+static void test_unknown_result_fails_closed(void) {
+    CHECK(consumer_may_use_stream(MAELYS_EGRESS_CLIENT_OK) == 1);
+    for (int value = 1; value < 64; ++value) {
+        CHECK(consumer_may_use_stream((maelys_egress_client_result_t)value) == 0);
+    }
+    /* A result beyond the last enumerator has no name; the library says so
+     * rather than borrowing another result's. */
+    CHECK(strcmp(maelys_egress_client_result_string(
+        (maelys_egress_client_result_t)(MAELYS_EGRESS_CLIENT_ERR_BUSY + 1)), "unknown") == 0);
+    /* A status the server sends and this client does not know: INTERNAL,
+     * and nothing handed over, even though a descriptor came with it. */
+    int channel[2];
+    int extra[2];
+    channel_pair(channel);
+    CHECK(socketpair(AF_UNIX, SOCK_STREAM, 0, extra) == 0);
+    int before = open_descriptors();
+    respond(channel[1], (maelys_egress_channel_status_t)200, &extra[0], 1u);
+    int received = 7;
+    char *error = NULL;
+    maelys_egress_client_result_t result = maelys_egress_client_connect(
+        channel[0], "example.com", 443u, 1000u, &received, &error);
+    CHECK(result != MAELYS_EGRESS_CLIENT_OK && !consumer_may_use_stream(result));
+    CHECK(received == -1 && error != NULL);
+    maelys_egress_client_error_free(error);
+    CHECK(open_descriptors() == before);
+    (void)close(channel[0]);
+    (void)close(channel[1]);
+    (void)close(extra[0]);
+    (void)close(extra[1]);
+}
+
 int main(void) {
+    test_unknown_result_fails_closed();
     test_arguments();
     test_success_hands_over_one_stream();
     test_refusals_carry_no_stream();

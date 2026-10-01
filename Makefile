@@ -198,7 +198,7 @@ all: $(STATIC_LIB) $(CLIENT_LIB) $(CLI) $(TEST) $(PC) $(CLIENT_PC) $(MANIFEST)
 	config-reference contract-check lifecycle-contract-check schema-check package-homebrew \
 	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-provider-mutation-check tls-binaries \
 	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check \
-	public-check reproducible-check install-metadata-check dist client-standalone-check \
+	public-check reproducible-check install-metadata-check dist client-standalone-check consumer-source-check \
 	compose-proxy-check compose-channel-check
 
 ifeq ($(MAELYS_SYSTEM_PREFIX),)
@@ -397,6 +397,20 @@ $(CLIENT_LIB): $(CLIENT_OBJECTS) $(CHANNEL_CODEC) $(BOOTSTRAP_CODEC) $(FDPASS_OB
 	@mkdir -p $(@D)
 	rm -f $@
 	ZERO_AR_DATE=1 ar rcs $@ $^
+
+# A consumer frozen at the last release that changed a public enumeration,
+# with a switch that names every enumerator and no default, compiled under
+# -Werror=switch against the current headers. It fails when an enumerator is
+# added: the ABI holds, such a consumer's build does not. The failure is the
+# point; see the file and AGENTS.md before touching it.
+consumer-source-check:
+	@$(CC) -Iinclude -std=c11 -Wall -Wextra -Werror -Werror=switch -fsyntax-only \
+		tests/public/frozen_results.c || \
+		{ echo "consumer-source-check: a public enumeration gained an enumerator." >&2; \
+		  echo "  This breaks consumers that switch without a default under -Werror=switch." >&2; \
+		  echo "  If intended: add it to tests/public/frozen_results.c, re-freeze the release named there," >&2; \
+		  echo "  and write a 'Consumer notice' line in CHANGELOG.md (AGENTS.md)." >&2; exit 1; }
+	@echo "consumer-source-check: the frozen consumer still compiles"
 
 # The client archive must not reach into maelys-system or the thread runtime
 # for anything it does not hold: every maelys_sys_ or pthread_ symbol an
@@ -623,7 +637,7 @@ conformance-check: $(CLI) check-spec-contract
 
 check: test examples-check sdk-check audit docs-check system-integration-check contract-check schema-check \
 	conformance-check public-check reproducible-check install-metadata-check \
-	client-standalone-check
+	client-standalone-check consumer-source-check
 	$(CXX) -Iinclude -std=c++17 -Wall -Wextra -Wpedantic -Werror \
 		tests/header_cpp.cpp -c -o $(BUILD)/header-cpp.o
 

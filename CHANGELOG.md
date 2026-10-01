@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- Consumer notice, late: 0.23.0 added `MAELYS_EGRESS_CLIENT_ERR_BUSY` to
+  `maelys_egress_client_result_t`. No existing value moved, but a consumer
+  that switches over this enumeration without a default, under
+  `-Werror=switch`, stopped compiling; maelys-warden did. Only
+  `maelys_egress_client_channel_open` returns it. `maelys_egress_client_connect`
+  never does: a status it does not know is `ERR_INTERNAL`, with no stream.
+  0.23.0 said none of this.
+
+- The public headers now say that their enumerations may gain enumerators,
+  that a switch needs a default which fails closed, and which results each
+  client call can return. A frozen consumer, `tests/public/frozen_results.c`,
+  names every enumerator of the three public result types as of 0.23.0 with
+  no default and is compiled under `-Werror=switch` by
+  `make consumer-source-check`, part of `make check`: it fails when an
+  enumerator is added, so the next addition is a decision written in this
+  changelog and not a surprise for a consumer. The client test also holds
+  the fallback: a result or a wire status this build does not know is a
+  failure with nothing usable, never success. `AGENTS.md` states the rule.
+
 ## 0.23.0 — 2026-09-30
 
 - Freeze the implemented channel bootstrap v1 contract for publication under
