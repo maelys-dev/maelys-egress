@@ -177,8 +177,9 @@ Two limits are stated, not solved:
 
 - If the launcher is killed with `SIGKILL`, the program survives it with a
   dead channel: its relayed connections end, and its next request fails.
-  On Linux the framework may offer a parent-death signal (below); elsewhere
-  there is none.
+  Linux's parent-death signal is not used: it fires when the *thread* that
+  started the program ends, and here that is the coordinator thread, so it
+  would kill a program whose launcher is alive.
 - A process the program starts inherits the descriptor unless the program
   sets `FD_CLOEXEC` on it, which a channel-aware program should do on
   entry. The launcher waits for the program only; what it leaves behind
@@ -232,8 +233,7 @@ typedef struct maelys_cli_process_inherit {
 
 typedef struct maelys_cli_process_options {
     const maelys_cli_process_inherit_t *inherit;
-    size_t inherit_count;
-    int parent_death_signal;  /* 0: none. Linux only, best effort. */
+    size_t inherit_count;  /* targets are distinct */
 } maelys_cli_process_options_t;
 
 /* Same trust checks as run. Returns once exec has succeeded, or -1 with
@@ -241,13 +241,34 @@ typedef struct maelys_cli_process_options {
 int maelys_cli_process_start(const char *path, char *const argv[],
     char *const envp[], const maelys_cli_process_options_t *options,
     maelys_cli_process_t *out_process);
-int maelys_cli_process_signal(const maelys_cli_process_t *process, int signal_number);
+/* May be called from another thread than wait, at any time. Once the
+ * program has been reaped it sends nothing and returns -1 with ESRCH. */
+int maelys_cli_process_signal(maelys_cli_process_t *process, int signal_number);
 int maelys_cli_process_wait(maelys_cli_process_t *process,
     maelys_cli_process_status_t *out_status);
 ```
 
-Three cases are acceptance criteria of that request, because each one makes
-the program start without its channel and without an error:
+Two requirements go with that signature.
+
+**The inheritance is a mapping, applied as a whole.** `3 → 4` together with
+`4 → 3` must work, and so must one source given to several targets:
+installing the targets one after the other would overwrite a source that a
+later entry still needs. Moving every source above the highest target
+first, then installing each target, covers both and the case of a source
+equal to its target. Two entries with the same target are refused before
+anything starts.
+
+**`signal` and `wait` share the handle between two threads.** Here the
+signal thread forwards while the coordinator waits. Between the moment the
+kernel gives up the program's identifier and the moment the handle records
+it, a forwarded signal could reach an unrelated process that received the
+same identifier. The contract must exclude that: after the program has been
+reaped, `signal` sends nothing. Waiting without reaping (`waitid` with
+`WNOWAIT`), then reaping under the lock `signal` takes, is one way to hold
+it. A second `wait` on the same handle returns the recorded status.
+
+Three more cases are acceptance criteria of that request, because each one
+makes the program start without its channel and without an error:
 
 1. **Target equal to source.** `dup2(4, 4)` does nothing and leaves
    `CLOEXEC` set; the kernel may well have given the client end the number
@@ -275,11 +296,13 @@ renders the overlay alone today.
   nothing on stdout.
 - Descriptors: in the program, `channel_fd` is open, is a datagram socket
   and answers a request; no other descriptor at or above 3 is open; the
-  source-equals-target case is forced.
+  source-equals-target case is forced. Permutations and duplicate targets
+  are the framework's tests, not this command's: it inherits one descriptor.
 - Signals: `SIGTERM` to the launcher while the program holds a relayed
   connection — the program receives it, the connection stays usable until
   the program exits, then the upstream sees the end. `SIGHUP` reloads the
-  policy and does not reach the program through the launcher.
+  policy and does not reach the program through the launcher. A signal
+  that arrives once the program has exited is not forwarded.
 - Shutdown: connections still open when the program exits are revoked; the
   launcher returns without waiting for `channel_connect_timeout_ms`.
 - Contract: `describe channel.exec` has no `protocol`, the standard
@@ -291,25 +314,27 @@ renders the overlay alone today.
 ## Order of work
 
 1. This proposal, merged without a tag.
-2. The request to maelys-cli, with the signature and the three criteria.
-   Advancing the pin is a product decision recorded in the changelog.
-3. Meanwhile, without the framework: the three configuration modes with
-   `config validate` and the generated reference, the optional receipt
-   sink, the exec mode of the signal thread. None of it is reachable from a
-   command until step 4, and all of it is tested through `config validate`
-   and unit tests.
-4. The `channel.exec` catalog entry, handler and tests, once the pin
-   carries the new process functions.
+2. The request to maelys-cli, with the signature, the two requirements and
+   the three cases. Advancing the pin is a product decision recorded in the
+   changelog.
+3. Meanwhile, without the framework, only what no user can observe: a
+   receipt sink that can be left out, and the exec mode of the signal
+   thread. The third configuration mode does **not** come early:
+   `config validate` would accept a file that no command can run, and a
+   patch release may leave before the command exists.
+4. In one change, once the pin carries the new process functions: the three
+   configuration modes with `config validate` and the generated reference,
+   the `channel.exec` catalog entry, its handler and the tests.
 5. `examples/channel_client.c` reads the variable; one line in
    `examples/README.md` runs it through `channel exec`. Then a release: the
    CLI, its reference and the configuration contract change.
 
-## Open questions
+## Questions closed on review
 
-1. Should `libmaelys_egress_client` offer a call that reads
-   `MAELYS_EGRESS_CHANNEL_FD` and the timeout? It would save every program a
-   parse and raise the client revision to 3. Left out of the first version.
-2. Should exec mode accept a receipt file distinct from `audit_log`?
-3. Is `channel_fd` better as an option of the command than as a key? The
-   proposal follows the repository's convention; the argument for an option
-   is that the number concerns one launch, like the program itself.
+1. **No call in `libmaelys_egress_client` that reads the environment**, in
+   this version. The example shows how to read and check the descriptor and
+   the timeout; the client interface does not grow before the use is known.
+2. **No receipt file distinct from `audit_log`.** Stdout stays the
+   program's alone.
+3. **`channel_fd` is a configuration key**, default 4. It follows the
+   repository's convention and leaves one way to set the number.
