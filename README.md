@@ -213,6 +213,41 @@ Egress-aware application a mediated channel through a read-only socket volume,
 with a distinct UID, no ambient network and no secret. Its integration test
 proves allowed access, direct-network failure and policy refusal.
 
+### Starting one program with a channel
+
+`channel exec` starts a program that speaks the
+[mediated-connection channel](protocol/egress-channel-v1.md) and hands it the
+channel as an open descriptor, the way a supervisor would: no socket on disk,
+no port, no secret. The configuration names a principal and no listener:
+
+```sh
+schema_version = 1
+channel_principal = build-agent
+allow_tls_sni = github.com:443
+```
+
+```sh
+maelys-egress channel exec --config /etc/maelys-egress.conf -- /usr/local/bin/agent --once
+```
+
+The program finds the channel on descriptor 4, or on the number `channel_fd`
+names, and reads that number in `MAELYS_EGRESS_CHANNEL_FD`;
+`MAELYS_EGRESS_CHANNEL_CONNECT_TIMEOUT_MS` tells it how long Egress may take
+to reach a destination. Its path is absolute and its arguments follow `--`,
+verbatim. Standard input, output and error are the program's own: Egress
+writes no lifecycle record there, and receipts go to `audit_log`.
+
+The exit status is the program's, `128 + signal` when a signal ended it. Exit
+1 with a JSON error envelope on stderr means the program never started.
+`SIGINT` and `SIGTERM` sent to `maelys-egress` are forwarded to the program,
+and the server stops only once the program has exited, so that it can finish
+what it has open; `SIGHUP` reloads the destinations, as for `serve`.
+
+**This is not a sandbox.** The program keeps every network path its
+environment gives it; the channel adds a mediated one and removes none.
+Confining the program is the deployer's part: a container with
+`network_mode: none`, maelys-warden, or another supervisor.
+
 ### Native connector
 
 The proxy listeners are one way in. The other is the native connector of the
@@ -242,7 +277,9 @@ only its descriptor-passing object — and
 asks for one destination per `maelys_egress_client_connect`, receiving the
 stream as a passed descriptor. [`examples/channel_supervisor.c`](examples/channel_supervisor.c)
 and [`examples/channel_client.c`](examples/channel_client.c) are the two sides;
-maelys-warden hands the channel to the sandboxed process on file descriptor 4.
+maelys-warden hands the channel to the sandboxed process on file descriptor 4,
+and `maelys-egress channel exec` does the same for a program started from the
+command line.
 
 ## Documentation map
 

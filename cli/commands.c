@@ -187,7 +187,7 @@ int egress_cli_command_config_validate(maelys_cli_context_t *context) {
         return validation_report(context, &error, NULL);
     }
     char digest[65] = {0};
-    int status = egress_cli_run(&settings, NULL, 1, &error, digest);
+    int status = egress_cli_run(&settings, NULL, 1, &error, digest, NULL);
     egress_cli_settings_destroy(&settings);
     if (status != 0) return validation_report(context, &error, NULL);
     return validation_report(context, NULL, digest);
@@ -195,25 +195,81 @@ int egress_cli_command_config_validate(maelys_cli_context_t *context) {
 
 /* ---- serve ------------------------------------------------------------------ */
 
-static int command_run(maelys_cli_context_t *context, int broker) {
+/* Loads the file and refuses one written for another command. Returns 0, or
+ * the exit status of the failure already reported. */
+static int load_for(maelys_cli_context_t *context, egress_cli_mode_t mode,
+    egress_cli_settings_t *settings) {
+    maelys_cli_error_t error;
+    if (egress_cli_settings_load(maelys_cli_option(context, "config"), settings, &error) != 0) {
+        return maelys_cli_fail_error(context, &error);
+    }
+    if (egress_cli_settings_mode(settings) != mode) {
+        egress_cli_settings_destroy(settings);
+        return maelys_cli_fail(context, MAELYS_CLI_CODE_VALIDATION_FAILED,
+            "Use serve for a proxy configuration, channel broker when channel_listen_unix "
+            "is set, and channel exec for channel_principal alone.",
+            "configuration mode does not match the command");
+    }
+    return 0;
+}
+
+static int command_run(maelys_cli_context_t *context, egress_cli_mode_t mode) {
     const char *path = maelys_cli_option(context, "config");
     egress_cli_settings_t settings;
     maelys_cli_error_t error;
-    if (egress_cli_settings_load(path, &settings, &error) != 0) {
-        return maelys_cli_fail_error(context, &error);
-    }
-    if (!!settings.channel_listen_unix != broker) {
-        egress_cli_settings_destroy(&settings);
-        return maelys_cli_fail(context, MAELYS_CLI_CODE_VALIDATION_FAILED,
-            "Use channel broker for channel configuration, or serve for proxy configuration.",
-            "configuration mode does not match the command");
-    }
-    int status = egress_cli_run(&settings, path, 0, &error, NULL);
+    int refused = load_for(context, mode, &settings);
+    if (refused) return refused;
+    int status = egress_cli_run(&settings, path, 0, &error, NULL, NULL);
     egress_cli_settings_destroy(&settings);
     if (status < 0) return maelys_cli_fail_error(context, &error);
     /* 0: clean stop. 1: a fatal event was already written to the stream. */
     return status == 0 ? MAELYS_CLI_EXIT_OK : MAELYS_CLI_EXIT_FAILURE;
 }
 
-int egress_cli_command_serve(maelys_cli_context_t *context) { return command_run(context, 0); }
-int egress_cli_command_channel_broker(maelys_cli_context_t *context) { return command_run(context, 1); }
+int egress_cli_command_serve(maelys_cli_context_t *context) {
+    return command_run(context, EGRESS_CLI_MODE_PROXY);
+}
+int egress_cli_command_channel_broker(maelys_cli_context_t *context) {
+    return command_run(context, EGRESS_CLI_MODE_BROKER);
+}
+
+/* ---- channel exec ------------------------------------------------------------ */
+
+/* Until the program has started, a failure is this command's: an envelope
+ * and exit 1. From then on the exit status is the program's, and nothing
+ * Egress does afterwards replaces it. */
+int egress_cli_command_channel_exec(maelys_cli_context_t *context) {
+    const char *path = maelys_cli_option(context, "config");
+    egress_cli_settings_t settings;
+    maelys_cli_error_t error;
+    int refused = load_for(context, EGRESS_CLI_MODE_EXEC, &settings);
+    if (refused) return refused;
+    const char *program = maelys_cli_operand(context, 0u);
+    const char *explanation = NULL;
+    /* Before any server exists: a program that cannot be trusted is a
+     * refusal of the invocation, not a failure of the launch. */
+    if (maelys_cli_process_check_executable(program, &explanation) != 0) {
+        int saved = errno;
+        egress_cli_settings_destroy(&settings);
+        return maelys_cli_fail(context, maelys_cli_file_error_code(saved),
+            "Name a regular executable by its absolute path, not writable by group or "
+            "others, in a directory only its owner or root can modify.",
+            "%s: %s", program, explanation ? explanation : strerror(saved));
+    }
+    size_t count = maelys_cli_operand_count(context);
+    char **argv = calloc(count + 1u, sizeof(*argv));
+    if (!argv) {
+        egress_cli_settings_destroy(&settings);
+        return maelys_cli_fail(context, MAELYS_CLI_CODE_UNEXPECTED, NULL, "out of memory");
+    }
+    for (size_t i = 0u; i < count; ++i) {
+        union { const char *held; char *passed; } argument = {maelys_cli_operand(context, i)};
+        argv[i] = argument.passed; /* execve's prototype, never written to */
+    }
+    egress_cli_exec_t exec = {.argv = argv};
+    int status = egress_cli_run(&settings, path, 0, &error, NULL, &exec);
+    free(argv);
+    egress_cli_settings_destroy(&settings);
+    if (status < 0) return maelys_cli_fail_error(context, &error);
+    return exec.exit_code;
+}

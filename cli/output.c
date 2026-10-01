@@ -1,6 +1,7 @@
 #include "cli/cli.h"
 
 #include <pthread.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -102,6 +103,17 @@ void egress_cli_lifecycle_policy_reloaded(uint64_t generation, const char *diges
     (void)maelys_cli_json_key_string(&writer, "digest", digest);
     (void)maelys_cli_json_end_object(&writer);
     event_end(&writer);
+}
+
+void egress_cli_diagnostic(const char *format, ...) {
+    char line[768];
+    va_list arguments;
+    va_start(arguments, format);
+    (void)vsnprintf(line, sizeof(line), format, arguments);
+    va_end(arguments);
+    /* One call, so two threads never interleave inside a line. */
+    (void)fprintf(stderr, "maelys-egress: %s\n", line);
+    (void)fflush(stderr);
 }
 
 void egress_cli_output_gate_open(egress_cli_output_gate_t *gate, int state) {

@@ -7,14 +7,14 @@ Configuration schema version 1, grammar `strict-key-value`. TLS listener keys ar
 | Key | Type | Required | Repeatable | Secret | Default | Constraint | Meaning |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `schema_version` | `integer` | yes | no | no |  | exactly 1 | Configuration grammar version. Version 1 is required. |
-| `listen` | `endpoint` | no | no | no | `127.0.0.1:0` | numeric loopback unless TLS+authentication are enabled | TCP proxy listener as HOST:PORT. Conflicts: `listen_unix,channel_listen_unix`. |
-| `listen_unix` | `path` | no | no | no |  | private existing parent directory | Filesystem AF_UNIX proxy listener. Conflicts: `listen,channel_listen_unix`. |
-| `unix_peer` | `enum` | no | no | no | `authenticated` | authenticated,same-euid | Peer authentication rule for an AF_UNIX listener. Requires: `listen_unix`. Conflicts: `channel_listen_unix`. |
+| `listen` | `endpoint` | no | no | no | `127.0.0.1:0` | numeric loopback unless TLS+authentication are enabled | TCP proxy listener as HOST:PORT. Conflicts: `listen_unix,channel_principal`. |
+| `listen_unix` | `path` | no | no | no |  | private existing parent directory | Filesystem AF_UNIX proxy listener. Conflicts: `listen,channel_principal`. |
+| `unix_peer` | `enum` | no | no | no | `authenticated` | authenticated,same-euid | Peer authentication rule for an AF_UNIX listener. Requires: `listen_unix`. Conflicts: `channel_principal`. |
 | `allow` | `destination` | no | yes | no |  | HOST:1..65535 | Allow one exact public TCP destination. |
 | `allow_private` | `destination` | no | yes | no |  | HOST:1..65535 | Allow one exact destination to resolve to private addresses. |
 | `allow_tls_sni` | `destination` | no | yes | no |  | HOST:1..65535 | Allow one destination and require matching readable TLS SNI; HTTP forward requests to it are refused. |
-| `token_file` | `path` | no | no | yes |  | owner-only regular file, at least 16 bytes | Bearer secret; the proxy username is maelys. Conflicts: `unauthenticated_loopback,channel_listen_unix`. |
-| `unauthenticated_loopback` | `boolean` | no | no | no | `false` | true,false | Development-only opt-out on a loopback TCP listener. Conflicts: `token_file,listen_unix,principal quotas,channel_listen_unix`. |
+| `token_file` | `path` | no | no | yes |  | owner-only regular file, at least 16 bytes | Bearer secret; the proxy username is maelys. Conflicts: `unauthenticated_loopback,channel_principal`. |
+| `unauthenticated_loopback` | `boolean` | no | no | no | `false` | true,false | Development-only opt-out on a loopback TCP listener. Conflicts: `token_file,listen_unix,principal quotas,channel_principal`. |
 | `max_connections` | `integer` | no | no | no | `128` | 1..4096 | Maximum concurrent mediated connections. |
 | `quota_connections` | `integer` | no | no | no | `0` | 0..4096; 0 disables | Maximum active connections for the configured principal (token_file or channel_principal). |
 | `quota_bytes` | `integer` | no | no | no | `0` | 0..2^64-1; 0 disables | Per-stream client plus server byte budget (token_file or channel_principal). |
@@ -24,11 +24,12 @@ Configuration schema version 1, grammar `strict-key-value`. TLS listener keys ar
 | `audit_key_file` | `path` | no | no | yes |  | owner-only regular file, 16..4096 bytes | HMAC key protecting the durable audit chain. Requires: `audit_log,audit_key_id`. |
 | `audit_key_id` | `string` | no | no | no |  | stable printable identifier | Non-secret identifier recorded beside every audit MAC. Requires: `audit_log,audit_key_file`. |
 | `channel_listen_unix` | `path` | no | no | no |  | absolute canonical path; caller-owned parent mode 0700 or 2750 | Private bootstrap socket for channel broker; no proxy listener is opened. Requires: `channel_principal`. Conflicts: `listen,listen_unix,unix_peer,token_file,unauthenticated_loopback,TLS listener keys`. |
-| `channel_principal` | `string` | no | no | no |  | canonical ASCII identity, 1..63 bytes | Immutable principal bound by the trusted broker, without a token. Requires: `channel_listen_unix`. |
-| `channel_invocation_id` | `string` | no | no | no |  | canonical ASCII invocation identifier, 1..127 bytes | Optional execution identifier included in receipts. Requires: `channel_listen_unix,channel_principal`. |
-| `channel_connect_timeout_ms` | `integer` | no | no | no | `5000` | 1..600000 | Per-destination channel deadline in milliseconds. Requires: `channel_listen_unix,channel_principal`. |
+| `channel_principal` | `string` | no | no | no |  | canonical ASCII identity, 1..63 bytes | Immutable principal bound by the trusted broker or launcher, without a token; alone it selects channel exec, with channel_listen_unix channel broker. Conflicts: `listen,listen_unix,unix_peer,token_file,unauthenticated_loopback,TLS listener keys`. |
+| `channel_invocation_id` | `string` | no | no | no |  | canonical ASCII invocation identifier, 1..127 bytes | Optional execution identifier included in receipts. Requires: `channel_principal`. |
+| `channel_connect_timeout_ms` | `integer` | no | no | no | `5000` | 1..600000 | Per-destination channel deadline in milliseconds. Requires: `channel_principal`. |
 | `channel_handshake_timeout_ms` | `integer` | no | no | no | `5000` | 1..60000 | One accept-to-complete bootstrap deadline in milliseconds. Requires: `channel_listen_unix,channel_principal`. |
 | `channel_max_clients` | `integer` | no | no | no | `128` | 1..4096 | Combined bound on pending handshakes, active leases and retiring channels. Requires: `channel_listen_unix,channel_principal`. |
+| `channel_fd` | `integer` | no | no | no | `4` | 3..255 | Descriptor on which channel exec hands the channel to the program it starts. Requires: `channel_principal`. Conflicts: `channel_listen_unix`. |
 
 ## Cross-key constraints
 
@@ -36,9 +37,10 @@ Configuration schema version 1, grammar `strict-key-value`. TLS listener keys ar
 - In proxy mode choose token_file or unauthenticated_loopback=true, never both.
 - listen and listen_unix are mutually exclusive; neither means 127.0.0.1:0 in proxy mode only.
 - listen_unix always requires token_file; unix_peer applies only to listen_unix.
-- Principal quotas require token_file in proxy mode or channel_principal in broker mode.
-- channel_listen_unix and channel_principal require each other; all other channel keys require both.
-- Broker mode refuses listen, listen_unix, unix_peer, token_file, unauthenticated_loopback and all TLS listener keys, even false/default values.
-- serve accepts proxy configuration only; channel broker accepts broker configuration only; config validate accepts either.
+- Principal quotas require token_file in proxy mode or channel_principal in broker and exec modes.
+- channel_principal selects a channel mode: broker mode with channel_listen_unix, exec mode without it. Every other channel key requires channel_principal.
+- channel_handshake_timeout_ms and channel_max_clients require channel_listen_unix; channel_fd refuses it.
+- Broker and exec modes refuse listen, listen_unix, unix_peer, token_file, unauthenticated_loopback and all TLS listener keys, even false/default values.
+- serve accepts proxy configuration only, channel broker broker configuration only, channel exec exec configuration only; config validate accepts the three.
 - audit_log, audit_key_file and audit_key_id are all present or all absent.
 - In a TLS-enabled binary, tls_cert and tls_key are paired; require_client_cert also requires tls_ca.

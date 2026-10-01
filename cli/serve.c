@@ -69,7 +69,8 @@ static void set_text_error(char **out_error, const char *message) {
 
 int egress_cli_run(
     const egress_cli_settings_t *settings, const char *reload_config_path,
-    int check_only, maelys_cli_error_t *out_error, char out_digest[65]) {
+    int check_only, maelys_cli_error_t *out_error, char out_digest[65],
+    egress_cli_exec_t *exec) {
     char secret[256] = {0};
     if (settings->token_file && !egress_cli_read_secret(settings->token_file, secret)) {
         char message[384];
@@ -91,7 +92,7 @@ int egress_cli_run(
         MAELYS_CLI_CODE_POLICY_FAILED : NULL;
     if (result == MAELYS_EGRESS_OK) result = maelys_egress_config_create(&config, &error);
     if (result == MAELYS_EGRESS_OK) {
-        result = settings->channel_listen_unix ? maelys_egress_config_set_native_only(config, 1, &error) :
+        result = settings->channel_principal ? maelys_egress_config_set_native_only(config, 1, &error) :
             settings->listen_unix ? maelys_egress_config_set_listen_unix(
             config, settings->listen_unix, strlen(settings->listen_unix),
             settings->unix_peer, &error) :
@@ -148,7 +149,9 @@ int egress_cli_run(
     }
     if (audit_key) { egress_cli_secure_zero(audit_key, audit_key_length); free(audit_key); }
     maelys_egress_audit_release(audit);
-    if (config) maelys_egress_config_set_receipt_sink(config, egress_cli_receipt_sink,
+    /* Under channel exec stdout is the program's: no receipt is written
+     * there, and the durable audit log is where receipts go. */
+    if (config && !exec) maelys_egress_config_set_receipt_sink(config, egress_cli_receipt_sink,
         settings->channel_listen_unix ? &output_gate : NULL);
     if (check_only && result == MAELYS_EGRESS_OK) {
         if (out_digest) {
@@ -183,6 +186,15 @@ int egress_cli_run(
     sigaddset(&signals, SIGTERM);
     sigaddset(&signals, SIGHUP);
     (void)pthread_sigmask(SIG_BLOCK, &signals, NULL);
+    if (exec) {
+        int status = egress_cli_exec_run(server, settings, reload_config_path,
+            &signals, exec, out_error);
+        maelys_egress_config_destroy(config);
+        maelys_egress_policy_destroy(policy);
+        (void)pthread_cond_destroy(&output_gate.condition);
+        (void)pthread_mutex_destroy(&output_gate.mutex);
+        return status;
+    }
     if (settings->channel_listen_unix) {
         int status = egress_cli_channel_run(server, settings, reload_config_path,
             &signals, maelys_egress_policy_digest_hex(policy), &output_gate, out_error);

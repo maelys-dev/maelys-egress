@@ -120,7 +120,7 @@ SERVER_SOURCES := src/server/server.c src/server/listener.c \
 SOURCES := $(CORE_SOURCES) $(HOST_SOURCES) $(SERVER_SOURCES)
 OBJECTS := $(SOURCES:%.c=$(OBJ)/%.o)
 CLI_COMMON_SOURCES := cli/main.c cli/commands.c cli/config_catalog.c cli/config_file.c \
-	cli/secrets.c cli/serve.c cli/channel_broker.c cli/reload.c cli/output.c
+	cli/secrets.c cli/serve.c cli/channel_broker.c cli/channel_exec.c cli/reload.c cli/output.c
 CLI_SOURCES := $(CLI_COMMON_SOURCES) cli/tls_listener.c
 CLI_COMMON_OBJECTS := $(CLI_COMMON_SOURCES:%.c=$(OBJ)/%.o)
 CLI_OBJECTS := $(CLI_SOURCES:%.c=$(OBJ)/%.o)
@@ -195,7 +195,7 @@ all: $(STATIC_LIB) $(CLIENT_LIB) $(CLI) $(TEST) $(PC) $(CLIENT_PC) $(MANIFEST)
 
 .PHONY: all clean check test examples-check sdk-check audit docs-check check-system-contract check-cli-contract \
 	system-integration-check mutation-check check-spec-contract conformance-check \
-	config-reference contract-check lifecycle-contract-check schema-check package-homebrew \
+	config-reference contract-check lifecycle-contract-check schema-check channel-exec-check package-homebrew \
 	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-provider-mutation-check tls-binaries \
 	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check \
 	public-check reproducible-check install-metadata-check dist client-standalone-check consumer-source-check abi-floor-check \
@@ -455,6 +455,11 @@ $(BIN)/bootstrap-cli-client: tests/bootstrap_cli_client.c $(CLIENT_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(filter-out -pthread,$(CFLAGS)) $(LDFLAGS) $< $(CLIENT_LIB) -o $@
 
+# The program `channel exec` starts under test: the client archive alone.
+$(BIN)/exec-probe: tests/exec_probe.c $(CLIENT_LIB)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(filter-out -pthread,$(CFLAGS)) $(LDFLAGS) $< $(CLIENT_LIB) -o $@
+
 $(BROKER_FAULTS_TEST): tests/test_broker_faults.c tests/tls_socket_fixture.h common/bootstrap.h src/channel_broker.c src/channel_server.c client/channel_open.c $(CLIENT_LIB) $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(CLIENT_LIB) $(STATIC_LIB) $(LDLIBS) -o $@
@@ -527,7 +532,7 @@ $(PC) $(CLIENT_PC) $(MANIFEST): | install-metadata
 	@test -f $@
 
 .PHONY: test-build
-test-build: all $(OPERATIONS_TEST) $(CHANNEL_TEST) $(CLIENT_TEST) $(BOOTSTRAP_CLIENT_TEST) $(BROKER_FAULTS_TEST) $(BOOTSTRAP_GATES_TEST) $(TLS_SOCKET_TEST) $(TLS_SOCKET_ERRORS_TEST) $(BIN)/bootstrap-cli-client
+test-build: all $(OPERATIONS_TEST) $(CHANNEL_TEST) $(CLIENT_TEST) $(BOOTSTRAP_CLIENT_TEST) $(BROKER_FAULTS_TEST) $(BOOTSTRAP_GATES_TEST) $(TLS_SOCKET_TEST) $(TLS_SOCKET_ERRORS_TEST) $(BIN)/bootstrap-cli-client $(BIN)/exec-probe
 
 test: test-build
 	$(TEST)
@@ -570,6 +575,12 @@ lifecycle-contract-check: $(CLI) $(BIN)/bootstrap-cli-client
 schema-check: $(CLI) $(BIN)/bootstrap-cli-client
 	python3 tools/check_schemas.py --binary $(abspath $(CLI))
 	python3 tests/test_broker_cli.py $(abspath $(CLI))
+
+# `channel exec` end to end: its contract, the three configuration modes,
+# what it refuses before starting, and the status, descriptor, signals and
+# shutdown of a program it started; part of `check`.
+channel-exec-check: $(CLI) $(BIN)/exec-probe $(BIN)/example-channel_client
+	python3 tests/test_channel_exec.py $(abspath $(CLI))
 
 examples-check: $(EXAMPLE_BINS) $(BIN)/example-compose-channel-client
 	$(BIN)/example-policy_reload
@@ -652,7 +663,7 @@ system-integration-check: $(STATIC_LIB) $(MAELYS_SYSTEM_LIB)
 conformance-check: $(CLI) check-spec-contract
 	python3 $(MAELYS_SPEC_DIR)/conformance/run.py $(abspath $(CLI))
 
-check: test examples-check sdk-check audit docs-check system-integration-check contract-check schema-check \
+check: test examples-check sdk-check audit docs-check system-integration-check contract-check schema-check channel-exec-check \
 	conformance-check public-check reproducible-check install-metadata-check \
 	client-standalone-check consumer-source-check abi-floor-check
 	$(CXX) -Iinclude -std=c++17 -Wall -Wextra -Wpedantic -Werror \

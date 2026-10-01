@@ -13,6 +13,12 @@ static const maelys_cli_option_t config_options[] = {
      .required = 1},
 };
 
+static const maelys_cli_operand_t exec_operands[] = {
+    {MAELYS_CLI_OPERAND_KIND("program", "Absolute path of the program to start.",
+     MAELYS_CLI_VALUE_ABSOLUTE_PATH)},
+    {MAELYS_CLI_OPERAND_REST("argument", "Argument passed to the program, verbatim.")},
+};
+
 static const maelys_cli_command_t commands[] = {
     {MAELYS_CLI_READ("config.describe", "config describe",
      "Describe every supported configuration key and constraint.",
@@ -34,6 +40,13 @@ static const maelys_cli_command_t commands[] = {
      "stdout carries the lifecycle JSON Lines stream.",
      egress_cli_command_channel_broker, "maelys-egress-lifecycle/1"),
      MAELYS_CLI_OPTIONS(config_options)},
+    {MAELYS_CLI_STREAM("channel.exec", "channel exec",
+     "Start one program with a native channel on an inherited descriptor and exit "
+     "with its status, 128 + signal if a signal ended it; stdout and stderr are the "
+     "program's. Not a sandbox: the program keeps its own network access.",
+     egress_cli_command_channel_exec),
+     MAELYS_CLI_OPTIONS(config_options),
+     MAELYS_CLI_OPERANDS(exec_operands)},
 };
 
 int main(int argc, char **argv) {
@@ -49,7 +62,10 @@ int main(int argc, char **argv) {
             "wait for event == \"ready\", then keep draining receipts and reload "
             "events until the process exits; 'fatal' or a non-zero exit is a "
             "failure. 'config validate' exits 2 when data.valid is false and "
-            "lists the violations in data.diagnostics.",
+            "lists the violations in data.diagnostics. 'channel exec' leaves stdout "
+            "and stderr to the program it starts and exits with that program's "
+            "status: a JSON error envelope on stderr means the program never started, "
+            "and only then is exit 1 this command's own.",
     };
     return maelys_cli_main(&app, argc, argv);
 }

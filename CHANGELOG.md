@@ -2,6 +2,54 @@
 
 ## Unreleased
 
+- **New command `maelys-egress channel exec --config FILE -- /absolute/program
+  [ARGUMENT...]`.** It starts one program that speaks the mediated-connection
+  channel and hands it the channel as an inherited descriptor, the way
+  maelys-warden does on descriptor 4: a server with no listener, one channel,
+  one program, and that program's exit status. No socket on disk, no port, no
+  secret. It is what `examples/channel_supervisor.c` shows, as a command.
+  - The channel is on the descriptor `channel_fd` names, **4** by default,
+    announced in `MAELYS_EGRESS_CHANNEL_FD`;
+    `MAELYS_EGRESS_CHANNEL_CONNECT_TIMEOUT_MS` carries
+    `channel_connect_timeout_ms`. The rest of the environment is inherited.
+  - Standard input, output and error are the program's. The command writes no
+    lifecycle record; receipts go to `audit_log` only.
+  - The exit status is the program's, `128 + signal` when a signal ended it,
+    as agent-cli/v2 requires of a stream command. A JSON error envelope on
+    stderr with exit 1 means the program never started: once it has, nothing
+    Egress does replaces its status.
+  - `SIGINT` and `SIGTERM` are forwarded to the program and the server stops
+    only after the program has exited; `SIGHUP` reloads the destinations and
+    reports on stderr.
+  - **It is not a sandbox**: the program keeps its own network access.
+  The contract and its reasons are in `proposals/egress-channel-exec.md`.
+- **Configuration: a third mode, and a file that was refused is now valid.**
+  `channel_principal` without `channel_listen_unix` is the mode of
+  `channel exec`; until now `config validate` refused it. New key `channel_fd`
+  (3..255, default 4), accepted in that mode only.
+  `channel_handshake_timeout_ms` and `channel_max_clients` remain the
+  broker's and are refused without `channel_listen_unix`. Each of `serve`,
+  `channel broker` and `channel exec` refuses a file of another mode.
+  `config describe` changes accordingly: `channel_principal` no longer
+  requires `channel_listen_unix`, the proxy keys conflict with
+  `channel_principal` instead of `channel_listen_unix`, and three constraint
+  sentences are reworded. A consumer that compares those strings must update.
+- `examples/channel_client.c` reads the descriptor number from
+  `MAELYS_EGRESS_CHANNEL_FD` instead of its first argument, and
+  `examples/channel_supervisor.c` sets it: one convention for the example,
+  the command and a program written for either.
+- maelys-cli 0.5.31, which adds `maelys_cli_process_start`, `_signal`,
+  `_wait` and `_release` with a mapping of inherited descriptors, and
+  `maelys_cli_environment_to_envp_inherited`. They were asked for by this
+  command; nothing else of the shipped binary depends on them. Read for
+  runtime changes, as the adoption rule asks: 0.5.31 also makes the `maelys`
+  dispatcher trust a manifest by the directory it resolves to instead of
+  refusing a symbolic link, which is what lets it read the manifest Homebrew
+  links from its cellar, `share/maelys/commands/egress.json` included. That
+  is the dispatcher's behaviour, not this binary's: `maelys-egress` reads its
+  configuration with the requirements it had, and nothing it ships changes
+  for that reason. The agent texts are refreshed with
+  `maelys agents install . --apply` from the pinned checkout.
 - The tag `v0.24.0` no longer exists. The 0.24.1 entry below says it "stays
   where it is": it was removed afterwards, by decision of the maintainer,
   and is not recreated. It had published nothing, but GitHub served a source

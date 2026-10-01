@@ -70,7 +70,13 @@ int egress_cli_settings_control_equal(
         same_text(a->channel_invocation_id, b->channel_invocation_id) &&
         a->channel_connect_timeout_ms == b->channel_connect_timeout_ms &&
         a->channel_handshake_timeout_ms == b->channel_handshake_timeout_ms &&
-        a->channel_max_clients == b->channel_max_clients;
+        a->channel_max_clients == b->channel_max_clients &&
+        a->channel_fd == b->channel_fd;
+}
+
+egress_cli_mode_t egress_cli_settings_mode(const egress_cli_settings_t *settings) {
+    if (!settings->channel_principal) return EGRESS_CLI_MODE_PROXY;
+    return settings->channel_listen_unix ? EGRESS_CLI_MODE_BROKER : EGRESS_CLI_MODE_EXEC;
 }
 
 static char *trim(char *value) {
@@ -257,6 +263,11 @@ static const char *apply_value(
                 return "channel_max_clients must be in 1..4096";
             settings->channel_max_clients = (size_t)number;
             return NULL;
+        case EGRESS_CLI_KEY_CHANNEL_FD:
+            if (maelys_cli_parse_u64_decimal(value, 3u, 255u, &number) != 0)
+                return "channel_fd must be in 3..255";
+            settings->channel_fd = (int)number;
+            return NULL;
         case EGRESS_CLI_KEY_COUNT:
             break;
     }
@@ -266,19 +277,26 @@ static const char *apply_value(
 /* The cross-key constraints published by `config describe`. */
 static const char *check_constraints(const egress_cli_settings_t *s, unsigned int seen) {
     int broker = s->channel_listen_unix != NULL;
+    int channel = s->channel_principal != NULL; /* broker or exec mode */
     unsigned int channel_keys = ~0u << EGRESS_CLI_KEY_CHANNEL_LISTEN_UNIX;
+    unsigned int broker_keys = (1u << EGRESS_CLI_KEY_CHANNEL_HANDSHAKE_TIMEOUT_MS) |
+        (1u << EGRESS_CLI_KEY_CHANNEL_MAX_CLIENTS);
     unsigned int proxy_keys = (1u << EGRESS_CLI_KEY_LISTEN) |
         (1u << EGRESS_CLI_KEY_LISTEN_UNIX) | (1u << EGRESS_CLI_KEY_UNIX_PEER) |
         (1u << EGRESS_CLI_KEY_TOKEN_FILE) | (1u << EGRESS_CLI_KEY_UNAUTHENTICATED_LOOPBACK) |
         (1u << EGRESS_CLI_KEY_TLS_CERT) | (1u << EGRESS_CLI_KEY_TLS_KEY) |
         (1u << EGRESS_CLI_KEY_TLS_CA) | (1u << EGRESS_CLI_KEY_REQUIRE_CLIENT_CERT);
-    if ((seen & channel_keys) && (!broker || !s->channel_principal))
-        return "all channel keys require channel_listen_unix and channel_principal";
-    if (broker && (seen & proxy_keys))
-        return "broker mode refuses proxy listener, credential and TLS listener keys";
+    if ((seen & channel_keys) && !channel)
+        return "all channel keys require channel_principal";
+    if (!broker && (seen & broker_keys))
+        return "channel_handshake_timeout_ms and channel_max_clients require channel_listen_unix";
+    if (broker && (seen & (1u << EGRESS_CLI_KEY_CHANNEL_FD)))
+        return "channel_fd belongs to channel exec and refuses channel_listen_unix";
+    if (channel && (seen & proxy_keys))
+        return "broker and exec modes refuse proxy listener, credential and TLS listener keys";
     if ((s->listen_unix && s->listen_set) || (s->unix_peer_set && !s->listen_unix))
         return "choose exactly one listener; unix_peer requires listen_unix";
-    if (s->destination_count == 0u || (!broker && !s->token_file && !s->unauthenticated_loopback))
+    if (s->destination_count == 0u || (!channel && !s->token_file && !s->unauthenticated_loopback))
         return "at least one destination and an explicit authentication mode are required";
     if (s->token_file && s->unauthenticated_loopback)
         return "choose token_file or unauthenticated_loopback, not both";

@@ -6,7 +6,7 @@
 # count as evidence that a regression assertion detected the mutation.
 set -eu
 scope=${1:-all}
-case "$scope" in all|bootstrap) ;; *) echo "expected all or bootstrap" >&2; exit 1 ;; esac
+case "$scope" in all|bootstrap|exec) ;; *) echo "expected all, bootstrap or exec" >&2; exit 1 ;; esac
 build_target=test-build
 test_target=test
 if test "$scope" = bootstrap; then
@@ -45,6 +45,10 @@ if source.count(old) != 1:
     raise SystemExit(f"mutation anchor count {source.count(old)} for {old!r}")
 path.write_text(source.replace(old, new, 1))
 PY
+    # The launcher's mutants are judged by its own end-to-end test, which
+    # the C suite does not run.
+    mutant_test=$test_target
+    case "$name" in exec-*) mutant_test=channel-exec-check ;; esac
     if ! perl -e 'alarm shift; exec @ARGV' 300 make -C "$mutant" \
         MAELYS_SYSTEM_DIR="$system_dir" MAELYS_CLI_DIR="$cli_dir" \
         MAELYS_SYSTEM_BUILD="$deps/deps/maelys-system" \
@@ -58,10 +62,18 @@ PY
         MAELYS_SYSTEM_DIR="$system_dir" MAELYS_CLI_DIR="$cli_dir" \
         MAELYS_SYSTEM_BUILD="$deps/deps/maelys-system" \
         MAELYS_CLI_BUILD="$deps/deps/maelys-cli" \
-        BUILD=build/mutant "$test_target" >"$work/$name.log" 2>&1; then
+        BUILD=build/mutant "$mutant_test" >"$work/$name.log" 2>&1; then
         printf 'survived\n' >"$work/$name.result"
     else
         case "$name" in
+        exec-*)
+            # Only an assertion of the launcher's test is evidence.
+            if grep -q '^AssertionError' "$work/$name.log"; then
+                printf 'killed\n' >"$work/$name.result"
+            else
+                printf 'invalid (no channel exec assertion)\n' >"$work/$name.result"
+                tail -20 "$work/$name.log" >&2
+            fi ;;
         native-*)
             if grep -q '^FAIL tests/test_egress.c:' "$work/$name.log"; then
                 printf 'killed\n' >"$work/$name.result"
@@ -108,7 +120,7 @@ PY
 queued=0
 selected=''
 schedule_mutant() {
-    case "$scope:$1" in bootstrap:bootstrap-*|all:*) ;; *) return ;; esac
+    case "$scope:$1" in bootstrap:bootstrap-*|exec:exec-*|all:*) ;; *) return ;; esac
     selected="$selected $1"
     run_mutant "$@" &
     queued=$((queued + 1))
@@ -182,6 +194,17 @@ schedule_mutant native-trusted-scope src/server/connector.c \
     'server->config.native_only &&'
 schedule_mutant native-immutable-binding src/config.c \
     'config->native_principal_bound = 1;' 'config->native_principal_bound = 0;'
+schedule_mutant exec-signal-stops-server cli/reload.c \
+    '                (void)maelys_cli_process_signal(context->program, signal_number);' \
+    '                (void)maelys_egress_server_stop(context->server); (void)maelys_cli_process_signal(context->program, signal_number);'
+schedule_mutant exec-receipt-on-stdout cli/serve.c \
+    'if (config && !exec) maelys_egress_config_set_receipt_sink' \
+    'if (config) maelys_egress_config_set_receipt_sink'
+schedule_mutant exec-status-replaced cli/commands.c \
+    '    return exec.exit_code;' \
+    '    return exec.exit_code ? MAELYS_CLI_EXIT_FAILURE : MAELYS_CLI_EXIT_OK;'
+schedule_mutant exec-broker-keys-accepted cli/config_file.c \
+    'if (!broker && (seen & broker_keys))' 'if (0 && (seen & broker_keys))'
 wait
 
 killed=0

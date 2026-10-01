@@ -1,10 +1,13 @@
 # `maelys-egress channel exec`
 
-**Status: proposed. Nothing is implemented.** This document decides the
-contract of the command before any code and names what it needs from
-maelys-cli. It changes no wire byte and no public C declaration: the command
-is built on `maelys_egress_channel_create`, which exists since 0.22.0, so
-neither ABI number moves.
+**Status: implemented.** `channel exec` is in `cli/channel_exec.c`, tested by
+`tests/test_channel_exec.py` (`make channel-exec-check`) and held by four
+mutants of `scripts/mutation-check.sh`. This document decided the contract
+before any code; what the implementation changed in it is listed at the end.
+The command changes no wire byte and no public C declaration: it is built on
+`maelys_egress_channel_create`, which exists since 0.22.0, so neither ABI
+number moves. maelys-cli provides the process functions it needs since
+0.5.31.
 
 ## Why
 
@@ -201,15 +204,16 @@ the destruction cannot run on the thread that owns that reactor.
 4. Close the launcher's copy of the client end, start the signal thread,
    wait for the program.
 5. When it has exited: **stop the server, then destroy the channel**, then
-   release the connector. This is the order `channel broker` uses. The
-   reverse would wait for a request in flight, up to
-   `channel_connect_timeout_ms`, with the reactor still running; stopping
-   first cancels pending opens and revokes the relayed connections.
+   release the connector, then destroy the server. This is the order
+   `channel broker` uses. The reverse would wait for a request in flight, up
+   to `channel_connect_timeout_ms`, with the reactor still running; stopping
+   first cancels pending opens, and destroying the server closes the
+   connections it still relays.
 6. Exit with the program's status.
 
 If the server stops by itself while the program runs, the launcher writes
-the reason on stderr, does not signal the program, waits for it and returns
-its status.
+the reason on stderr, ends the program's connections by destroying the
+server, does not signal the program, waits for it and returns its status.
 
 ## What maelys-cli must provide
 
@@ -338,3 +342,26 @@ renders the overlay alone today.
    program's alone.
 3. **`channel_fd` is a configuration key**, default 4. It follows the
    repository's convention and leaves one way to set the number.
+
+## What the implementation changed
+
+1. **The connections end when the server is destroyed, not when it stops.**
+   The order of section 6 holds, with one more step that the proposal took
+   for granted: stopping cancels the opens in flight, and it is
+   `maelys_egress_server_destroy` that closes the connections still relayed.
+   The launcher therefore destroys the server itself, and does so at once
+   when the server stops while the program runs: waiting for the program
+   first would leave its connections open and silent, with nothing to read
+   and no end.
+2. **The framework's handle is opaque and is released.** maelys-cli kept the
+   requested `start`, `signal` and `wait`, added
+   `maelys_cli_process_release`, and holds the guarantee without a lock:
+   `wait` observes the exit without reaping, so the process identifier stays
+   reserved until the release, and `signal` after `wait` sends nothing. The
+   signature above is the request as sent, not the one that exists.
+3. **An empty argument is accepted.** The test list feared that the operand
+   parser would refuse `""`; it does not for an untyped operand, and the
+   test holds that the program receives it.
+4. **The mutants.** `exec-signal-stops-server`, `exec-receipt-on-stdout`,
+   `exec-status-replaced` and `exec-broker-keys-accepted` each undo one
+   decision of this document and are killed by an assertion of the test.
