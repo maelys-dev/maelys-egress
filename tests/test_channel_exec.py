@@ -25,7 +25,7 @@ PURPOSE = (
 
 def invoke(*args, status=0):
     run = subprocess.run([str(BINARY), *args, "--non-interactive"], env=ENV,
-                         capture_output=True, text=True, timeout=10)
+                         capture_output=True, text=True, timeout=60)
     assert run.returncode == status, (args, run.returncode, run.stdout, run.stderr)
     if status == 1:
         assert not run.stdout, run.stdout
@@ -38,21 +38,57 @@ def invoke(*args, status=0):
     return value
 
 
+LIMIT = 60  # seconds for one launch; a sanitizer's runtime can take several to start
+GROUPS = []
+
+
 def launch(config, *program, **options):
-    return subprocess.Popen(
+    """Each launch has its own process group, so that whatever it leaves can be ended."""
+    process = subprocess.Popen(
         [str(BINARY), "channel", "exec", "--config", str(config), "--non-interactive",
          "--", *map(str, program)],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=ENV, **options)
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=ENV,
+        start_new_session=True, **options)
+    GROUPS.append(process.pid)
+    return process
+
+
+def end_group(group):
+    try:
+        os.killpg(group, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
 
 
 def finish(process, stdin=None):
-    """A launcher that does not return is a failure of the test, not of its harness."""
+    """Nothing here waits without a bound: a launcher that does not return, or
+    a process it left holding its output, is a failure of the test and never a
+    hang of the gate."""
     try:
-        return process.communicate(stdin, timeout=15)
+        return process.communicate(stdin, timeout=LIMIT)
     except subprocess.TimeoutExpired:
-        process.kill()
-        out, err = process.communicate()
-        raise AssertionError(("the launcher did not return", process.args, out, err)) from None
+        returned = process.poll()
+        end_group(process.pid)
+        try:
+            out, err = process.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            out, err = "", ""
+        raise AssertionError((
+            "the launcher did not return" if returned is None else
+            f"the launcher exited {returned} but its output was still held open",
+            process.args, out, err)) from None
+
+
+def line(process, stream):
+    """One line of a running launch, with the same bound."""
+    box = []
+    reader = threading.Thread(target=lambda: box.append(stream.readline()), daemon=True)
+    reader.start()
+    reader.join(LIMIT)
+    if not box:
+        end_group(process.pid)
+        raise AssertionError(("no line from the launch", process.args))
+    return box[0]
 
 
 def run(config, *program, status=0, stdin=None):
@@ -215,7 +251,7 @@ def test():
         out = subprocess.run(
             [str(BINARY), "channel", "exec", "--config", str(config), "--non-interactive",
              "--", "/bin/sh", "-c", 'echo "$MAELYS_EGRESS_CHANNEL_FD $KEPT"'],
-            env=environment, capture_output=True, text=True, timeout=10)
+            env=environment, capture_output=True, text=True, timeout=LIMIT)
         assert (out.returncode, out.stdout, out.stderr) == (0, "12 kept\n", ""), out
 
         servers = [socketserver.ThreadingTCPServer(("127.0.0.1", 0), Echo) for _ in range(2)]
@@ -228,7 +264,7 @@ def test():
             audit_key.write_text("0123456789abcdef0123456789abcdef")
             os.chmod(audit_key, 0o600)
             allowed = (exec_mode.replace("127.0.0.1:9", f"127.0.0.1:{ports[0]}") +
-                       "channel_invocation_id = run-42\nchannel_connect_timeout_ms = 30000\n"
+                       "channel_invocation_id = run-42\nchannel_connect_timeout_ms = 120000\n"
                        f"audit_log = {audit_log}\naudit_key_file = {audit_key}\n"
                        "audit_key_id = test-key\n")
             config.write_text(allowed)
@@ -248,7 +284,7 @@ def test():
             # only once the program has exited.
             for number in (signal.SIGTERM, signal.SIGINT):
                 process = launch(config, PROBE, "hold", "127.0.0.1", ports[0])
-                assert process.stdout.readline() == "ready\n"
+                assert line(process, process.stdout) == "ready\n"
                 process.send_signal(number)
                 out, err = finish(process)
                 assert (process.returncode, out, err) == (0, "echo after signal ok\n", ""), (out, err)
@@ -257,7 +293,7 @@ def test():
             # the status says so: 128 + signal.
             for number in (signal.SIGTERM, signal.SIGINT):
                 process = launch(config, PROBE, "sleep")
-                assert process.stdout.readline() == "ready\n"
+                assert line(process, process.stdout) == "ready\n"
                 process.send_signal(number)
                 out, err = finish(process)
                 assert (process.returncode, out, err) == (128 + number, "", ""), (out, err)
@@ -266,13 +302,14 @@ def test():
             # disposition would end the program), and its outcome is one
             # line on stderr. A refused reload changes nothing.
             process = launch(config, PROBE, "hold", "127.0.0.1", ports[0])
-            assert process.stdout.readline() == "ready\n"
+            assert line(process, process.stdout) == "ready\n"
             config.write_text(allowed.replace("agent-01", "agent-02"))
             process.send_signal(signal.SIGHUP)
-            assert process.stderr.readline().startswith("maelys-egress: policy reload rejected: ")
+            assert line(process, process.stderr).startswith(
+                "maelys-egress: policy reload rejected: ")
             config.write_text(allowed.replace(f"127.0.0.1:{ports[0]}", f"127.0.0.1:{ports[1]}"))
             process.send_signal(signal.SIGHUP)
-            assert process.stderr.readline().startswith(
+            assert line(process, process.stderr).startswith(
                 "maelys-egress: policy reloaded: generation 2, sha256 ")
             process.send_signal(signal.SIGTERM)
             out, err = finish(process)
@@ -281,18 +318,18 @@ def test():
 
             # What the program leaves behind loses its connection when the
             # program exits, and the launcher does not wait for it nor for
-            # channel_connect_timeout_ms (30 s here).
+            # channel_connect_timeout_ms (two minutes here).
             note = directory / "left-behind"
             Echo.closed.clear()
             begun = time.monotonic()
             assert run(config, PROBE, "leave", "127.0.0.1", ports[0], note, status=7) == ""
-            assert time.monotonic() - begun < 5
-            assert Echo.closed.wait(5)
-            for _ in range(100):
+            assert time.monotonic() - begun < 60, "the launcher waited for channel_connect_timeout_ms"
+            assert Echo.closed.wait(LIMIT)
+            for _ in range(LIMIT * 20):
                 if note.exists() and note.read_text():
                     break
                 time.sleep(0.05)
-            assert note.read_text().startswith("revoked "), note.read_text()
+            assert note.exists() and note.read_text().startswith("revoked "), "nothing was revoked"
         finally:
             for server in servers:
                 server.shutdown()
@@ -301,4 +338,8 @@ def test():
 
 
 if __name__ == "__main__":
-    test()
+    try:
+        test()
+    finally:
+        for group in GROUPS:
+            end_group(group)

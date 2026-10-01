@@ -9,7 +9,8 @@
  *   exec-probe connect HOST PORT
  *   exec-probe hold HOST PORT     connect, print ready, echo again on SIGTERM
  *   exec-probe sleep              wait for a signal with default dispositions
- *   exec-probe leave HOST PORT FILE   leave a child holding a stream, exit 7
+ *   exec-probe leave HOST PORT FILE   leave a process holding a stream, exit 7
+ *   exec-probe linger STREAM_FD FILE  that process: note in FILE how the stream ended
  *   exec-probe cat                copy stdin to stdout
  */
 #include <maelys/egress_client.h>
@@ -17,11 +18,14 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+extern char **environ;
 
 static volatile sig_atomic_t terminated;
 static void on_term(int number) { (void)number; terminated = 1; }
@@ -116,21 +120,31 @@ int main(int argc, char **argv) {
         int stream = open_stream(argv[2], argv[3]);
         if (stream < 0 || !echo(stream, "before")) return 3;
         fflush(stdout);
-        pid_t child = fork();
-        if (child < 0) return 4;
-        if (child == 0) {
-            /* What the program leaves behind: it loses its connection when
-             * the launcher stops the server, and says so in FILE. */
-            (void)close(STDOUT_FILENO);
-            (void)close(STDERR_FILENO);
-            char byte;
-            ssize_t amount;
-            do amount = recv(stream, &byte, 1u, 0); while (amount < 0 && errno == EINTR);
-            FILE *note = fopen(argv[4], "w");
-            if (note) { fprintf(note, "revoked %zd\n", amount); fclose(note); }
-            _exit(0);
-        }
+        /* What the program leaves behind: a process of its own holding the
+         * stream, and the channel with it, but neither of the launcher's
+         * output streams. A fresh program rather than a fork, so that it
+         * runs the same under a sanitizer's runtime. */
+        char stream_text[16];
+        (void)snprintf(stream_text, sizeof(stream_text), "%d", stream);
+        char linger[] = "linger";
+        char *left[] = {argv[0], linger, stream_text, argv[4], NULL};
+        posix_spawn_file_actions_t actions;
+        pid_t child = 0;
+        if (fcntl(stream, F_SETFD, 0) != 0 || posix_spawn_file_actions_init(&actions) != 0 ||
+            posix_spawn_file_actions_addclose(&actions, STDOUT_FILENO) != 0 ||
+            posix_spawn_file_actions_addclose(&actions, STDERR_FILENO) != 0 ||
+            posix_spawn(&child, argv[0], &actions, NULL, left, environ) != 0) return 4;
         return 7;
+    }
+    if (!strcmp(mode, "linger") && argc == 4) {
+        /* It loses its connection when the launcher destroys the server. */
+        int stream = atoi(argv[2]);
+        char byte;
+        ssize_t amount;
+        do amount = recv(stream, &byte, 1u, 0); while (amount < 0 && errno == EINTR);
+        FILE *note = fopen(argv[3], "w");
+        if (note) { fprintf(note, "revoked %zd\n", amount); fclose(note); }
+        return 0;
     }
     if (!strcmp(mode, "cat")) {
         char block[256];
