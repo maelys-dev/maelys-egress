@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- The tag `v0.24.0` no longer exists. The 0.24.1 entry below says it "stays
+  where it is": it was removed afterwards, by decision of the maintainer,
+  and is not recreated. It had published nothing, but GitHub served a source
+  archive for it whose `VERSION` read 0.23.0 while its headers already
+  carried the new ABI numbers; left in place, it invited a pin on an
+  incoherent tree. The rule that a published tag is never moved stands: a
+  tag that changes commit deceives whoever fetched it, and this one was
+  deleted, not moved. A clone that fetched it still has it locally.
+
 ## 0.24.1 — 2026-10-01
 
 - 0.24.0 was never published; this release carries everything its entry
