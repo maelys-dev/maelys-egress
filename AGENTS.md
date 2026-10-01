@@ -25,6 +25,16 @@ under `include/`, `protocol/`, `cli/`, in `docs/cli.md` or
 statically, so a new pin can change the shipped binary with none of those
 moving; read its changelog for runtime changes before deciding.
 
+Adding an enumerator to a public enumeration is a consumer-visible change
+even when no existing value moves: a consumer that switches over it without a
+default, under `-Werror=switch`, stops compiling. That happened to
+maelys-warden when 0.23.0 added `MAELYS_EGRESS_CLIENT_ERR_BUSY`. Such a
+change needs, in the same pull request: the enumerator added to
+`tests/public/frozen_results.c`, which `make consumer-source-check` compiles
+and which otherwise fails; a "Consumer notice" line in `CHANGELOG.md` naming
+the enumeration that grew; and the header saying which calls can return it.
+Never edit the frozen file only to make it compile.
+
 <!-- maelys-cli:begin -->
 <!-- SPDX-License-Identifier: CC-BY-4.0
 Copyright 2026 David Bromberg.

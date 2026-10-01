@@ -20,6 +20,25 @@ extern "C" {
  */
 #define MAELYS_EGRESS_CLIENT_ABI_VERSION 1u
 
+/*
+ * One enumeration serves both calls of this header, and it may gain
+ * enumerators in a later release; existing enumerators keep their values. A
+ * switch over it needs a default, and that default treats an unknown result
+ * as a failure: no stream, no channel, never success. On any result other
+ * than OK the output is -1 or NULL and nothing received stays open.
+ *
+ * Each call returns its own subset:
+ *
+ *   maelys_egress_client_connect       OK, ARGUMENT, IO, UNANSWERED, PROTOCOL,
+ *                                      DENIED, TIMEOUT, CANCELLED, UNSUPPORTED,
+ *                                      RESOURCE, INTERNAL. Never BUSY.
+ *   maelys_egress_client_channel_open  OK, ARGUMENT, IO, UNANSWERED, PROTOCOL,
+ *                                      DENIED, BUSY, CANCELLED, UNSUPPORTED,
+ *                                      RESOURCE, INTERNAL. Never TIMEOUT.
+ *
+ * A status the peer sends and this client does not know is INTERNAL in both.
+ * ERR_BUSY was added in 0.23.0, after ERR_INTERNAL, with the bootstrap.
+ */
 typedef enum maelys_egress_client_result {
     MAELYS_EGRESS_CLIENT_OK = 0,
     /* Local refusals, before or after the wire. */
