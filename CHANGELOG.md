@@ -10,6 +10,16 @@
   incoherent tree. The rule that a published tag is never moved stands: a
   tag that changes commit deceives whoever fetched it, and this one was
   deleted, not moved. A clone that fetched it still has it locally.
+- `make abi-floor-check` now holds every revision an interface serves, not
+  its floor alone, following an amendment of the family's ABI policy: the
+  declarations of the floor do not show the removal of a function that a
+  later revision added. `tools/check_abi_fragments.py` requires one frozen
+  fragment per revision from `..._ABI_COMPATIBLE_SINCE` to
+  `..._ABI_VERSION - 1` and refuses one below the floor. The four fragments
+  are regenerated from the same tags with names that carry the fragment's
+  own, so that two revisions of one interface compile together; what they
+  assert is unchanged. Nothing changes for a consumer: no header, no
+  number, no shipped file.
 
 ## 0.24.1 — 2026-10-01
 

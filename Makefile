@@ -420,13 +420,14 @@ consumer-source-check:
 # moved enumerator, a changed macro or structure layout does not. That is a
 # break: it raises the macro and regenerates the fragment in one change.
 abi-floor-check:
+	@python3 tools/check_abi_fragments.py
 	@$(CC) -Iinclude -Itests/public -std=c11 -Wall -Wextra -Wpedantic -Werror \
 		-fsyntax-only tests/public/abi_floor.c || \
-		{ echo "abi-floor-check: a declaration of the floor revision no longer holds." >&2; \
+		{ echo "abi-floor-check: a declaration of a served revision no longer holds." >&2; \
 		  echo "  This is a break. If intended: raise ..._ABI_COMPATIBLE_SINCE to the new" >&2; \
-		  echo "  ..._ABI_VERSION, regenerate the fragment with tools/freeze_abi.py at the tag that" >&2; \
-		  echo "  first carries it, and name the break in CHANGELOG.md (AGENTS.md)." >&2; exit 1; }
-	@echo "abi-floor-check: every declaration of the floor revisions still holds"
+		  echo "  ..._ABI_VERSION, remove the fragments of the revisions below it, and name" >&2; \
+		  echo "  the break in CHANGELOG.md (AGENTS.md)." >&2; exit 1; }
+	@echo "abi-floor-check: every declaration of the served revisions still holds"
 
 # The client archive must not reach into maelys-system or the thread runtime
 # for anything it does not hold: every maelys_sys_ or pthread_ symbol an
