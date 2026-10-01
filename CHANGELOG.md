@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.24.0 — 2026-10-01
 
 - Consumer notice: the interface is now numbered twice.
   `MAELYS_EGRESS_ABI_VERSION` is its revision and becomes **4**;
