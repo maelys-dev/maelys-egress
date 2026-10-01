@@ -23,7 +23,9 @@ import re
 import subprocess
 import sys
 
-SKIP_MACROS = {"MAELYS_EGRESS_ABI_VERSION", "MAELYS_EGRESS_CLIENT_ABI_VERSION"}
+# The two numbers themselves are not part of the floor: the revision rises
+# with every addition, and the floor macro is what this fragment stands for.
+SKIP_MACRO = re.compile(r"_ABI_(VERSION|COMPATIBLE_SINCE)$")
 
 
 def header_at(tag: str, path: str) -> str:
@@ -40,7 +42,7 @@ def macros(text: str):
     joined = re.sub(r"\\\n", " ", text)
     for match in re.finditer(r"^#define[ \t]+(MAELYS_[A-Z0-9_]+)[ \t]+(.+)$", joined, re.M):
         name, value = match.group(1), " ".join(match.group(2).split())
-        if name not in SKIP_MACROS:
+        if not SKIP_MACRO.search(name):
             yield name, value
 
 

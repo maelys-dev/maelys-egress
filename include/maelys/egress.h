@@ -27,7 +27,7 @@ extern "C" {
  *
  * Revision 3 is 0.20.0; 0.22.0 and 0.23.0 added the channel and the broker
  * under the same number; revision 4 is that interface, numbered once the
- * rule above was adopted. tests/public/abi-core-3.h holds the floor.
+ * rule above was adopted. tests/public/abi-3.h holds the floor.
  */
 #define MAELYS_EGRESS_ABI_VERSION 4u
 #define MAELYS_EGRESS_ABI_COMPATIBLE_SINCE 3u

@@ -10,7 +10,13 @@
 extern "C" {
 #endif
 
+/*
+ * The revision of the provider table below and the oldest revision whose
+ * declarations still hold, as <maelys/egress.h> explains for the library.
+ * A provider states the revision it was written for in ops->abi_version.
+ */
 #define MAELYS_EGRESS_TLS_ABI_VERSION 1u
+#define MAELYS_EGRESS_TLS_ABI_COMPATIBLE_SINCE 1u
 
 typedef struct maelys_egress_tls_provider maelys_egress_tls_provider_t;
 

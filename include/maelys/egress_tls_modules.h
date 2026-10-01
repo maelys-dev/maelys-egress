@@ -15,6 +15,7 @@ extern "C" {
  * (MAELYS_EGRESS_TLS_ABI_VERSION): a change to one leaves the other valid.
  */
 #define MAELYS_EGRESS_TLS_FILES_ABI_VERSION 1u
+#define MAELYS_EGRESS_TLS_FILES_ABI_COMPATIBLE_SINCE 1u
 
 /*
  * File-backed reference-provider configuration. Paths are copied while the

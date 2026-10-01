@@ -413,8 +413,9 @@ consumer-source-check:
 	@echo "consumer-source-check: the frozen consumer still compiles"
 
 # The floor each ABI_COMPATIBLE_SINCE macro names, held by the compiler:
-# tests/public/abi-core-3.h and abi-client-1.h declare again everything the
-# floor revisions declared, and check that the current headers still name
+# tests/public/abi-3.h, abi-tls-1.h, abi-tls-files-1.h and abi-client-1.h, one
+# per interface and named after its floor, declare again everything the floor
+# revisions declared, and check that the current headers still name
 # each of them. An addition passes; a removed or changed declaration, a
 # moved enumerator, a changed macro or structure layout does not. That is a
 # break: it raises the macro and regenerates the fragment in one change.

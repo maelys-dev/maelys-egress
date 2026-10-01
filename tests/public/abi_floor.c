@@ -14,23 +14,29 @@
 #include <maelys/egress_channel.h>
 #include <maelys/egress_client.h>
 
-/* First what the floor revision named must still be declared by the
- * headers above; then every declaration is made again and must agree. */
+/* First what each floor revision named must still be declared by the
+ * headers above; then every declaration is made again and must agree. One
+ * fragment per interface, named after the floor it holds. */
 #define MAELYS_ABI_FLOOR_PRESENCE
-#include "abi-core-3.h"
+#include "abi-3.h"
+#include "abi-tls-1.h"
+#include "abi-tls-files-1.h"
 #include "abi-client-1.h"
 #undef MAELYS_ABI_FLOOR_PRESENCE
-#include "abi-core-3.h"
+#include "abi-3.h"
+#include "abi-tls-1.h"
+#include "abi-tls-files-1.h"
 #include "abi-client-1.h"
 
-_Static_assert(MAELYS_EGRESS_ABI_COMPATIBLE_SINCE == 3u,
-               "abi-core-3.h is the floor MAELYS_EGRESS_ABI_COMPATIBLE_SINCE names");
-_Static_assert(MAELYS_EGRESS_CLIENT_ABI_COMPATIBLE_SINCE == 1u,
-               "abi-client-1.h is the floor MAELYS_EGRESS_CLIENT_ABI_COMPATIBLE_SINCE names");
-_Static_assert(MAELYS_EGRESS_ABI_COMPATIBLE_SINCE <= MAELYS_EGRESS_ABI_VERSION,
-               "the floor cannot be above the revision");
-_Static_assert(MAELYS_EGRESS_CLIENT_ABI_COMPATIBLE_SINCE <= MAELYS_EGRESS_CLIENT_ABI_VERSION,
-               "the floor cannot be above the revision");
+#define FLOOR(macro, revision, version, fragment) \
+    _Static_assert((macro) == (revision), fragment " is the floor " #macro " names"); \
+    _Static_assert((macro) <= (version), "a floor cannot be above its revision")
+FLOOR(MAELYS_EGRESS_ABI_COMPATIBLE_SINCE, 3u, MAELYS_EGRESS_ABI_VERSION, "abi-3.h");
+FLOOR(MAELYS_EGRESS_TLS_ABI_COMPATIBLE_SINCE, 1u, MAELYS_EGRESS_TLS_ABI_VERSION, "abi-tls-1.h");
+FLOOR(MAELYS_EGRESS_TLS_FILES_ABI_COMPATIBLE_SINCE, 1u, MAELYS_EGRESS_TLS_FILES_ABI_VERSION,
+      "abi-tls-files-1.h");
+FLOOR(MAELYS_EGRESS_CLIENT_ABI_COMPATIBLE_SINCE, 1u, MAELYS_EGRESS_CLIENT_ABI_VERSION,
+      "abi-client-1.h");
 
 int abi_floor_holds(void);
 int abi_floor_holds(void) { return 1; }
