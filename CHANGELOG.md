@@ -38,18 +38,22 @@
   `MAELYS_EGRESS_CHANNEL_FD` instead of its first argument, and
   `examples/channel_supervisor.c` sets it: one convention for the example,
   the command and a program written for either.
-- maelys-cli 0.5.31, which adds `maelys_cli_process_start`, `_signal`,
+- maelys-cli 0.5.32. 0.5.31 added `maelys_cli_process_start`, `_signal`,
   `_wait` and `_release` with a mapping of inherited descriptors, and
   `maelys_cli_environment_to_envp_inherited`. They were asked for by this
-  command; nothing else of the shipped binary depends on them. Read for
-  runtime changes, as the adoption rule asks: 0.5.31 also makes the `maelys`
+  command; nothing else of the shipped binary depends on them. 0.5.32
+  corrects a data race this command found in them under ThreadSanitizer:
+  the handle's `exited` flag, written by `wait` and read by `signal` from
+  another thread as the contract allows, is now atomic. Read for runtime
+  changes, as the adoption rule asks: 0.5.31 also makes the `maelys`
   dispatcher trust a manifest by the directory it resolves to instead of
   refusing a symbolic link, which is what lets it read the manifest Homebrew
   links from its cellar, `share/maelys/commands/egress.json` included. That
   is the dispatcher's behaviour, not this binary's: `maelys-egress` reads its
   configuration with the requirements it had, and nothing it ships changes
-  for that reason. The agent texts are refreshed with
-  `maelys agents install . --apply` from the pinned checkout.
+  for that reason. 0.5.32 makes an extension the dispatcher cannot run
+  unavailable instead of stopping the dispatcher. The agent texts are
+  refreshed with `maelys agents install . --apply` from the pinned checkout.
 - The tag `v0.24.0` no longer exists. The 0.24.1 entry below says it "stays
   where it is": it was removed afterwards, by decision of the maintainer,
   and is not recreated. It had published nothing, but GitHub served a source

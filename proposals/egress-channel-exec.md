@@ -7,7 +7,8 @@ before any code; what the implementation changed in it is listed at the end.
 The command changes no wire byte and no public C declaration: it is built on
 `maelys_egress_channel_create`, which exists since 0.22.0, so neither ABI
 number moves. maelys-cli provides the process functions it needs since
-0.5.31.
+0.5.31; the command is built on 0.5.32, which makes them free of a data
+race this command's sanitizer run found.
 
 ## Why
 
