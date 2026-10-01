@@ -8,7 +8,29 @@
 extern "C" {
 #endif
 
-#define MAELYS_EGRESS_ABI_VERSION 3u
+/*
+ * Two numbers describe this interface.
+ *
+ * MAELYS_EGRESS_ABI_VERSION is its revision: it rises with every change of
+ * the public headers, an addition as much as a break.
+ * MAELYS_EGRESS_ABI_COMPATIBLE_SINCE is the oldest revision whose every
+ * declaration still holds unchanged; it rises only on a break — a removed or
+ * changed declaration, a changed layout of an open structure, a changed
+ * meaning — and then takes the value of the revision that breaks.
+ *
+ * A consumer written for revision N is served by a library when
+ *
+ *     MAELYS_EGRESS_ABI_COMPATIBLE_SINCE <= N <= MAELYS_EGRESS_ABI_VERSION
+ *
+ * The lower bound says nothing it uses was broken; the upper bound says
+ * what it uses exists. Against a pinned commit, compare for equality.
+ *
+ * Revision 3 is 0.20.0; 0.22.0 and 0.23.0 added the channel and the broker
+ * under the same number; revision 4 is that interface, numbered once the
+ * rule above was adopted. tests/public/abi-3.h holds the floor.
+ */
+#define MAELYS_EGRESS_ABI_VERSION 4u
+#define MAELYS_EGRESS_ABI_COMPATIBLE_SINCE 3u
 
 /*
  * The public enumerations of Egress may gain enumerators in a later release.
@@ -84,6 +106,8 @@ typedef void (*maelys_egress_receipt_sink_fn)(
 
 const char *maelys_egress_version_string(void);
 unsigned int maelys_egress_abi_version(void);
+/* The floor the library was built with; see the two numbers above. */
+unsigned int maelys_egress_abi_compatible_since(void);
 const char *maelys_egress_result_string(maelys_egress_result_t result);
 void maelys_egress_error_free(char *error);
 
@@ -365,7 +389,7 @@ maelys_egress_result_t maelys_egress_channel_create(
     char **out_error);
 void maelys_egress_channel_destroy(maelys_egress_channel_t *channel);
 
-/* Pathname bootstrap v1, additive within ABI 3. The wire contract is
+/* Pathname bootstrap v1, added in 0.23.0 without breaking revision 3. The wire contract is
  * protocol/egress-channel-bootstrap-v1.md. The running connector
  * supplies the immutable principal; no client chooses an identity. The broker
  * retains it and owns a reactor and a cleanup worker, both distinct from the

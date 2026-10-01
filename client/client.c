@@ -266,3 +266,7 @@ void maelys_egress_client_error_free(char *error) { free(error); }
 unsigned int maelys_egress_client_abi_version(void) {
     return MAELYS_EGRESS_CLIENT_ABI_VERSION;
 }
+
+unsigned int maelys_egress_client_abi_compatible_since(void) {
+    return MAELYS_EGRESS_CLIENT_ABI_COMPATIBLE_SINCE;
+}

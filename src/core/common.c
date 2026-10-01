@@ -148,6 +148,9 @@ const char *maelys_egress_version_string(void) {
 }
 
 unsigned int maelys_egress_abi_version(void) { return MAELYS_EGRESS_ABI_VERSION; }
+unsigned int maelys_egress_abi_compatible_since(void) {
+    return MAELYS_EGRESS_ABI_COMPATIBLE_SINCE;
+}
 
 const char *maelys_egress_result_string(maelys_egress_result_t result) {
     switch (result) {
