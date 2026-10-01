@@ -194,6 +194,9 @@ static void gate_fragments(const char *path, maelys_egress_connector_t *connecto
     maelys_egress_client_channel_t *client = gate_open(path);
     REQUIRE(atomic_load(&broker_calls) == 10 && atomic_load(&broker_bytes) == 8);
     REQUIRE(atomic_load(&client_calls) == 19 && atomic_load(&client_bytes) == 16);
+    /* The broker counts the descriptor after its send returns; the client
+     * may have read the frame and returned before that. */
+    gate_wait(&sent_rights, 1);
     REQUIRE(atomic_load(&sent_rights) == 1);
     maelys_egress_client_channel_close(client); gate_idle(connector, fds);
     /* Truncation at the first descriptor and after it has been retained.
