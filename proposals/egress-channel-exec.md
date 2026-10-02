@@ -208,13 +208,13 @@ the destruction cannot run on the thread that owns that reactor.
    release the connector, then destroy the server. This is the order
    `channel broker` uses. The reverse would wait for a request in flight, up
    to `channel_connect_timeout_ms`, with the reactor still running; stopping
-   first cancels pending opens, and destroying the server closes the
-   connections it still relays.
+   first cancels pending opens and ends the connections the server still
+   relays.
 6. Exit with the program's status.
 
 If the server stops by itself while the program runs, the launcher writes
-the reason on stderr, ends the program's connections by destroying the
-server, does not signal the program, waits for it and returns its status.
+the reason on stderr, does not signal the program, waits for it and returns
+its status. The program's connections ended with the stop.
 
 ## What maelys-cli must provide
 
@@ -344,14 +344,18 @@ renders the overlay alone today.
 
 ## What the implementation changed
 
-1. **The connections end when the server is destroyed, not when it stops.**
-   The order of section 6 holds, with one more step that the proposal took
-   for granted: stopping cancels the opens in flight, and it is
-   `maelys_egress_server_destroy` that closes the connections still relayed.
-   The launcher therefore destroys the server itself, and does so at once
-   when the server stops while the program runs: waiting for the program
-   first would leave its connections open and silent, with nothing to read
-   and no end.
+1. **Stopping the server did not end the connections it relayed; now it
+   does.** The proposal took for granted what the public header said: that
+   a stop ends them. In 0.25.0 it did not. `maelys_egress_server_stop`
+   cancelled the opens in flight, and only `maelys_egress_server_destroy`
+   closed the connections already established; a mutant that stopped the
+   server while the program ran left the program reading a connection that
+   would never end. 0.25.0 and 0.26.0 worked around it in the launcher,
+   which destroyed the server at once in that case, from a thread that did
+   not own it. The library was then corrected instead: `server_run` closes
+   every connection before it returns, so that the stop, which any thread
+   may ask for, is what releases a holder. The launcher lost its
+   workaround and its lock, and tears down on the owner thread.
 2. **The framework's handle is opaque and is released.** maelys-cli kept the
    requested `start`, `signal` and `wait`, added
    `maelys_cli_process_release`, and holds the guarantee without a lock:

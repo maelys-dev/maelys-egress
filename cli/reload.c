@@ -7,7 +7,7 @@
  * file, refuses any change outside the destinations, and swaps in a freshly
  * sealed policy generation. SIGINT and SIGTERM stop the server.
  *
- * Under `channel exec` they do not: stopping the server closes every relayed
+ * Under `channel exec` they do not: stopping the server ends every relayed
  * connection, which would cut the program's network before it had seen any
  * signal. They are forwarded to the program, and the server stops once the
  * program has exited. The framework's handle keeps the program's process id
@@ -28,14 +28,6 @@ void *egress_cli_signal_main(void *opaque) {
         } else if (signal_number != SIGHUP || !context->config_path) {
             (void)maelys_egress_server_stop(context->server);
             return NULL;
-        }
-        if (context->server_lock) {
-            (void)pthread_mutex_lock(context->server_lock);
-            if (!context->server) {
-                (void)pthread_mutex_unlock(context->server_lock);
-                egress_cli_diagnostic("policy reload rejected: the server has stopped");
-                continue;
-            }
         }
         egress_cli_settings_t fresh;
         maelys_cli_error_t load_error;
@@ -71,7 +63,6 @@ void *egress_cli_signal_main(void *opaque) {
         } else {
             egress_cli_lifecycle_message("policy-reload-rejected", refusal);
         }
-        if (context->server_lock) (void)pthread_mutex_unlock(context->server_lock);
         maelys_egress_policy_destroy(replacement);
         maelys_egress_error_free(error);
         if (loaded) egress_cli_settings_destroy(&fresh);

@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -1405,6 +1406,133 @@ static void test_channel(void) {
     (void)pthread_mutex_destroy(&server.lock);
 }
 
+/* A server whose owner thread returns from run and then waits to be told
+ * before it destroys: the interval in which a stopped server exists. */
+typedef struct held_server_context {
+    server_context_t server;
+    int returned;
+    int release;
+} held_server_context_t;
+
+static void *held_server_main(void *opaque) {
+    held_server_context_t *held = opaque;
+    server_context_t *context = &held->server;
+    context->result = maelys_egress_server_create(
+        context->policy, context->config, &context->server, &context->error);
+    (void)pthread_mutex_lock(&context->lock);
+    context->port = maelys_egress_server_port(context->server);
+    context->ready = 1;
+    (void)pthread_cond_broadcast(&context->condition);
+    (void)pthread_mutex_unlock(&context->lock);
+    if (context->result == MAELYS_EGRESS_OK) {
+        context->result = maelys_egress_server_run(context->server, &context->error);
+    }
+    (void)pthread_mutex_lock(&context->lock);
+    held->returned = 1;
+    (void)pthread_cond_broadcast(&context->condition);
+    while (!held->release) (void)pthread_cond_wait(&context->condition, &context->lock);
+    (void)pthread_mutex_unlock(&context->lock);
+    maelys_egress_server_destroy(context->server);
+    return NULL;
+}
+
+/* 1 when the peer of fd has gone within two seconds: an end of stream or a
+ * reset, and nothing else. */
+static int stream_ended(int fd) {
+    struct pollfd item = {.fd = fd, .events = POLLIN};
+    int ready;
+    do { ready = poll(&item, 1u, 2000); } while (ready < 0 && errno == EINTR);
+    if (ready != 1) return 0;
+    char byte;
+    ssize_t amount;
+    do { amount = recv(fd, &byte, 1u, 0); } while (amount < 0 && errno == EINTR);
+    return amount == 0 || (amount < 0 && errno == ECONNRESET);
+}
+
+/* Stopping is thread-safe and destroying belongs to the owner thread, so a
+ * holder of a relayed connection has nothing but the stop to wake it: when
+ * run has returned, a native session and a proxied tunnel have both ended,
+ * with the server not yet destroyed. */
+static void test_stop_ends_relayed_connections(void) {
+    int baseline = open_descriptors();
+    uint16_t upstream_port = 0u;
+    channel_upstream_context_t upstream = {.listener = listener_create(&upstream_port)};
+    CHECK(upstream.listener >= 0);
+    pthread_t upstream_thread;
+    CHECK(pthread_create(&upstream_thread, NULL, channel_upstream_main, &upstream) == 0);
+
+    maelys_egress_policy_t *policy = NULL;
+    maelys_egress_config_t *config = NULL;
+    char *error = NULL;
+    CHECK(maelys_egress_policy_create(&policy, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_allow_tcp(policy, "127.0.0.1", upstream_port, 1, &error) ==
+          MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_seal(policy, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_create(&config, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_set_authentication(config, "maelys", "0123456789abcdef",
+                                                  &error) == MAELYS_EGRESS_OK);
+    held_server_context_t held = {
+        .server = {.lock = PTHREAD_MUTEX_INITIALIZER, .condition = PTHREAD_COND_INITIALIZER,
+                   .policy = policy, .config = config}
+    };
+    server_context_t *server = &held.server;
+    pthread_t server_thread;
+    CHECK(pthread_create(&server_thread, NULL, held_server_main, &held) == 0);
+    (void)pthread_mutex_lock(&server->lock);
+    while (!server->ready) (void)pthread_cond_wait(&server->condition, &server->lock);
+    (void)pthread_mutex_unlock(&server->lock);
+    CHECK(server->result == MAELYS_EGRESS_OK);
+    for (unsigned int attempt = 0u;
+         attempt < 1000u && !maelys_egress_server_is_running(server->server); ++attempt) {
+        struct timespec delay = {.tv_sec = 0, .tv_nsec = 1000000L};
+        (void)nanosleep(&delay, NULL);
+    }
+    CHECK(maelys_egress_server_is_running(server->server));
+
+    maelys_egress_connector_t *connector = NULL;
+    maelys_egress_session_t *session = NULL;
+    CHECK(maelys_egress_server_connector_create(server->server, "maelys", "0123456789abcdef",
+                                                &connector, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_connector_session_open(connector, "127.0.0.1", upstream_port, 3000u,
+                                               &session, &error) == MAELYS_EGRESS_OK);
+    int native = session ? maelys_egress_session_fd(session) : -1;
+    int tunnel = proxy_connect(server->port, upstream_port);
+    CHECK(native >= 0 && tunnel >= 0);
+    char echo[4] = {0};
+    CHECK(send_all(native, "ping", 4u) && recv(native, echo, 4u, MSG_WAITALL) == 4 &&
+          memcmp(echo, "ping", 4u) == 0);
+    CHECK(send_all(tunnel, "pong", 4u) && recv(tunnel, echo, 4u, MSG_WAITALL) == 4 &&
+          memcmp(echo, "pong", 4u) == 0);
+
+    CHECK(maelys_egress_server_stop(server->server) == MAELYS_EGRESS_OK);
+    (void)pthread_mutex_lock(&server->lock);
+    while (!held.returned) (void)pthread_cond_wait(&server->condition, &server->lock);
+    (void)pthread_mutex_unlock(&server->lock);
+    /* run has returned and destroy has not been called. */
+    CHECK(stream_ended(native));
+    CHECK(stream_ended(tunnel));
+
+    (void)pthread_mutex_lock(&server->lock);
+    held.release = 1;
+    (void)pthread_cond_broadcast(&server->condition);
+    (void)pthread_mutex_unlock(&server->lock);
+    maelys_egress_session_release(session);
+    maelys_egress_connector_release(connector);
+    if (tunnel >= 0) (void)close(tunnel);
+    CHECK(pthread_join(server_thread, NULL) == 0);
+    atomic_store(&upstream.stop, 1);
+    int wake = connect_loopback(upstream_port);
+    CHECK(pthread_join(upstream_thread, NULL) == 0);
+    if (wake >= 0) (void)close(wake);
+    (void)close(upstream.listener);
+    CHECK(descriptors_settle_at(baseline));
+    maelys_egress_config_destroy(config);
+    maelys_egress_policy_destroy(policy);
+    maelys_egress_error_free(error);
+    (void)pthread_cond_destroy(&server->condition);
+    (void)pthread_mutex_destroy(&server->lock);
+}
+
 int main(void) {
     fixture_limits();
     test_receipt_canonical();
@@ -1413,6 +1541,7 @@ int main(void) {
     test_connector_concurrency();
     test_cumulative_quota();
     test_channel();
+    test_stop_ends_relayed_connections();
     if (failures) return 1;
     puts("all operational checks passed");
     return 0;

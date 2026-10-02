@@ -189,6 +189,7 @@ int egress_cli_run(
     if (exec) {
         int status = egress_cli_exec_run(server, settings, reload_config_path,
             &signals, exec, out_error);
+        maelys_egress_server_destroy(server);
         maelys_egress_config_destroy(config);
         maelys_egress_policy_destroy(policy);
         (void)pthread_cond_destroy(&output_gate.condition);

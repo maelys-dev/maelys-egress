@@ -18,21 +18,22 @@
  * exec and installs the descriptor; nothing here forks.
  *
  * Shutdown has one order: stop the server, which cancels the opens in
- * flight; destroy the channel; release the connector; destroy the server,
- * which is what closes the connections it still relays. A stopped server
- * that is not destroyed leaves those connections open and silent, so the
- * last step cannot wait for a program that may be reading one of them. */
+ * flight and ends the connections it relays when its loop returns; then,
+ * on the thread that owns the server, destroy the channel, release the
+ * connector and destroy the server. Since stopping ends the connections,
+ * a server that stops by itself while the program runs needs nothing from
+ * this file but a word to the operator: the program learns it from its
+ * connections, and its status is still waited for. */
 
 typedef struct exec_command {
-    signal_context_t signals;       /* .server is NULL once destroyed */
+    signal_context_t signals;
     egress_cli_exec_t *exec;
     maelys_cli_error_t *error;
-    pthread_mutex_t lock;           /* guards everything below and .server */
-    maelys_egress_connector_t *connector;
-    maelys_egress_channel_t *channel;
-    int started;                    /* the program runs or has run */
-    int finished;                   /* the coordinator asked for the stop */
-    atomic_int server_finished;     /* server_run has returned */
+    maelys_egress_connector_t *connector;   /* released by the owner thread */
+    maelys_egress_channel_t *channel;       /* destroyed by the owner thread */
+    atomic_int started;                     /* the program runs or has run */
+    atomic_int finished;                    /* the coordinator asked for the stop */
+    atomic_int server_finished;             /* server_run has returned */
 } exec_command_t;
 
 static void pause_briefly(void) {
@@ -56,18 +57,6 @@ static char **program_environment(const egress_cli_settings_t *settings) {
     if (failed || maelys_cli_environment_to_envp_inherited(&overlay, &envp) != 0) envp = NULL;
     maelys_cli_environment_clear(&overlay);
     return envp;
-}
-
-/* Called with the lock held, once the reactor no longer runs; a second call
- * finds nothing left. Whoever sees first that the server is finished does
- * it: every connection the program still holds ends here. */
-static void teardown(exec_command_t *command) {
-    maelys_egress_channel_destroy(command->channel);
-    command->channel = NULL;
-    maelys_egress_connector_release(command->connector);
-    command->connector = NULL;
-    maelys_egress_server_destroy(command->signals.server);
-    command->signals.server = NULL;
 }
 
 static void *exec_command_main(void *opaque) {
@@ -137,13 +126,8 @@ static void *exec_command_main(void *opaque) {
      * closed theirs, the channel sees its peer gone. */
     (void)close(client_fd);
     client_fd = -1;
-    (void)pthread_mutex_lock(&command->lock);
-    command->started = 1;
     exec->started = 1;
-    /* The reactor may have ended while the program was being started, after
-     * the main thread looked: then the connections are ended here. */
-    if (atomic_load(&command->server_finished)) teardown(command);
-    (void)pthread_mutex_unlock(&command->lock);
+    atomic_store(&command->started, 1);
     command->signals.program = program;
     if (pthread_create(&signal_thread, NULL, egress_cli_signal_main, &command->signals) == 0) {
         signal_started = 1;
@@ -163,10 +147,10 @@ done:
         (void)pthread_kill(signal_thread, SIGTERM);
         (void)pthread_join(signal_thread, NULL);
     }
-    (void)pthread_mutex_lock(&command->lock);
-    command->finished = 1;
-    if (command->signals.server) (void)maelys_egress_server_stop(command->signals.server);
-    (void)pthread_mutex_unlock(&command->lock);
+    /* Said before the stop is asked, so that the owner thread can tell a
+     * stop it was not asked for from this one. */
+    atomic_store(&command->finished, 1);
+    (void)maelys_egress_server_stop(server);
     if (client_fd >= 0) (void)close(client_fd);
     maelys_cli_process_release(program);
     maelys_cli_envp_free(envp);
@@ -179,18 +163,18 @@ int egress_cli_exec_run(maelys_egress_server_t *server,
     egress_cli_exec_t *exec, maelys_cli_error_t *error) {
     exec_command_t command = {
         .signals = {.server = server, .signals = *signals, .config_path = path,
-                    .baseline = settings, .server_lock = &command.lock},
-        .exec = exec, .error = error, .lock = PTHREAD_MUTEX_INITIALIZER
+                    .baseline = settings},
+        .exec = exec, .error = error
     };
     atomic_init(&command.signals.stopping, 0);
+    atomic_init(&command.started, 0);
+    atomic_init(&command.finished, 0);
     atomic_init(&command.server_finished, 0);
     memset(error, 0, sizeof(*error));
     pthread_t worker;
     if (pthread_create(&worker, NULL, exec_command_main, &command) != 0) {
         maelys_cli_error_set(error, MAELYS_CLI_CODE_UNEXPECTED,
             "Check available process/thread resources.", "cannot create the launch coordinator");
-        maelys_egress_server_destroy(server);
-        (void)pthread_mutex_destroy(&command.lock);
         return -1;
     }
     char *server_error = NULL;
@@ -198,22 +182,19 @@ int egress_cli_exec_run(maelys_egress_server_t *server,
     atomic_store(&command.server_finished, 1);
     const char *reason = server_error ? server_error : result != MAELYS_EGRESS_OK ?
         maelys_egress_result_string(result) : "it was stopped";
-    (void)pthread_mutex_lock(&command.lock);
-    int alone = !command.finished; /* nothing here asked the server to stop */
-    int told = command.started && alone;
-    if (told) {
-        /* The program is not signalled: it is told through its connections,
-         * which end now, and its status is still the one reported. */
-        egress_cli_diagnostic("the server stopped while the program was running: %s", reason);
-        teardown(&command);
-    }
-    (void)pthread_mutex_unlock(&command.lock);
+    /* Nothing here asked for this stop: the program is not signalled. Its
+     * connections ended when the loop returned, which is how it is told,
+     * and its status is still the one reported. */
+    int alone = !atomic_load(&command.finished);
+    int told = alone && atomic_load(&command.started);
+    if (told) egress_cli_diagnostic("the server stopped while the program was running: %s", reason);
     (void)pthread_join(worker, NULL);
-    /* Started after the look above: the coordinator ended the connections. */
+    /* Started after the look above. */
     if (exec->started && alone && !told) {
         egress_cli_diagnostic("the server stopped while the program was running: %s", reason);
     }
-    teardown(&command);
+    maelys_egress_channel_destroy(command.channel);
+    maelys_egress_connector_release(command.connector);
     int status = 0;
     if (!exec->started) {
         if (result != MAELYS_EGRESS_OK) {
@@ -224,6 +205,5 @@ int egress_cli_exec_run(maelys_egress_server_t *server,
         status = -1;
     }
     maelys_egress_error_free(server_error);
-    (void)pthread_mutex_destroy(&command.lock);
     return status;
 }

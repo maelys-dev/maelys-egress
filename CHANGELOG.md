@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+- **Stopping the server now ends the connections it relays.**
+  `maelys_egress_server_run` closes every connection before it returns,
+  proxied tunnels and native sessions included. Until now it closed only the
+  opens still pending; a connection already established stayed open and
+  carried nothing until `maelys_egress_server_destroy`.
+  `maelys_egress_server_stop` may be called from any thread and
+  `maelys_egress_server_destroy` only from the owner thread, so a holder
+  blocked on such a connection had nothing to wake it: a supervisor that
+  stopped its server from a signal thread and waited for its child before
+  destroying waited for a child that was waiting for it. `channel exec`
+  met exactly that on a mutant. The public header promised the new
+  behaviour until 0.26.0 rewrote its comments to describe the old one; the
+  comments say it again, and it is now true.
+  **Consumer notice**: no declaration changes and no ABI number moves, but
+  an embedder that kept using a relayed connection between the return of
+  `server_run` and `server_destroy` now reads its end there. Nothing could
+  be relayed in that interval, so nothing that worked stops working; the
+  `maelys-egress` commands destroyed their server at once and see no
+  difference. `tests/test_operations.c` holds a server between the two and
+  requires the end of a native session and of a proxied tunnel; the mutant
+  `stop-leaves-relayed-open` restores the old condition and is killed.
+- `channel exec` no longer destroys its server from the coordinator thread
+  when the server stops while the program runs: the stop ends the program's
+  connections, and the launcher tears down on the thread that owns the
+  server, as the header requires. Its lock and its two-sided teardown are
+  removed.
+- `tests/test_channel_exec.py`: four assertions that proved less than they
+  said are corrected, and the proposal withdraws two tests it listed and
+  never carried, with the reason.
+
 ## 0.26.0 — 2026-10-02
 
 - New configuration key `channel_exec_by_path` (`true` or `false`, default
