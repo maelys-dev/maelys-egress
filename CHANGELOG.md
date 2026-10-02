@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+- **The `.rpm` packages shipped a manifest that did not name the binary they
+  installed.** `rpmbuild` strips what it packages by default, so the
+  installed `maelys-egress` was not the staged one whose `sha256` the
+  manifest declares: 371 kB installed against 1.2 MB staged for 0.27.0 on
+  arm64. `maelys-egress` itself ran; the `maelys` dispatcher, which runs
+  `maelys egress` only when that digest matches, refused it. Every `.rpm`
+  published so far has the defect; the `.deb`, the archives and the Homebrew
+  bottles do not. The spec now packages the files as staged, and the
+  packaging script compares the digest the `.rpm` records for the binary with
+  the staged one before it writes the package out.
+- New gate: `scripts/check-installed-packages.sh` installs the `.deb` on
+  Ubuntu and the `.rpm` on Fedora, each in a clean container, and uses what
+  was installed: version, catalog, the manifest's digest against the
+  installed binary, the SDK files, and a program started through
+  `channel exec`. The package job of the CI runs it on both Linux
+  architectures. Until now the packages were listed and never installed;
+  the first install, done by hand for 0.27.0, is what found the defect above.
+
 ## 0.27.0 — 2026-10-02
 
 - **Stopping the server now ends the connections it relays.**
