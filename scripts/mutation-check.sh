@@ -194,6 +194,9 @@ schedule_mutant native-trusted-scope src/server/connector.c \
     'server->config.native_only &&'
 schedule_mutant native-immutable-binding src/config.c \
     'config->native_principal_bound = 1;' 'config->native_principal_bound = 0;'
+schedule_mutant stop-leaves-relayed-open src/server/server.c \
+    '        egress_connection_close(server, i); /* relayed or still opening */' \
+    '        if (connection->open_command) egress_connection_close(server, i);'
 schedule_mutant exec-signal-stops-server cli/reload.c \
     '                (void)maelys_cli_process_signal(context->program, signal_number);' \
     '                (void)maelys_egress_server_stop(context->server); (void)maelys_cli_process_signal(context->program, signal_number);'

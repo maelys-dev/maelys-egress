@@ -96,16 +96,13 @@ egress_cli_mode_t egress_cli_settings_mode(const egress_cli_settings_t *settings
 
 /* program is set by `channel exec` only. With it, SIGINT and SIGTERM are
  * forwarded to the program and the server is left running; the thread ends
- * on the first signal that follows `stopping`. There the server may be
- * destroyed while the program still runs: server is then read under
- * server_lock and is NULL once it is gone. */
+ * on the first signal that follows `stopping`. */
 typedef struct signal_context {
     maelys_egress_server_t *server;
     sigset_t signals;
     const char *config_path;
     const egress_cli_settings_t *baseline;
     maelys_cli_process_t *program;
-    pthread_mutex_t *server_lock;
     atomic_int stopping;
 } signal_context_t;
 
@@ -190,8 +187,7 @@ int egress_cli_command_serve(maelys_cli_context_t *context);
 int egress_cli_command_channel_broker(maelys_cli_context_t *context);
 int egress_cli_command_channel_exec(maelys_cli_context_t *context);
 /* channel_exec.c. Runs the server on the calling thread until the program
- * has exited, and destroys the server: the caller no longer owns it. Same
- * return as egress_cli_run with exec. */
+ * has exited. Same return as egress_cli_run with exec. */
 int egress_cli_exec_run(maelys_egress_server_t *server,
     const egress_cli_settings_t *settings, const char *path, const sigset_t *signals,
     egress_cli_exec_t *exec, maelys_cli_error_t *error);

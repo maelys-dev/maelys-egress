@@ -368,9 +368,10 @@ maelys_egress_result_t maelys_egress_server_run(
             connection->result = result == MAELYS_EGRESS_OK ?
                 MAELYS_EGRESS_ERR_CANCELLED : result;
         }
-        if (connection->state != CONNECTION_UNUSED && connection->open_command) {
-            egress_connection_close(server, i);
-        }
+        /* Every connection, not only those still opening: once this loop
+         * has ended nothing relays any more, and a holder blocked on one
+         * would wait for a destroy that only this thread may call. */
+        egress_connection_close(server, i); /* relayed or still opening */
     }
     atomic_store(&server->running, 0);
     return result;
