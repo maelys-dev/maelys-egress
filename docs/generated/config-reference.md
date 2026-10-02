@@ -30,6 +30,7 @@ Configuration schema version 1, grammar `strict-key-value`. TLS listener keys ar
 | `channel_handshake_timeout_ms` | `integer` | no | no | no | `5000` | 1..60000 | One accept-to-complete bootstrap deadline in milliseconds. Requires: `channel_listen_unix,channel_principal`. |
 | `channel_max_clients` | `integer` | no | no | no | `128` | 1..4096 | Combined bound on pending handshakes, active leases and retiring channels. Requires: `channel_listen_unix,channel_principal`. |
 | `channel_fd` | `integer` | no | no | no | `4` | 3..255 | Descriptor on which channel exec hands the channel to the program it starts. Requires: `channel_principal`. Conflicts: `channel_listen_unix`. |
+| `channel_exec_by_path` | `boolean` | no | no | no | `false` | true,false | Let channel exec execute the checked program through its path instead of the descriptor held across the check; only for a multi-call binary that names itself from how it was executed. Requires: `channel_principal`. Conflicts: `channel_listen_unix`. |
 
 ## Cross-key constraints
 
@@ -39,7 +40,7 @@ Configuration schema version 1, grammar `strict-key-value`. TLS listener keys ar
 - listen_unix always requires token_file; unix_peer applies only to listen_unix.
 - Principal quotas require token_file in proxy mode or channel_principal in broker and exec modes.
 - channel_principal selects a channel mode: broker mode with channel_listen_unix, exec mode without it. Every other channel key requires channel_principal.
-- channel_handshake_timeout_ms and channel_max_clients require channel_listen_unix; channel_fd refuses it.
+- channel_handshake_timeout_ms and channel_max_clients require channel_listen_unix; channel_fd and channel_exec_by_path refuse it.
 - Broker and exec modes refuse listen, listen_unix, unix_peer, token_file, unauthenticated_loopback and all TLS listener keys, even false/default values.
 - serve accepts proxy configuration only, channel broker broker configuration only, channel exec exec configuration only; config validate accepts the three.
 - audit_log, audit_key_file and audit_key_id are all present or all absent.

@@ -80,6 +80,7 @@ typedef struct egress_cli_settings {
     uint64_t channel_handshake_timeout_ms;
     size_t channel_max_clients;
     int channel_fd;
+    int channel_exec_by_path;
 } egress_cli_settings_t;
 
 /* What a configuration file is for, named by what it has: no

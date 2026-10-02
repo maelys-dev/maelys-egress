@@ -12,6 +12,7 @@
  *   exec-probe leave HOST PORT FILE   leave a process holding a stream, exit 7
  *   exec-probe linger STREAM_FD FILE  that process: note in FILE how the stream ended
  *   exec-probe cat                copy stdin to stdout
+ *   exec-probe execfn             the name the kernel executed this program under
  */
 #include <maelys/egress_client.h>
 
@@ -24,6 +25,9 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#if defined(__linux__)
+#include <sys/auxv.h>
+#endif
 
 extern char **environ;
 
@@ -152,6 +156,18 @@ int main(int argc, char **argv) {
         ssize_t amount;
         while ((amount = read(STDIN_FILENO, block, sizeof(block))) > 0)
             if (write(STDOUT_FILENO, block, (size_t)amount) != amount) return 5;
+        return 0;
+    }
+    if (!strcmp(mode, "execfn")) {
+        /* What a multi-call binary reads to choose its applet: the path when
+         * the program was executed by path, /dev/fd/N when it was executed
+         * through a descriptor. Only Linux executes through a descriptor. */
+#if defined(__linux__)
+        const char *name = (const char *)getauxval(AT_EXECFN);
+        printf("execfn %s\n", name ? name : "");
+#else
+        puts("execfn unavailable");
+#endif
         return 0;
     }
     fprintf(stderr, "usage: exec-probe MODE ...\n");
