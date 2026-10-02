@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.27.0 — 2026-10-02
 
 - **Stopping the server now ends the connections it relays.**
   `maelys_egress_server_run` closes every connection before it returns,
