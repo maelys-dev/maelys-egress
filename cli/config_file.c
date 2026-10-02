@@ -71,7 +71,8 @@ int egress_cli_settings_control_equal(
         a->channel_connect_timeout_ms == b->channel_connect_timeout_ms &&
         a->channel_handshake_timeout_ms == b->channel_handshake_timeout_ms &&
         a->channel_max_clients == b->channel_max_clients &&
-        a->channel_fd == b->channel_fd;
+        a->channel_fd == b->channel_fd &&
+        a->channel_exec_by_path == b->channel_exec_by_path;
 }
 
 egress_cli_mode_t egress_cli_settings_mode(const egress_cli_settings_t *settings) {
@@ -173,13 +174,16 @@ static const char *apply_value(
             *out_memory = !own_text(&settings->token_file, value);
             return NULL;
         case EGRESS_CLI_KEY_UNAUTHENTICATED_LOOPBACK:
-        case EGRESS_CLI_KEY_REQUIRE_CLIENT_CERT: {
+        case EGRESS_CLI_KEY_REQUIRE_CLIENT_CERT:
+        case EGRESS_CLI_KEY_CHANNEL_EXEC_BY_PATH: {
             int flag = 0;
             if (strcmp(value, "true") == 0) flag = 1;
             else if (strcmp(value, "false") != 0) return "boolean must be true or false";
             if (spec->key == EGRESS_CLI_KEY_UNAUTHENTICATED_LOOPBACK)
                 settings->unauthenticated_loopback = flag;
-            else settings->require_client_cert = flag;
+            else if (spec->key == EGRESS_CLI_KEY_REQUIRE_CLIENT_CERT)
+                settings->require_client_cert = flag;
+            else settings->channel_exec_by_path = flag;
             return NULL;
         }
         case EGRESS_CLI_KEY_MAX_CONNECTIONS:
@@ -290,8 +294,10 @@ static const char *check_constraints(const egress_cli_settings_t *s, unsigned in
         return "all channel keys require channel_principal";
     if (!broker && (seen & broker_keys))
         return "channel_handshake_timeout_ms and channel_max_clients require channel_listen_unix";
-    if (broker && (seen & (1u << EGRESS_CLI_KEY_CHANNEL_FD)))
-        return "channel_fd belongs to channel exec and refuses channel_listen_unix";
+    unsigned int exec_keys = (1u << EGRESS_CLI_KEY_CHANNEL_FD) |
+        (1u << EGRESS_CLI_KEY_CHANNEL_EXEC_BY_PATH);
+    if (broker && (seen & exec_keys))
+        return "channel_fd and channel_exec_by_path belong to channel exec and refuse channel_listen_unix";
     if (channel && (seen & proxy_keys))
         return "broker and exec modes refuse proxy listener, credential and TLS listener keys";
     if ((s->listen_unix && s->listen_set) || (s->unix_peer_set && !s->listen_unix))

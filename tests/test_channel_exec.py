@@ -141,6 +141,11 @@ def contract():
     assert keys["channel_fd"]["default"] == "4" and keys["channel_fd"]["range"] == "3..255"
     assert keys["channel_fd"]["requires"] == "channel_principal"
     assert keys["channel_fd"]["conflicts"] == "channel_listen_unix"
+    by_path = keys["channel_exec_by_path"]
+    assert (by_path["type"], by_path["default"], by_path["allowedValues"]) == (
+        "boolean", "false", "true,false")
+    assert by_path["requires"] == "channel_principal"
+    assert by_path["conflicts"] == "channel_listen_unix"
     assert "requires" not in keys["channel_principal"]
     assert keys["channel_connect_timeout_ms"]["requires"] == "channel_principal"
     assert keys["channel_max_clients"]["requires"] == "channel_listen_unix,channel_principal"
@@ -169,6 +174,8 @@ def modes(directory, config):
                  exec_mode + "channel_connect_timeout_ms = 777\n",
                  exec_mode + "quota_connections = 1\nquota_total_bytes = 16\n",
                  exec_mode + "admin_listen = 127.0.0.1:0\n",
+                 exec_mode + "channel_exec_by_path = true\n",
+                 exec_mode + "channel_exec_by_path = false\n",
                  broker + "channel_max_clients = 2\nchannel_handshake_timeout_ms = 1000\n"]:
         assert valid(text), text
     for text, reason in [
@@ -177,8 +184,11 @@ def modes(directory, config):
             (exec_mode + "channel_fd = 4\nchannel_fd = 5\n", "duplicate key"),
             (exec_mode + "channel_max_clients = 2\n", "require channel_listen_unix"),
             (exec_mode + "channel_handshake_timeout_ms = 1000\n", "require channel_listen_unix"),
-            (broker + "channel_fd = 4\n", "refuses channel_listen_unix"),
+            (broker + "channel_fd = 4\n", "refuse channel_listen_unix"),
+            (broker + "channel_exec_by_path = false\n", "refuse channel_listen_unix"),
+            (exec_mode + "channel_exec_by_path = yes\n", "boolean must be true or false"),
             (proxy + "channel_fd = 4\n", "require channel_principal"),
+            (proxy + "channel_exec_by_path = true\n", "require channel_principal"),
             (proxy + "channel_invocation_id = run-42\n", "require channel_principal"),
             (base + f"channel_listen_unix = {directory / 'channel.sock'}\n",
              "require channel_principal"),
@@ -247,6 +257,41 @@ def test():
                                  f"open {expected}"], (number, lines)
             assert lines[5:] == ["argument [--flag]", "argument []", "argument [two words]",
                                  "argument [--]"], lines
+        # The checked program is executed through the descriptor held across
+        # the check, and through its path only when the configuration asks:
+        # the name the kernel gives the program says which, where the platform
+        # executes through a descriptor at all. Either way the program runs
+        # with its channel.
+        for by_path in (False, True):
+            config.write_text(exec_mode + f"channel_exec_by_path = {str(by_path).lower()}\n")
+            name = run(config, PROBE, "execfn").strip()
+            if sys.platform.startswith("linux") and by_path:
+                assert name == f"execfn {PROBE}", name
+            elif sys.platform.startswith("linux"):
+                assert name.startswith("execfn /dev/fd/"), name
+            else:
+                assert name == "execfn unavailable", name
+            assert run(config, PROBE, "report").splitlines()[0] == "fd 4"
+        # The program the key exists for, where the system has one: a
+        # multi-call binary that reads its applet from the name it was
+        # executed under. Recent Ubuntu ships uutils as its coreutils, so
+        # /bin/sleep is one there. Under the default it refuses and exits
+        # non-zero, which is its status and not this command's; with the key
+        # it runs. On a system without such a binary this proves nothing and
+        # says so.
+        sleeper = Path(os.path.realpath("/bin/sleep"))
+        if sleeper.parent.name == "coreutils" and sleeper.name == "sleep":
+            config.write_text(exec_mode)
+            process = launch(config, "/bin/sleep", "0.1")
+            out, err = finish(process)
+            assert process.returncode != 0 and not out and err and not err.startswith("{"), (
+                process.returncode, out, err)
+            config.write_text(exec_mode + "channel_exec_by_path = true\n")
+            assert run(config, "/bin/sleep", "0.1") == ""
+            print("channel exec: a multi-call binary refuses the descriptor and runs by path")
+        else:
+            print("channel exec: no multi-call /bin/sleep here, channel_exec_by_path not exercised on one")
+        config.write_text(exec_mode + "channel_connect_timeout_ms = 777\nchannel_fd = 12\n")
         environment = dict(ENV, MAELYS_EGRESS_CHANNEL_FD="99", KEPT="kept")
         out = subprocess.run(
             [str(BINARY), "channel", "exec", "--config", str(config), "--non-interactive",

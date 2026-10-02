@@ -116,7 +116,14 @@ static void *exec_command_main(void *opaque) {
         goto done;
     }
     const maelys_cli_process_inherit_t inherit[] = {{client_fd, settings->channel_fd}};
-    const maelys_cli_process_options_t options = {inherit, 1u};
+    /* By the descriptor that was checked unless the configuration asks for
+     * the path: the object executed is then the object checked, with no
+     * window. A multi-call binary that names itself from how it was executed
+     * cannot run that way, and channel_exec_by_path is for it alone. */
+    const maelys_cli_process_options_t options = {
+        .inherit = inherit, .inherit_count = 1u,
+        .exec_by_path = settings->channel_exec_by_path
+    };
     if (maelys_cli_process_start(exec->argv[0], exec->argv, envp, &options, &program) != 0) {
         int saved = errno;
         maelys_cli_error_set(command->error, maelys_cli_file_error_code(saved),

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- New configuration key `channel_exec_by_path` (`true` or `false`, default
+  `false`), accepted in exec mode only. `channel exec` executes the program it
+  checked through the descriptor it held across the check, so that the object
+  executed is the object checked. A multi-call binary that names itself from
+  how it was executed then sees `/dev/fd/N` and refuses: the `coreutils` of
+  Ubuntu 26.04 does, and `-- /bin/sleep 30` exited at once under 0.25.0. With
+  the key set, the checked program is executed through its path, its device
+  and inode compared again against the trusted directory immediately before.
+  The default does not change and stays the stronger guarantee. The refusal
+  of `channel_fd` in broker mode is reworded to name both keys.
+- maelys-cli 0.5.33, which adds `exec_by_path` to the options of
+  `maelys_cli_process_start` on this repository's report. Read for runtime
+  changes: nothing else of the shipped binary depends on it, and the default
+  it leaves is the behaviour of 0.5.32.
 - `include/maelys/egress.h` said in three places that stopping the server
   ends the connections it relays. It does not, and never did:
   `maelys_egress_server_stop` ends `maelys_egress_server_run` and cancels

@@ -247,13 +247,21 @@ The exit status is the program's, `128 + signal` when a signal ended it. Exit
 and the server stops only once the program has exited, so that it can finish
 what it has open; `SIGHUP` reloads the destinations, as for `serve`.
 
-One kind of program does not start this way: a multi-call binary that chooses
-what it is from the name it was executed under rather than from its first
-argument. The program is executed through the descriptor that was checked,
-not through its path, so that name is not the one on the command line. The
+One kind of program needs a setting: a multi-call binary that chooses what it
+is from the name it was executed under rather than from its first argument.
+By default the program is executed through the descriptor that was checked,
+not through its path, so that the object executed is the object checked with
+no window in between; the name the kernel gives it is then `/dev/fd/N`. The
 `coreutils` of Ubuntu 26.04 is such a binary: `-- /bin/sleep 30` starts it
-and it exits at once with `unknown program`. An ordinary executable, a
-script with an absolute interpreter, or `/bin/sh -c '...'` is not affected.
+and it exits at once, refusing a name it does not know. An ordinary
+executable, a script with an absolute interpreter, or `/bin/sh -c '...'` is
+not affected.
+
+`channel_exec_by_path = true` executes the checked program through its path
+instead. Its device and inode are compared again, against the trusted
+directory, immediately before it is executed, which leaves a window that
+only the owner of that directory or root can use. Set it for a program that
+cannot run otherwise, and leave it out for every other.
 
 **This is not a sandbox.** The program keeps every network path its
 environment gives it; the channel adds a mediated one and removes none.
