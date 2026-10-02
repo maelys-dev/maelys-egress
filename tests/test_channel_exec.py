@@ -42,12 +42,12 @@ LIMIT = 60  # seconds for one launch; a sanitizer's runtime can take several to 
 GROUPS = []
 
 
-def launch(config, *program, **options):
+def launch(config, *program, env=ENV, **options):
     """Each launch has its own process group, so that whatever it leaves can be ended."""
     process = subprocess.Popen(
         [str(BINARY), "channel", "exec", "--config", str(config), "--non-interactive",
          "--", *map(str, program)],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=ENV,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env,
         start_new_session=True, **options)
     GROUPS.append(process.pid)
     return process
@@ -91,9 +91,10 @@ def line(process, stream):
     return box[0]
 
 
-def run(config, *program, status=0, stdin=None):
+def run(config, *program, status=0, stdin=None, env=ENV):
     """A program that started: the status is its own, stderr stays empty."""
-    process = launch(config, *program, stdin=subprocess.PIPE if stdin is not None else None)
+    process = launch(config, *program, env=env,
+                     stdin=subprocess.PIPE if stdin is not None else None)
     out, err = finish(process, stdin)
     assert process.returncode == status, (program, process.returncode, out, err)
     assert not err, err
@@ -111,13 +112,10 @@ def refused(config, *program, code):
 
 
 class Echo(socketserver.BaseRequestHandler):
-    closed = threading.Event()
-
     def handle(self):
         while True:
             block = self.request.recv(4096)
             if not block:
-                Echo.closed.set()
                 return
             self.request.sendall(block)
 
@@ -195,7 +193,8 @@ def modes(directory, config):
             (exec_mode + "listen = 127.0.0.1:0\n", "refuse proxy listener"),
             (exec_mode + "token_file = /absent\n", "refuse proxy listener"),
             (exec_mode + "unauthenticated_loopback = false\n", "refuse proxy listener"),
-            (exec_mode.replace("agent-01", "invalid identity"), "")]:
+            (exec_mode.replace("agent-01", "invalid identity"),
+             "canonical native principal")]:
         assert reason in invalid(text), (text, reason)
     for text, own in [(exec_mode, "exec"), (broker, "broker"), (proxy, "serve")]:
         config.write_text(text)
@@ -293,11 +292,8 @@ def test():
             print("channel exec: no multi-call /bin/sleep here, channel_exec_by_path not exercised on one")
         config.write_text(exec_mode + "channel_connect_timeout_ms = 777\nchannel_fd = 12\n")
         environment = dict(ENV, MAELYS_EGRESS_CHANNEL_FD="99", KEPT="kept")
-        out = subprocess.run(
-            [str(BINARY), "channel", "exec", "--config", str(config), "--non-interactive",
-             "--", "/bin/sh", "-c", 'echo "$MAELYS_EGRESS_CHANNEL_FD $KEPT"'],
-            env=environment, capture_output=True, text=True, timeout=LIMIT)
-        assert (out.returncode, out.stdout, out.stderr) == (0, "12 kept\n", ""), out
+        assert run(config, "/bin/sh", "-c", 'echo "$MAELYS_EGRESS_CHANNEL_FD $KEPT"',
+                   env=environment) == "12 kept\n"
 
         servers = [socketserver.ThreadingTCPServer(("127.0.0.1", 0), Echo) for _ in range(2)]
         for server in servers:
@@ -363,13 +359,14 @@ def test():
 
             # What the program leaves behind loses its connection when the
             # program exits, and the launcher does not wait for it nor for
-            # channel_connect_timeout_ms (two minutes here).
+            # channel_connect_timeout_ms: that is two minutes here and one
+            # launch is given half of it, so a launcher that waited would be
+            # reported as one that did not return. The proof of the
+            # revocation is the note the process left behind writes when its
+            # read ends.
+            assert LIMIT * 1000 < 120000
             note = directory / "left-behind"
-            Echo.closed.clear()
-            begun = time.monotonic()
             assert run(config, PROBE, "leave", "127.0.0.1", ports[0], note, status=7) == ""
-            assert time.monotonic() - begun < 60, "the launcher waited for channel_connect_timeout_ms"
-            assert Echo.closed.wait(LIMIT)
             for _ in range(LIMIT * 20):
                 if note.exists() and note.read_text():
                     break

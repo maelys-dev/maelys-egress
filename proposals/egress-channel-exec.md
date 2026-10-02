@@ -295,7 +295,6 @@ renders the overlay alone today.
 ## Tests the implementation carries
 
 - Status: the program exits 0, 1, 2, 42; is killed by `SIGTERM` (143).
-  A program that exits 0 while cleanup is made to fail is still reported 0.
 - Not started: relative program path, untrusted program, missing program,
   wrong configuration mode, each with an envelope on stderr and exit 1, and
   nothing on stdout.
@@ -306,8 +305,7 @@ renders the overlay alone today.
 - Signals: `SIGTERM` to the launcher while the program holds a relayed
   connection — the program receives it, the connection stays usable until
   the program exits, then the upstream sees the end. `SIGHUP` reloads the
-  policy and does not reach the program through the launcher. A signal
-  that arrives once the program has exited is not forwarded.
+  policy and does not reach the program through the launcher.
 - Shutdown: connections still open when the program exits are revoked; the
   launcher returns without waiting for `channel_connect_timeout_ms`.
 - Contract: `describe channel.exec` has no `protocol`, the standard
@@ -366,3 +364,23 @@ renders the overlay alone today.
 4. **The mutants.** `exec-signal-stops-server`, `exec-receipt-on-stdout`,
    `exec-status-replaced` and `exec-broker-keys-accepted` each undo one
    decision of this document and are killed by an assertion of the test.
+5. **Two tests of the list above were not written, and are withdrawn.** "A
+   program that exits 0 while cleanup is made to fail is still reported 0":
+   the cleanup has no failure the launcher could report, since destroying
+   the channel and the server and releasing the connector return nothing;
+   the rule is held by the code's shape and by the mutant
+   `exec-status-replaced`, which changes how the status is returned. "A
+   signal that arrives once the program has exited is not forwarded": the
+   launcher exits within milliseconds of the program, so nothing outside it
+   can place a signal in that interval; the guarantee is the framework's,
+   whose handle sends nothing once the program has been waited for, and is
+   tested there with the two calls running concurrently.
+6. **`channel_exec_by_path`, added in 0.26.0.** The proposal assumed the
+   program could always be executed through the descriptor held across its
+   check. A multi-call binary that names itself from how it was executed
+   cannot: the kernel gives it `/dev/fd/N`, and the `coreutils` of Ubuntu
+   26.04 refuses that name. The key, `false` by default and accepted in exec
+   mode only, executes the checked program through its path, its device and
+   inode compared again immediately before. Two legs of the gate run on a
+   system that has such a binary and hold the real case; the others say they
+   did not.
