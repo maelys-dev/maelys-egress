@@ -154,6 +154,13 @@ Summary:        Policy-enforced HTTP and SOCKS network mediator
 License:        MPL-2.0
 URL:            https://github.com/maelys-dev/maelys-egress
 BuildArch:      ${rpm_arch}
+# The files are packaged as they were staged. rpmbuild's default post-install
+# step strips binaries and archives, and a stripped binary no longer has the
+# sha256 its manifest declares: every .rpm up to 0.27.0 shipped that pair, and
+# the dispatcher refuses a command whose digest does not match.
+%global __os_install_post %{nil}
+%global debug_package %{nil}
+%global _binary_filedigest_algorithm 8
 
 %description
 Daemon, public static C SDK and pinned Maelys System foundation.
@@ -189,5 +196,15 @@ test -n "$rpm_source"
 rpm_name="$(basename "$rpm_source")"
 cp "$rpm_source" "$dist/$rpm_name"
 (cd "$dist" && sha256 "$rpm_name" >"${rpm_name}.sha256")
+# The .deb is unpacked and its manifest compared above; the .rpm is asked for
+# the digest it recorded for the binary, which is the one an install writes.
+rpm_binary_digest="$(rpm -qp --dump "$dist/$rpm_name" |
+  awk '$1 == "/usr/bin/maelys-egress" { print $4 }')"
+staged_digest="$(sha256 "$linux_stage/usr/bin/maelys-egress" | awk '{print $1}')"
+test "$rpm_binary_digest" = "$staged_digest" || {
+  echo "$rpm_name packages a maelys-egress of sha256 ${rpm_binary_digest:-none}," \
+    "not the staged one its manifest declares ($staged_digest)" >&2
+  exit 1
+}
 
 ls -1 "$dist"/*"${version}"*

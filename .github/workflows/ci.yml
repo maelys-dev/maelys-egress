@@ -192,3 +192,9 @@ jobs:
         run: |
           dpkg-deb --contents dist/maelys-egress_0.0.0_*.deb | grep -q '/usr/bin/maelys-egress'
           rpm -qpl dist/maelys-egress-0.0.0-1.*.rpm | grep -q '/usr/include/maelys/egress.h'
+      # Listing a package says what it holds. Installing it in a clean
+      # container of its distribution, and running what was installed, says
+      # that it installs and that the manifest names the installed binary.
+      - name: Install the Linux packages and use what they installed
+        if: runner.os == 'Linux'
+        run: sh scripts/check-installed-packages.sh dist 0.0.0
