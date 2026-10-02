@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- `include/maelys/egress.h` said in three places that stopping the server
+  ends the connections it relays. It does not, and never did:
+  `maelys_egress_server_stop` ends `maelys_egress_server_run` and cancels
+  the opens still pending, and it is `maelys_egress_server_destroy` that
+  closes the connections already established. Between the two they stay
+  open and carry nothing, so a holder blocked on one waits for the destroy.
+  The comments now say so. No declaration and no behaviour changes, and no
+  ABI number moves; `channel exec` found it and destroys its server at once
+  for that reason. An embedder that stops a server and keeps it should
+  destroy it as soon as `server_run` has returned.
+- The README states two limits of `channel exec`. `channel_fd = 3` is valid
+  and is not what a program written for maelys-warden expects, since
+  descriptor 3 carries Warden's own protocol there. And a multi-call binary
+  that names itself from how it was executed, as the `coreutils` of Ubuntu
+  26.04 does, does not start: the program is executed through the checked
+  descriptor, not through its path.
+
 ## 0.25.0 — 2026-10-02
 
 - **New command `maelys-egress channel exec --config FILE -- /absolute/program

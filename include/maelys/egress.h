@@ -304,9 +304,17 @@ maelys_egress_result_t maelys_egress_server_run(
  * reads and metric snapshots are also thread-safe. Destruction serializes with
  * an already-entered control call. As with every opaque handle, callers must
  * not begin a new operation after destroy begins.
+ *
+ * Stopping ends server_run: no connection is accepted or relayed any more,
+ * and every open still pending is cancelled. It does not close the
+ * connections already established, proxied or handed to a native session:
+ * they stay open and carry nothing until the server is destroyed. A holder
+ * blocked on one of them is released by server_destroy, not by server_stop,
+ * so destroy the server as soon as server_run has returned.
  */
 maelys_egress_result_t maelys_egress_server_stop(maelys_egress_server_t *server);
-/* Call on the creating/owner thread after server_run has returned. */
+/* Call on the creating/owner thread after server_run has returned. Closes
+ * every connection the server still holds. */
 void maelys_egress_server_destroy(maelys_egress_server_t *server);
 
 /*
@@ -316,8 +324,9 @@ void maelys_egress_server_destroy(maelys_egress_server_t *server);
  * object, is immutable after creation and may open sessions concurrently.
  *
  * The server must have entered server_run before session_open. Stopping the
- * server cancels pending opens and active sessions. Releasing the connector
- * does not close sessions that were already returned.
+ * server cancels pending opens; destroying it closes the sessions already
+ * returned, which carry nothing in between. Releasing the connector does
+ * not close sessions that were already returned.
  */
 maelys_egress_result_t maelys_egress_server_connector_create(
     maelys_egress_server_t *server,
@@ -378,7 +387,8 @@ void maelys_egress_session_release(maelys_egress_session_t *session);
  * Destroying the channel ends its thread and closes the server end; a
  * request in flight completes inside Egress and its stream is closed. The
  * streams already handed over are not touched: they end with the server
- * (maelys_egress_server_stop cancels active sessions) or with their holder.
+ * (maelys_egress_server_destroy closes them; maelys_egress_server_stop
+ * alone leaves them open and silent) or with their holder.
  */
 typedef struct maelys_egress_channel maelys_egress_channel_t;
 maelys_egress_result_t maelys_egress_channel_create(
@@ -408,7 +418,7 @@ void maelys_egress_channel_destroy(maelys_egress_channel_t *channel);
  * must NOT run on the server owner thread:
  * it joins channel workers, whose pending opens need that reactor to progress.
  * Destroy closes leases/channels, NOT already returned destination streams;
- * server_stop revokes those. Call destroy once, with no concurrent use. It
+ * server_destroy closes those. Call destroy once, with no concurrent use. It
  * frees the handle even on failure and reports a replaced/missing socket path
  * instead of removing a different inode. NULL destruction is a success. */
 typedef struct maelys_egress_channel_broker maelys_egress_channel_broker_t;

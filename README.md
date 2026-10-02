@@ -231,7 +231,11 @@ maelys-egress channel exec --config /etc/maelys-egress.conf -- /usr/local/bin/ag
 ```
 
 The program finds the channel on descriptor 4, or on the number `channel_fd`
-names, and reads that number in `MAELYS_EGRESS_CHANNEL_FD`;
+names, and reads that number in `MAELYS_EGRESS_CHANNEL_FD`. The default is
+maelys-warden's convention, so a program written for Warden runs unchanged.
+In that convention descriptor 3 carries Warden's own application protocol:
+`channel_fd = 3` is valid here, and wrong for such a program, which would
+find the network channel where it expects something else;
 `MAELYS_EGRESS_CHANNEL_CONNECT_TIMEOUT_MS` tells it how long Egress may take
 to reach a destination. Its path is absolute and its arguments follow `--`,
 verbatim. Standard input, output and error are the program's own: Egress
@@ -242,6 +246,14 @@ The exit status is the program's, `128 + signal` when a signal ended it. Exit
 `SIGINT` and `SIGTERM` sent to `maelys-egress` are forwarded to the program,
 and the server stops only once the program has exited, so that it can finish
 what it has open; `SIGHUP` reloads the destinations, as for `serve`.
+
+One kind of program does not start this way: a multi-call binary that chooses
+what it is from the name it was executed under rather than from its first
+argument. The program is executed through the descriptor that was checked,
+not through its path, so that name is not the one on the command line. The
+`coreutils` of Ubuntu 26.04 is such a binary: `-- /bin/sleep 30` starts it
+and it exits at once with `unknown program`. An ordinary executable, a
+script with an absolute interpreter, or `/bin/sh -c '...'` is not affected.
 
 **This is not a sandbox.** The program keeps every network path its
 environment gives it; the channel adds a mediated one and removes none.
