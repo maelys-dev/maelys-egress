@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.26.0 — 2026-10-02
 
 - New configuration key `channel_exec_by_path` (`true` or `false`, default
   `false`), accepted in exec mode only. `channel exec` executes the program it
