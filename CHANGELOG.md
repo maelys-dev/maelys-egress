@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.27.1 — 2026-10-02
 
 - **The `.rpm` packages shipped a manifest that did not name the binary they
   installed.** `rpmbuild` strips what it packages by default, so the
