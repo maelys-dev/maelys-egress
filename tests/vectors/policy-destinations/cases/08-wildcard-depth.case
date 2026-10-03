@@ -1,0 +1,11 @@
+# *.suffix covers every depth under the suffix, never the suffix itself nor
+# a longer last label.
+destination tcp *.example.com 443
+request tcp api.example.com 443 sni=absent allowed
+request tcp cdn.eu.example.com 443 sni=absent allowed
+request tcp example.com 443 sni=absent refused no-destination
+request tcp xexample.com 443 sni=absent refused no-destination
+request tcp api.example.org 443 sni=absent refused no-destination
+request tcp api.example.com 80 sni=absent refused no-destination
+requires network-host-wildcard
+compile accepted

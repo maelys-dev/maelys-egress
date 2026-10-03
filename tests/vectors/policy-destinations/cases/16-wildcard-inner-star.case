@@ -1,0 +1,4 @@
+# A star that is not the whole first label is refused at the source.
+destination tcp api.*.example.com 443
+requires network-host-wildcard
+compile refused

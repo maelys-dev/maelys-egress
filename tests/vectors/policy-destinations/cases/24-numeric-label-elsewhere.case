@@ -1,0 +1,11 @@
+# A numeric label elsewhere than last is an ordinary label; the suffix
+# .0xdead is reserved by the rule, deliberately. As a request, a literal in
+# disguise is malformed.
+destination tcp 1.example.com 443
+destination tcp 0xdead.example.com 443
+request tcp 1.example.com 443 sni=absent allowed
+request tcp 0xdead.example.com 443 sni=absent allowed
+request tcp 2130706433 443 sni=absent refused malformed-name
+request tcp 0x7f000001 443 sni=absent refused malformed-name
+request tcp example.0x1 443 sni=absent refused malformed-name
+compile accepted

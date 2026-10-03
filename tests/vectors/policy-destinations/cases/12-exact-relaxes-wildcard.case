@@ -1,0 +1,10 @@
+# The other way round: a wildcard with the flag, an exact name without it.
+# The exact name is reachable without a server name; the rest of the suffix
+# is not. The reason reported comes from the destination that refused.
+destination tcp *.example.com 443 require-tls-sni
+destination tcp api.example.com 443
+request tcp api.example.com 443 sni=absent allowed
+request tcp cdn.example.com 443 sni=absent refused sni-absent
+request tcp cdn.example.com 443 sni=cdn.example.com allowed
+requires network-host-wildcard
+compile accepted

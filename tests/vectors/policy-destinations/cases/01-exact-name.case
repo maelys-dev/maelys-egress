@@ -1,0 +1,10 @@
+# One exact destination: the name, the port and the protocol must all be
+# equal. Nothing is inferred from a name that merely contains it.
+destination tcp api.example.com 443
+request tcp api.example.com 443 sni=absent allowed
+request tcp api.example.com 443 sni=api.example.com allowed
+request tcp api.example.com 80 sni=absent refused no-destination
+request tcp example.com 443 sni=absent refused no-destination
+request tcp www.api.example.com 443 sni=absent refused no-destination
+request tcp xapi.example.com 443 sni=absent refused no-destination
+compile accepted

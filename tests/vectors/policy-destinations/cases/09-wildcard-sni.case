@@ -1,0 +1,9 @@
+# Under a wildcard, the server name must equal the request name, not the
+# pattern and not the suffix.
+destination tcp *.example.com 443 require-tls-sni
+request tcp api.example.com 443 sni=api.example.com allowed
+request tcp api.example.com 443 sni=absent refused sni-absent
+request tcp api.example.com 443 sni=example.com refused sni-mismatch
+request tcp api.example.com 443 sni=cdn.example.com refused sni-mismatch
+requires network-host-wildcard
+compile accepted

@@ -1,0 +1,10 @@
+# Grants are additive: an exact name under a wildcard is judged by its own
+# flags, and the request is allowed as soon as one destination admits it.
+# The exact entry here admits nothing the wildcard does not.
+destination tcp *.example.com 443
+destination tcp api.example.com 443 require-tls-sni
+request tcp api.example.com 443 sni=absent allowed
+request tcp api.example.com 443 sni=api.example.com allowed
+request tcp cdn.example.com 443 sni=absent allowed
+requires network-host-wildcard
+compile accepted

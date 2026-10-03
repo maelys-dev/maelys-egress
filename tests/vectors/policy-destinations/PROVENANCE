@@ -1,0 +1,36 @@
+# Copied verbatim from maelys-sandbox-policy, tag v0.10.0,
+# commit 39f7426093352e909b1b3daeb1f208c5d0744bae, corpus/destinations
+# (MPL-2.0, as this repository). Refresh by copying that directory from
+# a later tag and updating these lines; never edit a case here.
+source maelys-dev/maelys-sandbox-policy v0.10.0 39f7426093352e909b1b3daeb1f208c5d0744bae
+8aa8ee89d288d5229fcc235cb6dfe5faecfeaa7aa0aa758baea52489f4c8ec2c  README.md
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  VERSION
+986c73fc348bc7013bd93b4c498a083738d88aac78df70a93d133ec48f62ce4c  cases/01-exact-name.case
+122fbdba25cb51e35460cb545578e0379bf68763554bfe0e2424a4a5ba3c715f  cases/02-require-tls-sni.case
+64bd0d4610c7331d3a39630ecd46967be2f7cd0cf2b1035c674b52743e5ef25b  cases/03-private-address.case
+962fd06b2264f83c8d50e0a8ccfc0e7017ed88b7ee85671d442ccbd8ae82a1df  cases/04-network-none.case
+11d67e2a3aaf14dead881f0ef7846d607435d907805bea01f3ed4c11c8853887  cases/05-network-direct.case
+38c1060915f8c781880460bcab9a9c424c20afbe099213ace7490165876c945f  cases/06-malformed-name.case
+cb9f1df5b2cf679fd05d68515b65c7b2a17a829c8fc0413832f17170ddbafa34  cases/07-ip-literal.case
+b5c4e2c36da6a6434a7c500f8930a3829edf172c5713d33108d7c6bf59f757ad  cases/08-wildcard-depth.case
+3bfc745c401eb176c6c781c6af1f53964be729fbc979d0b6f33fc6eab31fbe98  cases/09-wildcard-sni.case
+655d8161494af8c81a5d433a54c7effdb17e93ab04a2b3f52b4762bbcbf84d92  cases/10-wildcard-private.case
+26ee544ec7a4e166f1e45aa09dd20e5a356659a048c3c5a54c3e79e77e341522  cases/11-wildcard-beside-exact.case
+e370c2b8890f7f8eaa13a66e6ae75876b84f72f5812105332670137a73551ce3  cases/12-exact-relaxes-wildcard.case
+1cd8f824d241e804556dcda1b22b166d59de3a4789fcefb93fb4629411d56f51  cases/13-exact-allows-private-under-wildcard.case
+47dae1960ce0720db1c5d9cfa427c441eb717b182eac0c87e97d0995f3ca79a2  cases/14-wildcard-one-label.case
+ec44c671640e099aee2ac5e9fb8f49c2fd7ba8aabdf89674a2c62c4478034dcb  cases/15-wildcard-other-forms.case
+01f000d97a4cb144ce35efae32493baf1491648d2024003fc71d0f3d367df8b6  cases/16-wildcard-inner-star.case
+f7c23a95306281d51d7907a5729e3a8cceb9686358b9fe165076aa7f7bfd8920  cases/17-wildcard-with-private.case
+cd9b0ae7c662429e441e161dfc9c9558e28a0c48b4d2a45e444b387dbcc449ae  cases/18-two-ports.case
+1996d3a3559a18ed499f3b520b344a4596bd940cd9c617e5524dc1045dfb8b20  cases/19-wildcard-numeric-suffix.case
+9e63db0068a3f11432b5abd902baa4aab1d7546f3efc32373b50636b5c201229  cases/20-numeric-abbreviated.case
+3c6fd4c2474baa3355673c1faf80a1b0c82f1689845fdeda798a132cb4862fd6  cases/21-numeric-leading-zero.case
+5fe7ae15a1a29d50a987021053259af7c5aa67c8190618ea91f57235be96ff37  cases/22-numeric-hexadecimal.case
+0bbbdeaaac7d03d9761690c433b4a9bef16b5be85f28c9521b06829f279cca40  cases/23-numeric-out-of-range.case
+1de0f480e91a24a429dea01898d34f2720e9ba9455996ff97af826c5f1766b33  cases/24-numeric-label-elsewhere.case
+83a3bff45dfdedcd02a1de91517f7b1241c49f2611a03f8389492f042c3e2315  cases/25-wildcard-hex-suffix.case
+7dacf726aa2d8b1f0abb074a7a25eae980947774ea93a579edfe8aa03c250b98  cases/26-wildcard-longest.case
+450572cfdc41a4980a1530d18130129c23063a833e4a5b2ae1bb91407ec15166  cases/27-wildcard-too-long.case
+4f9c4a820c6478aee936befdb480859a89201103c7fb51502b08117e53d0abbf  cases/28-wildcard-too-long-by-two.case
+dbf927d7b79fe175325a519b4cd435b0d414236882ff6c6ed0e6eef833dcab3e  cases/29-literal-requires-sni.case

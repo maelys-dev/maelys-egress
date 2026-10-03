@@ -155,6 +155,7 @@ CLIENT_LIB := $(LIB)/libmaelys_egress_client.a
 CLIENT_TEST := $(BIN)/test-client
 BOOTSTRAP_CLIENT_TEST := $(BIN)/test-bootstrap-client
 BROKER_FAULTS_TEST := $(BIN)/test-broker-faults
+POLICY_CORPUS_TEST := $(BIN)/test-policy-corpus
 BOOTSTRAP_GATES_TEST := $(BIN)/test-bootstrap-gates
 CLIENT_PC := $(LIB)/pkgconfig/maelys-egress-client.pc
 MBEDTLS_LIB := $(LIB)/libmaelys_egress_tls_mbedtls.a
@@ -195,7 +196,7 @@ all: $(STATIC_LIB) $(CLIENT_LIB) $(CLI) $(TEST) $(PC) $(CLIENT_PC) $(MANIFEST)
 
 .PHONY: all clean check test examples-check sdk-check audit docs-check check-system-contract check-cli-contract \
 	system-integration-check mutation-check check-spec-contract conformance-check \
-	config-reference contract-check lifecycle-contract-check schema-check channel-exec-check package-homebrew \
+	config-reference contract-check lifecycle-contract-check schema-check channel-exec-check policy-corpus-check package-homebrew \
 	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-provider-mutation-check tls-binaries \
 	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check \
 	public-check reproducible-check install-metadata-check dist client-standalone-check consumer-source-check abi-floor-check \
@@ -464,6 +465,22 @@ $(BROKER_FAULTS_TEST): tests/test_broker_faults.c tests/tls_socket_fixture.h com
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(CLIENT_LIB) $(STATIC_LIB) $(LDLIBS) -o $@
 
+# maelys-sandbox-policy's destination corpus, played against the sealing
+# code with the resolver substituted: the source is compiled in, not linked.
+$(POLICY_CORPUS_TEST): tests/test_policy_corpus.c src/core/policy.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(STATIC_LIB) $(LDLIBS) -o $@
+
+# The copy is the tag's: every file has the digest PROVENANCE records, and a
+# case edited here instead of in maelys-sandbox-policy is refused.
+policy-corpus-check: $(POLICY_CORPUS_TEST)
+	@cd tests/vectors/policy-destinations && python3 -c 'import hashlib, sys; \
+	rows = [l.split() for l in open("PROVENANCE") if l.strip() and not l.startswith(("#", "source "))]; \
+	bad = [n for d, n in rows if hashlib.sha256(open(n, "rb").read()).hexdigest() != d]; \
+	import glob; extra = sorted(set(glob.glob("cases/*")) - {n for _, n in rows}); \
+	sys.exit("policy-destinations differs from its PROVENANCE: " + " ".join(bad + extra)) if bad or extra else print("policy-corpus-check: the copy is v0.10.0 of maelys-sandbox-policy, " + str(len(rows)) + " files")'
+	$(POLICY_CORPUS_TEST) tests/vectors/policy-destinations
+
 $(BOOTSTRAP_GATES_TEST): tests/test_bootstrap_gates.c tests/tls_socket_fixture.h common/bootstrap.h src/connector.c src/channel_broker.c src/channel_server.c client/channel_open.c $(CLIENT_LIB) $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(CLIENT_LIB) $(STATIC_LIB) $(LDLIBS) -o $@
@@ -532,7 +549,7 @@ $(PC) $(CLIENT_PC) $(MANIFEST): | install-metadata
 	@test -f $@
 
 .PHONY: test-build
-test-build: all $(OPERATIONS_TEST) $(CHANNEL_TEST) $(CLIENT_TEST) $(BOOTSTRAP_CLIENT_TEST) $(BROKER_FAULTS_TEST) $(BOOTSTRAP_GATES_TEST) $(TLS_SOCKET_TEST) $(TLS_SOCKET_ERRORS_TEST) $(BIN)/bootstrap-cli-client $(BIN)/exec-probe
+test-build: all $(OPERATIONS_TEST) $(CHANNEL_TEST) $(CLIENT_TEST) $(BOOTSTRAP_CLIENT_TEST) $(BROKER_FAULTS_TEST) $(BOOTSTRAP_GATES_TEST) $(TLS_SOCKET_TEST) $(TLS_SOCKET_ERRORS_TEST) $(BIN)/bootstrap-cli-client $(BIN)/exec-probe $(POLICY_CORPUS_TEST)
 
 test: test-build
 	$(TEST)
@@ -542,6 +559,7 @@ test: test-build
 	$(BOOTSTRAP_CLIENT_TEST)
 	$(BROKER_FAULTS_TEST)
 	$(BOOTSTRAP_GATES_TEST)
+	$(POLICY_CORPUS_TEST) tests/vectors/policy-destinations
 	$(TLS_SOCKET_TEST)
 	$(TLS_SOCKET_ERRORS_TEST)
 	tests/test_cli.sh $(CLI)
@@ -663,7 +681,7 @@ system-integration-check: $(STATIC_LIB) $(MAELYS_SYSTEM_LIB)
 conformance-check: $(CLI) check-spec-contract
 	python3 $(MAELYS_SPEC_DIR)/conformance/run.py $(abspath $(CLI))
 
-check: test examples-check sdk-check audit docs-check system-integration-check contract-check schema-check channel-exec-check \
+check: test examples-check sdk-check audit docs-check system-integration-check contract-check schema-check channel-exec-check policy-corpus-check \
 	conformance-check public-check reproducible-check install-metadata-check \
 	client-standalone-check consumer-source-check abi-floor-check
 	$(CXX) -Iinclude -std=c++17 -Wall -Wextra -Wpedantic -Werror \

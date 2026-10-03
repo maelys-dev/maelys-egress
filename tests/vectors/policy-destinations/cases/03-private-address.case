@@ -1,0 +1,10 @@
+# A name that resolves to a private address needs allowPrivateAddresses on
+# a destination that matches. A mediator that resolves at sealing may refuse
+# the policy before launch instead; the request is then never made.
+destination tcp api.example.com 443
+destination tcp internal.example.com 8443 allow-private-addresses
+request tcp api.example.com 443 sni=absent allowed
+request tcp api.example.com 443 sni=absent private refused private-address
+request tcp internal.example.com 8443 sni=absent private allowed
+request tcp internal.example.com 8443 sni=absent allowed
+compile accepted

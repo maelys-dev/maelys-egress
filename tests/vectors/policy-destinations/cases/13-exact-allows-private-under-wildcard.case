@@ -1,0 +1,8 @@
+# allowPrivateAddresses lives on the exact name only; the wildcard beside
+# it stays bounded to global addresses.
+destination tcp *.example.com 443
+destination tcp internal.example.com 443 allow-private-addresses
+request tcp internal.example.com 443 sni=absent private allowed
+request tcp other.example.com 443 sni=absent private refused private-address
+requires network-host-wildcard
+compile accepted

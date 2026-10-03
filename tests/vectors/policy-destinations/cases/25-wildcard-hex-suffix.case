@@ -1,0 +1,4 @@
+# A wildcard suffix never ends with a numeric label, hexadecimal included.
+destination tcp *.0x7f.0x1 443
+requires network-host-wildcard
+compile refused
