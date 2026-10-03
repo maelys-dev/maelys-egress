@@ -38,7 +38,11 @@ def invoke(*args, status=0):
     return value
 
 
-LIMIT = 60  # seconds for one launch; a sanitizer's runtime can take several to start
+# Seconds for one launch. A launch takes a tenth of a second; the bound is for
+# the machine, not for the product. On macOS a process is sometimes held
+# before its first instruction, with its launcher and whatever else starts at
+# that moment: measured here at 5 and 15 seconds, and once beyond a minute.
+LIMIT = 180
 GROUPS = []
 
 
@@ -51,6 +55,16 @@ def launch(config, *program, env=ENV, **options):
         start_new_session=True, **options)
     GROUPS.append(process.pid)
     return process
+
+
+def group_alive(group):
+    try:
+        os.killpg(group, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        pass
+    return True
 
 
 def end_group(group):
@@ -305,7 +319,7 @@ def test():
             audit_key.write_text("0123456789abcdef0123456789abcdef")
             os.chmod(audit_key, 0o600)
             allowed = (exec_mode.replace("127.0.0.1:9", f"127.0.0.1:{ports[0]}") +
-                       "channel_invocation_id = run-42\nchannel_connect_timeout_ms = 120000\n"
+                       "channel_invocation_id = run-42\nchannel_connect_timeout_ms = 600000\n"
                        f"audit_log = {audit_log}\naudit_key_file = {audit_key}\n"
                        "audit_key_id = test-key\n")
             config.write_text(allowed)
@@ -359,19 +373,33 @@ def test():
 
             # What the program leaves behind loses its connection when the
             # program exits, and the launcher does not wait for it nor for
-            # channel_connect_timeout_ms: that is two minutes here and one
-            # launch is given half of it, so a launcher that waited would be
-            # reported as one that did not return. The proof of the
-            # revocation is the note the process left behind writes when its
-            # read ends.
-            assert LIMIT * 1000 < 120000
+            # channel_connect_timeout_ms: that is ten minutes here and one
+            # launch is given less than a third of it, so a launcher that
+            # waited would be reported as one that did not return. The proof
+            # of the revocation is the note the process left behind writes
+            # when its read ends.
+            assert LIMIT * 1000 < 600000
             note = directory / "left-behind"
             assert run(config, PROBE, "leave", "127.0.0.1", ports[0], note, status=7) == ""
-            for _ in range(LIMIT * 20):
-                if note.exists() and note.read_text():
+            # The launcher has exited, so the kernel has closed its end of the
+            # connection: the process left behind reads the end as soon as it
+            # runs. It is waited for as long as it exists, since the machine
+            # may not have let it run yet, and no longer: gone without a note
+            # is the failure, still there after the bound is another.
+            left = GROUPS[-1]
+            deadline = time.monotonic() + LIMIT
+            while not (note.exists() and note.read_text()):
+                if not group_alive(left):
+                    assert note.exists() and note.read_text(), (
+                        "the process left behind ended without noting how its connection ended")
                     break
+                assert time.monotonic() < deadline, (
+                    f"the process left behind was still there after {LIMIT} s and had not "
+                    "read the end of its connection")
                 time.sleep(0.05)
-            assert note.exists() and note.read_text().startswith("revoked "), "nothing was revoked"
+            # An end of stream or a reset is the revocation; a byte received,
+            # or any other error, is not.
+            assert note.read_text() in ("ended eof\n", "ended reset\n"), note.read_text()
         finally:
             for server in servers:
                 server.shutdown()
