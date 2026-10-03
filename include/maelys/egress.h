@@ -27,9 +27,11 @@ extern "C" {
  *
  * Revision 3 is 0.20.0; 0.22.0 and 0.23.0 added the channel and the broker
  * under the same number; revision 4 is that interface, numbered once the
- * rule above was adopted. tests/public/abi-3.h holds the floor.
+ * rule above was adopted. Revision 5 states what a canonical host is, below,
+ * and no longer takes for a name the numeric forms a resolver reads as an
+ * address. tests/public/abi-3.h and abi-4.h hold the revisions served.
  */
-#define MAELYS_EGRESS_ABI_VERSION 4u
+#define MAELYS_EGRESS_ABI_VERSION 5u
 #define MAELYS_EGRESS_ABI_COMPATIBLE_SINCE 3u
 
 /*
@@ -114,6 +116,27 @@ void maelys_egress_error_free(char *error);
 maelys_egress_result_t maelys_egress_policy_create(
     maelys_egress_policy_t **out_policy,
     char **out_error);
+/*
+ * A canonical host, wherever this interface takes one (a policy destination,
+ * a native session, the channel) and in what a proxy client names, is an
+ * IPv6 literal, kept exactly as written, or a name: 1 to 253 bytes of ASCII
+ * letters, digits and hyphens in labels of 1 to 63 bytes, no label beginning
+ * or ending with a hyphen, no trailing dot, letters in lower case. A proxy
+ * lowers the case of a name it receives; a native session and the channel
+ * require a name lowered already.
+ *
+ * A label is numeric when it holds decimal digits only, or 0x / 0X and at
+ * least one hexadecimal digit. A name whose last label is numeric is
+ * refused unless the whole name is a strict IPv4 literal: four decimal
+ * octets of 0 to 255, no leading zero except for 0 itself. 93.184.216.34 is
+ * a canonical host. 127.1, 2130706433, 0x7f.1 and 010.0.0.1 are not: the
+ * system resolver reads each as an address, and 010.0.0.1 not as the same
+ * address on every host. example.0x1 is not either, although no resolver
+ * reads it as an address: a numeric last label is reserved to the strict
+ * IPv4 form, so that no name can be mistaken for one. Until revision 5 all
+ * of these were taken for names and resolved. The grammar is
+ * maelys-sandbox-policy's.
+ */
 maelys_egress_result_t maelys_egress_policy_allow_tcp(
     maelys_egress_policy_t *policy,
     const char *canonical_host,

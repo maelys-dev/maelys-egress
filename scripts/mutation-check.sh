@@ -194,6 +194,9 @@ schedule_mutant native-trusted-scope src/server/connector.c \
     'server->config.native_only &&'
 schedule_mutant native-immutable-binding src/config.c \
     'config->native_principal_bound = 1;' 'config->native_principal_bound = 0;'
+schedule_mutant host-numeric-last-label src/core/common.c \
+    'if (numeric_label(input + label_start, final_length) && !strict_ipv4(input, length))' \
+    'if (0 && numeric_label(input + label_start, final_length) && !strict_ipv4(input, length))'
 schedule_mutant stop-leaves-relayed-open src/server/server.c \
     '        egress_connection_close(server, i); /* relayed or still opening */' \
     '        if (connection->open_command) egress_connection_close(server, i);'

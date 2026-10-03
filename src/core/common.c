@@ -41,14 +41,57 @@ void egress_secure_zero(void *data, size_t length) {
     }
 }
 
+/* A label a resolver reads as a number: decimal digits only, or 0x / 0X and
+ * at least one hexadecimal digit. Judged on the bytes received, before any
+ * change of case. */
+static int numeric_label(const char *label, size_t length) {
+    if (length == 0u) return 0;
+    size_t first = 0u;
+    int hexadecimal = length > 2u && label[0] == '0' && (label[1] == 'x' || label[1] == 'X');
+    if (hexadecimal) first = 2u;
+    for (size_t i = first; i < length; ++i) {
+        unsigned char byte = (unsigned char)label[i];
+        int digit = byte >= '0' && byte <= '9';
+        int hex = (byte >= 'a' && byte <= 'f') || (byte >= 'A' && byte <= 'F');
+        if (!(digit || (hexadecimal && hex))) return 0;
+    }
+    return 1;
+}
+
+/* Exactly four decimal octets of 0 to 255, without a leading zero except
+ * for 0 itself: the one numeric form every resolver reads the same way. */
+static int strict_ipv4(const char *input, size_t length) {
+    size_t octets = 0u, start = 0u;
+    for (size_t i = 0u; i <= length; ++i) {
+        if (i < length && input[i] != '.') continue;
+        size_t size = i - start;
+        if (size == 0u || size > 3u || (size > 1u && input[start] == '0')) return 0;
+        unsigned int value = 0u;
+        for (size_t j = start; j < i; ++j) {
+            if (input[j] < '0' || input[j] > '9') return 0;
+            value = value * 10u + (unsigned int)(input[j] - '0');
+        }
+        if (value > 255u || ++octets > 4u) return 0;
+        start = i + 1u;
+    }
+    return octets == 4u;
+}
+
+/* A canonical host is either an IPv6 literal, kept as written, or a name:
+ * 1 to 253 bytes of ASCII letters, digits and hyphens in labels of 1 to 63
+ * bytes, no label beginning or ending with a hyphen, no trailing dot,
+ * letters lowered. A name whose last label is numeric must be a strict IPv4
+ * literal: 127.1, 2130706433, 0x7f.1 or 010.0.0.1 are refused, since the
+ * system resolver reads them as addresses, and not the same address on
+ * every host (010.0.0.1 is 10.0.0.1 on macOS and 8.0.0.1 with glibc and
+ * musl). No inet_pton for IPv4: it accepts 010.0.0.1 on some systems. The
+ * grammar is maelys-sandbox-policy's, so that both say the same. */
 int egress_canonical_host(const char *input, char output[EGRESS_MAX_HOST + 1u]) {
     if (!input || !output) return 0;
     size_t length = strlen(input);
     if (length == 0u || length > EGRESS_MAX_HOST) return 0;
-    struct in_addr ipv4;
     struct in6_addr ipv6;
-    if (inet_pton(AF_INET, input, &ipv4) == 1 ||
-        inet_pton(AF_INET6, input, &ipv6) == 1) {
+    if (memchr(input, ':', length) && inet_pton(AF_INET6, input, &ipv6) == 1) {
         memcpy(output, input, length + 1u);
         return 1;
     }
@@ -72,6 +115,8 @@ int egress_canonical_host(const char *input, char output[EGRESS_MAX_HOST + 1u]) 
     size_t final_length = length - label_start;
     if (final_length == 0u || final_length > 63u ||
         output[label_start] == '-' || output[length - 1u] == '-') return 0;
+    if (numeric_label(input + label_start, final_length) && !strict_ipv4(input, length))
+        return 0;
     output[length] = '\0';
     return 1;
 }

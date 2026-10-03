@@ -22,11 +22,13 @@
  * named after the revision it holds. */
 #define MAELYS_ABI_FLOOR_PRESENCE
 #include "abi-3.h"
+#include "abi-4.h"
 #include "abi-tls-1.h"
 #include "abi-tls-files-1.h"
 #include "abi-client-1.h"
 #undef MAELYS_ABI_FLOOR_PRESENCE
 #include "abi-3.h"
+#include "abi-4.h"
 #include "abi-tls-1.h"
 #include "abi-tls-files-1.h"
 #include "abi-client-1.h"

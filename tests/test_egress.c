@@ -131,7 +131,7 @@ static maelys_egress_tls_provider_t *make_passthrough_provider(void) {
 
 static void test_version_and_tls_seam(void) {
     CHECK(strcmp(maelys_egress_version_string(), MAELYS_EGRESS_BUILD_VERSION) == 0);
-    CHECK(maelys_egress_abi_version() == 4u);
+    CHECK(maelys_egress_abi_version() == 5u);
     CHECK(maelys_egress_abi_compatible_since() == 3u);
     CHECK(strcmp(maelys_egress_result_string(MAELYS_EGRESS_ERR_CRYPTO), "crypto") == 0);
     maelys_egress_tls_ops_t bad = {.abi_version = 2u, .name = "bad"};
@@ -377,6 +377,136 @@ static void test_address_classification(void) {
     CHECK(!egress_address_is_private((const struct sockaddr *)&public_v6));
     CHECK(inet_pton(AF_INET6, "64:ff9b::8.8.8.8", &public_v6.sin6_addr) == 1);
     CHECK(!egress_address_is_private((const struct sockaddr *)&public_v6));
+}
+
+/* The grammar of a canonical host, case by case: the fifteen names refused
+ * and the seven accepted are maelys-sandbox-policy's list, so that the two
+ * say the same. */
+static void test_numeric_host_grammar(void) {
+    static const char *const refused[] = {
+        "127.1", "2130706433", "0x7f.1", "010.0.0.1", "999.1.1.1", "0x7f000001",
+        "0x7f.0x1", "0177.0x1", "0X7F.1", "1.2.3.04", "256.1.1.1", "a.0xdead",
+        "example.0x1", "1.2.3", "1.2.3.4.5"};
+    static const char *const accepted[] = {
+        "93.184.216.34", "0.0.0.0", "255.255.255.255", "1.example.com",
+        "0xdead.example.com", "x0.example.com", "localhost"};
+    char canonical[EGRESS_MAX_HOST + 1u];
+    for (size_t i = 0u; i < sizeof(refused) / sizeof(refused[0]); ++i) {
+        if (egress_canonical_host(refused[i], canonical)) {
+            fprintf(stderr, "accepted as a canonical host: %s\n", refused[i]);
+            ++failures;
+        }
+    }
+    for (size_t i = 0u; i < sizeof(accepted) / sizeof(accepted[0]); ++i) {
+        CHECK(egress_canonical_host(accepted[i], canonical) &&
+              strcmp(canonical, accepted[i]) == 0);
+    }
+    /* Unchanged around the rule: case is lowered, IPv6 literals stay as
+     * written, a label like 0x without a digit is a name, a trailing dot
+     * is refused. */
+    CHECK(egress_canonical_host("Api.Example.COM", canonical) &&
+          strcmp(canonical, "api.example.com") == 0);
+    CHECK(egress_canonical_host("2001:db8::1", canonical) &&
+          strcmp(canonical, "2001:db8::1") == 0);
+    CHECK(egress_canonical_host("2001:DB8::1", canonical) &&
+          strcmp(canonical, "2001:DB8::1") == 0);
+    CHECK(egress_canonical_host("::ffff:127.0.0.1", canonical));
+    CHECK(egress_canonical_host("example.0x", canonical));
+    CHECK(!egress_canonical_host("example.com.", canonical));
+
+    /* At each entry point. A policy refuses such a destination and keeps a
+     * strict IPv4 one, whose private address remains a matter of the
+     * private-address rule; SNI can still not be required of a literal. */
+    maelys_egress_policy_t *policy = NULL;
+    char *error = NULL;
+    CHECK(maelys_egress_policy_create(&policy, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_allow_tcp(policy, "127.1", 443u, 1, &error) ==
+          MAELYS_EGRESS_ERR_ARGUMENT);
+    maelys_egress_error_free(error); error = NULL;
+    CHECK(maelys_egress_policy_allow_tcp(policy, "010.0.0.1", 443u, 1, &error) ==
+          MAELYS_EGRESS_ERR_ARGUMENT);
+    maelys_egress_error_free(error); error = NULL;
+    CHECK(maelys_egress_policy_allow_tcp(policy, "127.0.0.1", 443u, 0, &error) ==
+          MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_allow_tcp(policy, "::1", 443u, 1, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_allow_tcp(policy, "1.example.com", 443u, 0, &error) ==
+          MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_require_tls_sni(policy, "1.example.com", 443u, &error) ==
+          MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_require_tls_sni(policy, "127.0.0.1", 443u, &error) ==
+          MAELYS_EGRESS_ERR_ARGUMENT);
+    maelys_egress_error_free(error); error = NULL;
+    maelys_egress_policy_destroy(policy);
+    /* A strict private IPv4 is a canonical host; reaching it is still the
+     * private-address rule's decision, made when the policy is sealed. */
+    policy = NULL;
+    CHECK(maelys_egress_policy_create(&policy, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_allow_tcp(policy, "127.0.0.1", 443u, 0, &error) ==
+          MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_seal(policy, &error) == MAELYS_EGRESS_ERR_DENIED);
+    maelys_egress_error_free(error); error = NULL;
+    maelys_egress_policy_destroy(policy);
+
+    /* A proxy request: CONNECT and the forward authority. */
+    maelys_egress_config_t *config = NULL;
+    CHECK(maelys_egress_config_create(&config, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_set_authentication(
+        config, "maelys", "0123456789abcdef", &error) == MAELYS_EGRESS_OK);
+    static const char *const connects[][2] = {
+        {"127.1:443", "-1"}, {"010.0.0.1:443", "-1"}, {"0x7f.1:443", "-1"},
+        {"93.184.216.34:443", "1"}, {"[::1]:443", "1"}, {"1.example.com:443", "1"}};
+    for (size_t i = 0u; i < sizeof(connects) / sizeof(connects[0]); ++i) {
+        char wire[256];
+        int length = snprintf(wire, sizeof(wire), "CONNECT %s HTTP/1.1\r\nHost: %s\r\n"
+            "Proxy-Authorization: Bearer 0123456789abcdef\r\n\r\n",
+            connects[i][0], connects[i][0]);
+        egress_proxy_request_t request;
+        memset(&request, 0, sizeof(request));
+        int parsed = egress_parse_http_request((const unsigned char *)wire,
+            (size_t)length, config, &request, &error);
+        if (parsed != atoi(connects[i][1])) {
+            fprintf(stderr, "CONNECT %s parsed %d\n", connects[i][0], parsed);
+            ++failures;
+        }
+        egress_proxy_request_clear(&request);
+        maelys_egress_error_free(error); error = NULL;
+    }
+    static const char forward[] =
+        "GET http://2130706433/ HTTP/1.1\r\nHost: 2130706433\r\n"
+        "Proxy-Authorization: Bearer 0123456789abcdef\r\n\r\n";
+    egress_proxy_request_t request;
+    memset(&request, 0, sizeof(request));
+    CHECK(egress_parse_http_request((const unsigned char *)forward, sizeof(forward) - 1u,
+        config, &request, &error) == -1);
+    maelys_egress_error_free(error); error = NULL;
+    maelys_egress_config_destroy(config);
+
+    /* SOCKS5: a domain of that form is refused; the address types carry
+     * their own literals, which inet_ntop writes in the strict form. */
+    CHECK(maelys_egress_config_create(&config, &error) == MAELYS_EGRESS_OK);
+    unsigned char response[10] = {0};
+    size_t consumed = 0u, response_length = 0u, principal = 0u;
+    char invocation[EGRESS_MAX_INVOCATION_ID + 1u] = "run-1";
+    int phase = 2;
+    unsigned char domain[5u + 6u + 2u] = {5u, 1u, 0u, 3u, 6u};
+    memcpy(domain + 5u, "0x7f.1", 6u);
+    domain[11] = 1u; domain[12] = 0xbbu;
+    CHECK(egress_parse_socks_frame(domain, sizeof(domain), config, &phase, &consumed,
+        response, &response_length, &request, invocation, &principal) == -1);
+    unsigned char ipv4[10] = {5u, 1u, 0u, 1u, 127u, 0u, 0u, 1u, 1u, 0xbbu};
+    phase = 2;
+    CHECK(egress_parse_socks_frame(ipv4, sizeof(ipv4), config, &phase, &consumed,
+        response, &response_length, &request, invocation, &principal) == 2);
+    CHECK(strcmp(request.host, "127.0.0.1") == 0);
+    egress_proxy_request_clear(&request);
+    unsigned char ipv6[22] = {5u, 1u, 0u, 4u};
+    ipv6[19] = 1u; ipv6[20] = 1u; ipv6[21] = 0xbbu;
+    phase = 2;
+    CHECK(egress_parse_socks_frame(ipv6, sizeof(ipv6), config, &phase, &consumed,
+        response, &response_length, &request, invocation, &principal) == 2);
+    CHECK(strcmp(request.host, "::1") == 0);
+    egress_proxy_request_clear(&request);
+    maelys_egress_config_destroy(config);
 }
 
 static void test_http_parser_adversarial(void) {
@@ -1531,6 +1661,7 @@ int main(void) {
     test_policy_fail_closed();
     test_address_classification();
     test_http_parser_adversarial();
+    test_numeric_host_grammar();
     test_execution_profile();
     test_tls_client_hello_identity();
     test_tls_client_hello_embedded_nul();
