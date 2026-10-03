@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.28.0 — 2026-10-03
 
 - **A name whose last label is numeric must now be a strict IPv4 literal.**
   `127.1`, `2130706433`, `0x7f.1`, `010.0.0.1` and `1.2.3.04` were taken for
