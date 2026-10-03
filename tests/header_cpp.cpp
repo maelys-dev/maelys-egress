@@ -5,7 +5,7 @@
 #include "maelys/egress_channel.h"
 #include "maelys/egress_client.h"
 
-static_assert(MAELYS_EGRESS_ABI_VERSION == 4u, "unexpected Egress ABI revision");
+static_assert(MAELYS_EGRESS_ABI_VERSION == 5u, "unexpected Egress ABI revision");
 static_assert(MAELYS_EGRESS_ABI_COMPATIBLE_SINCE == 3u, "unexpected Egress ABI floor");
 static_assert(MAELYS_EGRESS_TLS_ABI_VERSION == 1u, "unexpected TLS seam ABI");
 static_assert(MAELYS_EGRESS_TLS_ABI_COMPATIBLE_SINCE == 1u, "unexpected TLS seam ABI floor");

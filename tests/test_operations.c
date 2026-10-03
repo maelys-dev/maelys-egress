@@ -613,6 +613,14 @@ static void test_connector_guard_and_timeout(void) {
     CHECK(maelys_egress_connector_session_open(connector, "LOCALHOST", upstream_port,
         1000u, &session, &error) == MAELYS_EGRESS_ERR_ARGUMENT);
     maelys_egress_error_free(error); error = NULL;
+    /* A numeric form a resolver reads as an address is not a canonical host
+     * for a native session either. */
+    CHECK(maelys_egress_connector_session_open(connector, "127.1", upstream_port,
+        1000u, &session, &error) == MAELYS_EGRESS_ERR_ARGUMENT);
+    maelys_egress_error_free(error); error = NULL;
+    CHECK(maelys_egress_connector_session_open(connector, "010.0.0.1", upstream_port,
+        1000u, &session, &error) == MAELYS_EGRESS_ERR_ARGUMENT);
+    maelys_egress_error_free(error); error = NULL;
     CHECK(maelys_egress_connector_session_open(connector, "localhost",
         (uint16_t)(upstream_port == UINT16_MAX ? upstream_port - 1u : upstream_port + 1u),
         1000u, &session, &error) == MAELYS_EGRESS_ERR_DENIED);

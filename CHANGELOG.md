@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased
+
+- **A name whose last label is numeric must now be a strict IPv4 literal.**
+  `127.1`, `2130706433`, `0x7f.1`, `010.0.0.1` and `1.2.3.04` were taken for
+  DNS names and handed to the system resolver, which reads them as addresses,
+  and not the same address on every host: `010.0.0.1` is 10.0.0.1 on macOS
+  and 8.0.0.1 with glibc and musl, measured. A policy that named one therefore
+  did not say where it connected. A name such as `example.0x1` is refused too,
+  although no resolver reads it as an address: the rule reserves a numeric
+  last label to the strict IPv4 form, so that no name can be mistaken for
+  one. A label is numeric when
+  it holds decimal digits only, or `0x`/`0X` and at least one hexadecimal
+  digit; a name whose last label is numeric is refused unless it is four
+  decimal octets of 0 to 255 without a leading zero. The decision no longer
+  uses `inet_pton` for IPv4, which accepts `010.0.0.1` on macOS. IPv6 literals
+  are kept as they were, exactly as written: the lowering of case applies to
+  names only. The grammar is maelys-sandbox-policy's, with its
+  fifteen refused and seven accepted names as this repository's test.
+- `include/maelys/egress.h` now states what a canonical host is. It did not:
+  the parameters were named `canonical_host` and the channel specification
+  referred to "the form Egress policies use".
+- **Compatibility.** The library revision rises to **5**; the floor stays
+  **3**. The names now refused were never within a documented contract: they
+  are not IP literals, and as names they meant an address that depended on the
+  host. Refusing them corrects an acceptance outside the contract; it does not
+  withdraw a behaviour the interface guaranteed, so no declaration of revisions
+  3 and 4 stops holding, and both stay served (`tests/public/abi-4.h` is
+  frozen from v0.27.1). The revision rises because the header gains the
+  definition.
+  **Consumer notice**: `maelys_egress_policy_allow_tcp` and
+  `maelys_egress_policy_require_tls_sni` return `MAELYS_EGRESS_ERR_ARGUMENT`
+  for such a name; a native session and the channel refuse it as a host that
+  is not canonical; an HTTP proxy request naming it is malformed, and a
+  SOCKS5 domain of that form is refused. A strict private IPv4 is still a
+  canonical host, and reaching it is still the private-address rule's
+  decision. maelys-warden is not affected for the destinations
+  maelys-sandbox-policy now validates by the same rule; that says nothing of
+  an older MIR or of another consumer of Egress, which may have named such a
+  host and will now be refused.
+
 ## 0.27.1 — 2026-10-02
 
 - **The `.rpm` packages shipped a manifest that did not name the binary they
