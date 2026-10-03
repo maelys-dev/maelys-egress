@@ -152,13 +152,22 @@ int main(int argc, char **argv) {
         return spawned ? 7 : 4;
     }
     if (!strcmp(mode, "linger") && argc == 4) {
-        /* It loses its connection when the launcher destroys the server. */
+        /* It loses its connection when the launcher's server stops, and
+         * notes how its read ended: an end of stream, a reset, or anything
+         * else with the count and errno, which the test refuses. A byte
+         * received is not a revocation. */
         int stream = atoi(argv[2]);
         char byte;
         ssize_t amount;
         do amount = recv(stream, &byte, 1u, 0); while (amount < 0 && errno == EINTR);
+        int error = amount < 0 ? errno : 0;
         FILE *note = fopen(argv[3], "w");
-        if (note) { fprintf(note, "revoked %zd\n", amount); fclose(note); }
+        if (note) {
+            if (amount == 0) fputs("ended eof\n", note);
+            else if (amount < 0 && error == ECONNRESET) fputs("ended reset\n", note);
+            else fprintf(note, "unexpected amount=%zd errno=%d\n", amount, error);
+            fclose(note);
+        }
         return 0;
     }
     if (!strcmp(mode, "cat")) {

@@ -397,7 +397,9 @@ def test():
                     f"the process left behind was still there after {LIMIT} s and had not "
                     "read the end of its connection")
                 time.sleep(0.05)
-            assert note.read_text().startswith("revoked "), note.read_text()
+            # An end of stream or a reset is the revocation; a byte received,
+            # or any other error, is not.
+            assert note.read_text() in ("ended eof\n", "ended reset\n"), note.read_text()
         finally:
             for server in servers:
                 server.shutdown()
