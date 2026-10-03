@@ -1,0 +1,8 @@
+# A request name without a canonical form is refused before any match: a
+# trailing dot leaves an empty last label. The destination is beside the
+# point.
+destination tcp api.example.com 443
+request tcp api.example.com. 443 sni=absent refused malformed-name
+request tcp api..example.com 443 sni=absent refused malformed-name
+request tcp -api.example.com 443 sni=absent refused malformed-name
+compile accepted

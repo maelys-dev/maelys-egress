@@ -1,0 +1,5 @@
+# A numeric last label that is not a strict IPv4 literal is a literal in
+# disguise, read differently from one host to the next: refused at the
+# source. 127.1, 2130706433 and 0x7f.1 reach 127.0.0.1 through inet_aton.
+destination tcp 127.1 443
+compile refused

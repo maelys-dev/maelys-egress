@@ -1,0 +1,8 @@
+# Mode direct: everything is reachable and no mediator is involved; a
+# mediator given such a policy has nothing to apply, and a name it would
+# refuse as malformed is not judged at all.
+network direct
+request tcp api.example.com 443 sni=absent allowed
+request tcp anything.invalid 1 sni=absent private allowed
+request tcp api.example.com. 443 sni=absent allowed
+compile accepted

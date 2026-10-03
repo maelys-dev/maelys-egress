@@ -1,0 +1,5 @@
+# Mode none: nothing is reachable, whatever the request.
+network none
+request tcp api.example.com 443 sni=api.example.com refused network-none
+request tcp localhost 80 sni=absent private refused network-none
+compile accepted

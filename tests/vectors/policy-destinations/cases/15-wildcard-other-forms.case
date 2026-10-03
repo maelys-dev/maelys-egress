@@ -1,0 +1,5 @@
+# Only *.suffix exists: a star that is not the whole first label is refused
+# at the source, as is a star alone.
+destination tcp *example.com 443
+requires network-host-wildcard
+compile refused

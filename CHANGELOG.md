@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- **maelys-sandbox-policy's network destination corpus is played in the
+  tests.** `tests/vectors/policy-destinations` is a verbatim copy of its
+  `corpus/destinations` at v0.10.0 (corpus version 1, 29 cases), with a
+  `PROVENANCE` file naming the tag, the commit and each file's digest;
+  `make policy-corpus-check` refuses a copy that differs. `test-policy-corpus`
+  builds each policy through the public calls, seals it with the real sealing
+  code and a substituted resolver, since the corpus states what each name
+  resolves to, and decides each request with the functions the server uses:
+  the host canonicalisation, the sealed lookup and the ClientHello identity
+  guard. Result: 28 requests enforced as stated, 3 refused before launch
+  (a name that resolves to a private address without
+  `allow-private-addresses`, which the contract admits for a mediator that
+  resolves when it seals), 20 policies refused at the source (the corpus
+  refuses them, or they need `network-host-wildcard`, which Egress does not
+  announce), 1 case of `direct` mode, where no mediator is involved.
+  Removing the numeric-label rule, the private-address refusal or the SNI
+  comparison each makes it report non-conformant cases. It runs in `make test`,
+  so every mutant is judged by it too. No code of the product changes.
+
 ## 0.28.0 — 2026-10-03
 
 - **A name whose last label is numeric must now be a strict IPv4 literal.**

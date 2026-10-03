@@ -1,0 +1,7 @@
+# requireTlsSni: exactly one DNS server name, equal to the request name.
+destination tcp api.example.com 443 require-tls-sni
+request tcp api.example.com 443 sni=api.example.com allowed
+request tcp api.example.com 443 sni=absent refused sni-absent
+request tcp api.example.com 443 sni=cdn.example.com refused sni-mismatch
+request tcp api.example.com 443 sni=example.com refused sni-mismatch
+compile accepted

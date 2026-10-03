@@ -1,0 +1,5 @@
+# A TLS server name is never required of an IPv4 literal: RFC 6066 admits
+# no literal in a server name, so the flag would close the destination.
+# Refused at the source.
+destination tcp 93.184.216.34 443 require-tls-sni
+compile refused

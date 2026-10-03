@@ -1,0 +1,4 @@
+# A leading zero reads as octal on Linux and as decimal on macOS: 010.0.0.1
+# is 8.0.0.1 there and 10.0.0.1 here. Refused at the source.
+destination tcp 010.0.0.1 443
+compile refused

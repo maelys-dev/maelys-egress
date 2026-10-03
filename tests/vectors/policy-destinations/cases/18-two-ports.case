@@ -1,0 +1,8 @@
+# Ports are part of the destination: the same name on another port is
+# another destination, with its own flags.
+destination tcp api.example.com 443 require-tls-sni
+destination tcp api.example.com 80
+request tcp api.example.com 443 sni=absent refused sni-absent
+request tcp api.example.com 80 sni=absent allowed
+request tcp api.example.com 8080 sni=absent refused no-destination
+compile accepted

@@ -1,0 +1,5 @@
+# The last label of a suffix is never numeric, as no top-level domain is: a
+# numeric suffix would put IPv4 literals under a wildcard.
+destination tcp *.216.34 443
+requires network-host-wildcard
+compile refused

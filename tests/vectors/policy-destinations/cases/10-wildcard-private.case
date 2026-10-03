@@ -1,0 +1,7 @@
+# A wildcard never allows a private address: whoever controls a name under
+# the suffix chooses the address, and only global ones are admitted.
+destination tcp *.example.com 443
+request tcp api.example.com 443 sni=absent allowed
+request tcp api.example.com 443 sni=absent private refused private-address
+requires network-host-wildcard
+compile accepted

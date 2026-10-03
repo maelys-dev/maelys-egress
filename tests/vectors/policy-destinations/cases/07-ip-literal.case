@@ -1,0 +1,10 @@
+# An IPv4 literal is compared as the name it spells: it matches only a
+# destination that names it, and the private-address rule applies to it.
+destination tcp api.example.com 443
+destination tcp 93.184.216.34 443
+destination tcp 127.0.0.1 8080 allow-private-addresses
+request tcp 93.184.216.34 443 sni=absent allowed
+request tcp 127.0.0.1 443 sni=absent private refused no-destination
+request tcp 127.0.0.1 8080 sni=absent private allowed
+request tcp 10.0.0.1 8080 sni=absent private refused no-destination
+compile accepted

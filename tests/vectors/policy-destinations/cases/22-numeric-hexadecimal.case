@@ -1,0 +1,4 @@
+# Hexadecimal forms, in either case: 0x7f000001, 0x7f.0x1, 0177.0x1 and
+# 0X7F.1 all reach 127.0.0.1. Refused at the source.
+destination tcp 0X7F.1 443
+compile refused

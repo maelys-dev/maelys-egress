@@ -1,0 +1,5 @@
+# A suffix of one label is refused at the source: there is no public suffix
+# list, and *.com would admit the world.
+destination tcp *.com 443
+requires network-host-wildcard
+compile refused

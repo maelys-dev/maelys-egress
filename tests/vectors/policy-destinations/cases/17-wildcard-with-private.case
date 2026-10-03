@@ -1,0 +1,4 @@
+# A wildcard carrying allowPrivateAddresses is refused at the source.
+destination tcp *.example.com 443 allow-private-addresses
+requires network-host-wildcard
+compile refused
