@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.28.1 — 2026-10-05
 
 - **The shell completion `maelys-egress completion` prints did not complete
   under zsh nor under bash 3.2**, the `/bin/bash` of macOS: every release up
