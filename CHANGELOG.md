@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- **The shell completion `maelys-egress completion` prints did not complete
+  under zsh nor under bash 3.2**, the `/bin/bash` of macOS: every release up
+  to 0.28.0 offered file names and nothing else. The zsh script read
+  `${words[@]:1:CURRENT-1}`, which zsh 5.9 refuses, and the bash script took
+  its slice of words after changing `IFS`, which bash 3.2 joins into one
+  word. maelys-cli 0.5.34 corrects both, and fish's fallback to paths; a
+  script written to a file from an earlier release must be generated again.
+  No catalog, option or command of this product changes.
+- Pins moved: maelys-cli **0.5.34**, agent-cli-spec **2.7.0**, the release
+  socle **0.62.3**; maelys-system was already at its latest, 0.11.0. The
+  specification is not at its latest, 2.8.0, on purpose: this repository pins
+  the version its framework targets (`make check-spec-contract`), and
+  maelys-cli 0.5.34 targets 2.7.0. 2.8.0 comes with the maelys-cli release
+  that targets it. Read for runtime changes, as the adoption rule asks:
+  maelys-cli changes its library in the completion only (`__complete` no
+  longer offers `true`/`false` for an untyped operand, offers a word common
+  to two commands once, and never an unavailable command after `help` or
+  `describe`); the process functions `channel exec` uses, the trusted files
+  and the dispatcher are untouched. agent-cli-spec 2.7.0 makes the kit drive
+  each completion script in its shell. The socle asks nothing of this
+  repository; at the next release
+  the formula's test runs on a poured bottle before the formula reaches the
+  tap.
+
 - **maelys-sandbox-policy's network destination corpus is played in the
   tests.** `tests/vectors/policy-destinations` is a verbatim copy of its
   `corpus/destinations` at v0.10.0 (corpus version 1, 29 cases), with a
