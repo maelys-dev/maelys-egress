@@ -12,6 +12,13 @@
   had neither shell and answered 300 passed, 2 skipped; it installs both and
   answers 304 passed, none skipped. The image that is delivered is a later
   stage and carries neither. Nothing a user receives changes.
+- **Every job of this repository's CI has a time bound.** Two jobs sat for
+  an hour in `apt-get update`, on a mirror that had stopped answering, and
+  would have held their runners until GitHub's limit of six hours. Each job
+  of `ci.yml` now fails after 20 minutes, 45 for `docker`, whose image
+  builds download their packages; over thirty green runs the longest job
+  took 4 minutes, and `docker` 26. The legs the release socle runs are
+  bounded by the socle, not from here.
 
 ## 0.28.3 — 2026-10-07
 

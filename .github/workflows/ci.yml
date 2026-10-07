@@ -25,6 +25,14 @@ jobs:
       # place in CI. A focused bootstrap gate also runs on macOS below.
       fuzz_command: make fuzz-smoke fuzz bootstrap-fuzz-check
 
+  # Every job below is bounded. A job without a bound runs until GitHub's own
+  # limit of six hours: two of them sat for an hour in `apt-get update`, on a
+  # mirror that had stopped answering, until they were cancelled by hand.
+  # Over thirty green runs no job but `docker` took more than 4 minutes, and
+  # `docker`, whose image builds download their packages, took up to 26:
+  # hence 20 minutes, and 45 for it. The `socle` job calls a reusable
+  # workflow, which a caller cannot bound: its legs have the bound the socle
+  # gives them.
   native:
     strategy:
       fail-fast: false
@@ -46,6 +54,7 @@ jobs:
             cc: clang
             cxx: clang++
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       # One root for every pin, exported for this job: the build reads
@@ -84,6 +93,7 @@ jobs:
 
   sanitizers:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       # One root for every pin, exported for this job: the build reads
@@ -99,6 +109,7 @@ jobs:
 
   mutation:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       # One root for every pin, exported for this job: the build reads
@@ -117,6 +128,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       # One root for every pin, exported for this job: the build reads
@@ -151,6 +163,7 @@ jobs:
 
   docker:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Materialize pinned dependencies for the deployment image
@@ -178,6 +191,7 @@ jobs:
           - os: macos-15
             target: macos-arm64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       # One root for every pin, exported for this job: the build reads
