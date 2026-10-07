@@ -58,6 +58,11 @@ jobs:
           # install of Ubuntu archive packages: the update reports, the install decides.
           sudo apt-get update || echo "::warning::apt-get update reported errors; the install decides"
           sudo apt-get install -y clang gcc g++ fish zsh
+      # macOS ships zsh and bash and no fish: without it the conformance kit
+      # skips the fish completion script on every macOS job.
+      - name: Install fish
+        if: runner.os == 'macOS'
+        run: brew install fish
       - name: Require Apple Silicon
         if: runner.os == 'macOS'
         run: test "$(uname -m)" = arm64
@@ -185,6 +190,11 @@ jobs:
           # install of Ubuntu archive packages: the update reports, the install decides.
           sudo apt-get update || echo "::warning::apt-get update reported errors; the install decides"
           sudo apt-get install -y build-essential dpkg-dev file rpm fish zsh
+      # The packaging script runs `make check`, as the release build does
+      # with the packages `dependencies/packages` declares for macOS.
+      - name: Install fish
+        if: runner.os == 'macOS'
+        run: brew install fish
       - run: PACKAGE_VERSION_OVERRIDE=0.0.0 bash scripts/package-release.sh ${{ matrix.target }}
       - run: sh scripts/check-installed-system.sh
       - name: Inspect Linux packages
