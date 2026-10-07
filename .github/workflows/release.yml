@@ -29,6 +29,7 @@ jobs:
       tag: ${{ inputs.tag || github.ref_name }}
       dependency_checkout: |
         sh scripts/checkout-dependencies.sh "$RUNNER_TEMP/dependencies" >>"$GITHUB_ENV"
+      linux_packages: build-essential dpkg-dev file rpm fish zsh
 
   tap-maelys-egress:
     needs: release
