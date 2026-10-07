@@ -30,6 +30,7 @@ jobs:
       dependency_checkout: |
         sh scripts/checkout-dependencies.sh "$RUNNER_TEMP/dependencies" >>"$GITHUB_ENV"
       linux_packages: build-essential dpkg-dev file rpm fish zsh
+      macos_packages: fish
 
   tap-maelys-egress:
     needs: release

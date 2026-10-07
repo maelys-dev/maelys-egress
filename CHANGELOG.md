@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **The fish completion script is driven on macOS, and the deployment
+  image's build drives zsh and fish.** 0.28.3 left two places where the
+  conformance kit still skipped a shell. macOS has zsh and no fish: `fish` is
+  now declared under `[macos]` in `dependencies/packages`, which the release
+  socle's macOS leg and the macOS release build read, and installed by this
+  repository's own macOS jobs (`native`, `package`). The build stage of
+  `docker/Dockerfile.sidecar`, which runs `make check` before it installs,
+  had neither shell and answered 300 passed, 2 skipped; it installs both and
+  answers 304 passed, none skipped. The image that is delivered is a later
+  stage and carries neither. Nothing a user receives changes.
+
 ## 0.28.3 — 2026-10-07
 
 - **The completion scripts are driven under zsh and fish on Linux.** Neither

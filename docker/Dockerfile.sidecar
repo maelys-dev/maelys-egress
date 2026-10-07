@@ -5,7 +5,7 @@
 #   -f docker/Dockerfile.sidecar -t maelys-egress-sidecar .
 FROM ubuntu:24.04 AS build
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    build-essential ca-certificates curl git nodejs pkg-config python3 && \
+    build-essential ca-certificates curl fish git nodejs pkg-config python3 zsh && \
     rm -rf /var/lib/apt/lists/*
 COPY --from=maelys-system . /maelys-system
 COPY --from=maelys-cli . /maelys-cli
