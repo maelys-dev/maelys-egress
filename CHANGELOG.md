@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.28.2 — 2026-10-07
 
 - Pins moved to their latest: maelys-cli **0.5.35**, agent-cli-spec
   **2.8.1**, maelys-system **0.12.2**; the release socle was already at its
