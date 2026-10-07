@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Pins moved to their latest: maelys-cli **0.5.35**, agent-cli-spec
+  **2.8.1**, maelys-system **0.12.2**; the release socle was already at its
+  latest, 0.62.3. Read for runtime changes, as the adoption rule asks:
+  - maelys-system 0.12 adds directory watching (`maelys/sys/dirwatch.h`),
+    which Egress does not use, and corrects contracts in its headers; its ABI
+    stays 1 and nothing Egress calls changes. `libmaelys_sys.a`, shipped in
+    the archives and packages, carries the new object.
+  - maelys-cli 0.5.35 changes its Python module only; the C library this
+    binary links differs from 0.5.34 by its version number.
+  - agent-cli-spec 2.8.1 is the version maelys-cli 0.5.35 targets, which is
+    why it is pinned and 2.9.0 is not (`make check-spec-contract`). Since
+    2.8.0 the kit drives every bash it finds, the system's included: the
+    bash 3.2 of macOS is now held by the gate, where 0.28.1 had measured it
+    by hand.
+
 - **0.28.1 did not reach the Homebrew tap; its archives and packages are
   published and correct.** The formula's test expected the manifest to name
   `opt_bin`, the stable path under `opt/`, while `make install` writes the
