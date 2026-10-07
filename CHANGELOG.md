@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- **0.28.1 did not reach the Homebrew tap; its archives and packages are
+  published and correct.** The formula's test expected the manifest to name
+  `opt_bin`, the stable path under `opt/`, while `make install` writes the
+  path of the keg, under `Cellar/`, and always has: the manifest of an
+  installed 0.20.0 names it. The test had never been run on an installed
+  bottle. The release socle 0.62.3 runs it on a poured bottle and keeps a
+  formula whose test fails out of the tap, which is what happened to 0.28.1
+  on both macOS legs; the tap stayed at 0.28.0. Nothing was wrong with what
+  the formula installed: the dispatcher accepts that manifest, and its digest
+  is the installed binary's. The test now asserts what is true and what
+  matters: the manifest names the binary of the keg, and carries that
+  binary's `sha256`. A formula is rendered from the tag's own template, so
+  the remedy is this release and not a replay of 0.28.1.
+
 ## 0.28.1 — 2026-10-05
 
 - **The shell completion `maelys-egress completion` prints did not complete

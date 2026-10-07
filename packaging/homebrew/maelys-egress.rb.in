@@ -54,8 +54,13 @@ class MaelysEgress < Formula
     system ENV.cc, "-std=c11", "client-smoke.c", "-I#{include}", "-L#{lib}",
            "-lmaelys_egress_client", "-o", "client-smoke"
     system "./client-smoke"
+    # The manifest names the binary of this keg, where `make install` put it,
+    # and carries that binary's digest: the two things the maelys dispatcher
+    # checks before it runs `maelys egress`.
     manifest = (share/"maelys/commands/egress.json").read
-    assert_match "\"executable\": \"#{opt_bin}/maelys-egress\"", manifest
+    digest = (bin/"maelys-egress").sha256
+    assert_match "\"executable\": \"#{bin}/maelys-egress\"", manifest
+    assert_match "\"sha256\": \"#{digest}\"", manifest
     (testpath/"egress.conf").write <<~EOS
       schema_version = 1
       listen = 127.0.0.1:0
