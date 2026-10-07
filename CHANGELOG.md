@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.28.3 — 2026-10-07
 
 - **The completion scripts are driven under zsh and fish on Linux.** Neither
   shell was installed on any Linux job, so the conformance kit skipped them
