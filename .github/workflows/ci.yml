@@ -57,7 +57,7 @@ jobs:
           # A broken third-party apt source of the runner image must not fail an
           # install of Ubuntu archive packages: the update reports, the install decides.
           sudo apt-get update || echo "::warning::apt-get update reported errors; the install decides"
-          sudo apt-get install -y clang gcc g++
+          sudo apt-get install -y clang gcc g++ fish zsh
       - name: Require Apple Silicon
         if: runner.os == 'macOS'
         run: test "$(uname -m)" = arm64
@@ -88,7 +88,7 @@ jobs:
           # A broken third-party apt source of the runner image must not fail an
           # install of Ubuntu archive packages: the update reports, the install decides.
           sudo apt-get update || echo "::warning::apt-get update reported errors; the install decides"
-          sudo apt-get install -y clang g++ libclang-rt-18-dev
+          sudo apt-get install -y clang g++ libclang-rt-18-dev fish zsh
       - run: make asan-ubsan
       - run: make tsan
 
@@ -184,7 +184,7 @@ jobs:
           # A broken third-party apt source of the runner image must not fail an
           # install of Ubuntu archive packages: the update reports, the install decides.
           sudo apt-get update || echo "::warning::apt-get update reported errors; the install decides"
-          sudo apt-get install -y build-essential dpkg-dev file rpm
+          sudo apt-get install -y build-essential dpkg-dev file rpm fish zsh
       - run: PACKAGE_VERSION_OVERRIDE=0.0.0 bash scripts/package-release.sh ${{ matrix.target }}
       - run: sh scripts/check-installed-system.sh
       - name: Inspect Linux packages

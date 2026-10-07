@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+- **The completion scripts are driven under zsh and fish on Linux.** Neither
+  shell was installed on any Linux job, so the conformance kit skipped them
+  there, and fish was driven nowhere: macOS has zsh and no fish. `fish` and
+  `zsh` are now declared in `dependencies/packages`, which the release
+  socle's legs and the release build read, and installed by this
+  repository's own Linux jobs (`native`, `sanitizers`, `package`) and its
+  test image. Tried before the change reached the CI, in containers of
+  Ubuntu 24.04 (fish 3.7.0) and 26.04 (fish 4.2.1): the three scripts offer
+  the words of `__complete` and fall back to files, 304 checks passed and
+  none skipped.
+- maelys-cli **0.5.36** and agent-cli-spec **2.9.0**, the version it targets
+  (2.10.0 is not pinned, for the reason given under 0.28.2). Read for runtime
+  changes: `MAELYS_CLI_FORMAT` is now the default format in every case, where
+  the C library applied it only when no rendering option at all was given.
+  With `MAELYS_CLI_FORMAT=json` in the environment, `--compact` answered
+  text; it answers compact JSON, and only `--format` and `--json` replace
+  the variable. For `serve`, `channel broker` and `channel exec`, which are
+  streams, the variable still shapes the failure envelope only. The other
+  two rules of 2.9.0 concern commands that write and commands that emit
+  records; this product declares neither.
+
 ## 0.28.2 — 2026-10-07
 
 - Pins moved to their latest: maelys-cli **0.5.35**, agent-cli-spec
