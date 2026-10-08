@@ -335,6 +335,12 @@ maelys_egress_result_t maelys_egress_server_run(
  * which any thread may ask for, and does not depend on the destroy, which
  * only the owner thread may call. Until 0.26.0 the established ones stayed
  * open and carried nothing until server_destroy.
+ *
+ * Any thread, and never a signal handler: the stop goes through the wakeup
+ * of the server's loop, which takes a lock. A process that stops on a signal
+ * blocks that signal and waits for it in a thread, which is what the
+ * maelys-egress command does, or has its handler write one byte to a pipe
+ * that a thread reads; the thread calls this function.
  */
 maelys_egress_result_t maelys_egress_server_stop(maelys_egress_server_t *server);
 /* Call on the creating/owner thread after server_run has returned. */
