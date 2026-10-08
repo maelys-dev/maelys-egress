@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- **The example of `channel exec` is one line to copy.** In 0.30.0, `help
+  channel.exec` showed it cut in two at 80 columns, after the `--` and with
+  no mark of continuation: copied as shown, the first line ran `channel
+  exec` with no program and the second ran the program outside the channel.
+  maelys-cli **0.6.2**, to which this was reported, leaves an example on one
+  line whatever the width of the help. `maelys-egress channel exec --config
+  /etc/maelys-egress.conf -- /usr/local/bin/agent --once` is now one line of
+  92 columns with its indentation, in the text and in `data.text` of `help
+  channel.exec --format json`; the sentence below it still wraps. The four
+  other examples already fitted. `describe` moves by one value, `framework`:
+  its `words` were always whole. agent-cli-spec stays at 2.12.0, the version
+  0.6.2 targets.
+
 ## 0.30.0 — 2026-10-08
 
 - **Each command declares an example, and the command lines of the README
