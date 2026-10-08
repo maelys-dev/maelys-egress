@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- maelys-release **0.63.1**: the three workflow pins, and no managed file.
+  Its impact line asks nothing of a product. What this repository gains is
+  what it reported after 0.28.3, when two of its own jobs sat for an hour in
+  `apt-get update`: every job of the socle's workflows now has a time bound,
+  which a caller cannot give them. The legs the `socle` job runs here,
+  `check` on the three targets and `fuzz`, stop after 30 minutes; in the
+  release, `build` after 45, `verify` after 10, `publish` after 15, and in
+  the tap `render` after 10, each `bottle` after 30, `publish` after 15.
+  Nothing a user receives changes.
+
 ## 0.29.1 — 2026-10-08
 
 - **No line of `maelys-egress help` passes 80 columns.** 0.29.0 left one:
