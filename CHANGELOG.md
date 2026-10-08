@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+- **maelys-cli 0.6.0 and agent-cli-spec 2.12.0, the version it targets: the
+  text of `help` changes, and `COMMAND --help` answers as `help`.** The two
+  pins move together, because the kit of 2.12.0 checks the second point and a
+  binary built on 0.5.36 fails it. What a user of the command sees:
+  - `maelys-egress help` no longer repeats every usage, the global options
+    and the whole agent contract. It names each command by its words and its
+    purpose, in 80 columns, and `maelys-egress help conventions`, which is
+    new, has the options and the contract whole. A consumer that read an
+    option's description or an exit code in the general help reads it there,
+    or better in `describe`.
+  - `maelys-egress help config` and `maelys-egress channel --help`, which
+    were refused with `INVALID_COMMAND`, list the commands of a family with
+    their usage.
+  - **Consumer notice.** Under `--format json`, `COMMAND --help` answered
+    with the envelope's `command` naming the command asked about
+    (`"command": "config.describe"`). It now answers `"command": "help"`,
+    the command asked about being in `data.commands`, and returns the same
+    bytes as `help COMMAND_ID`. A consumer that matched `command` against
+    what it asked reads `data.commands`.
+  - `describe` moves by two values: `framework` is `0.6.0`, and the summary
+    of the `help` operand names the family and `conventions`. The
+    completion scripts are byte for byte those of 0.28.3.
+
+  Unchanged, and tried on both binaries: after `--`, `channel exec` hands
+  `--help` to the program it starts like any other argument. The paragraph
+  this product adds to the general help is still one line of 533 columns:
+  the framework prints a product's `agent_guidance` as given, and does not
+  wrap it. No command of this product declares examples yet, which 2.12.0
+  allows and checks. 2.10.0 names `channel exec` as what it already was, a
+  `stream` that is not a delegate; 2.11.0 is skipped, as the framework skips
+  it.
 - **The fish completion script is driven on macOS, and the deployment
   image's build drives zsh and fish.** 0.28.3 left two places where the
   conformance kit still skipped a shell. macOS has zsh and no fish: `fish` is
