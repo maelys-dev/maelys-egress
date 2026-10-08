@@ -33,6 +33,12 @@
   allows and checks. 2.10.0 names `channel exec` as what it already was, a
   `stream` that is not a delegate; 2.11.0 is skipped, as the framework skips
   it.
+- maelys-release **0.63.0**, re-adopted as its impact line asks, a managed
+  file moving: `scripts/checkout-dependencies.sh` now skips a pin whose file
+  says `on-request` and says on stderr how long each clone took. This
+  repository declares no such pin and clones what it cloned, three pins in
+  two or three seconds each. The three workflow pins move with it; the
+  checks `main` requires keep their names.
 - **The fish completion script is driven on macOS, and the deployment
   image's build drives zsh and fish.** 0.28.3 left two places where the
   conformance kit still skipped a shell. macOS has zsh and no fish: `fish` is
