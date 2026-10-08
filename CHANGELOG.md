@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- maelys-system **0.12.3**. It corrects the fairness of a loop's step, where
+  a timer due at every step kept the descriptors unheard, and says in every
+  public header which thread may call, whether a signal handler may, and
+  what is done when an error comes back. No function, structure or result
+  code of it changes. Read for what reaches this product:
+  - the correction of the step does not change its paths: this product arms
+    no loop timer, and its three loops, the server's, the channel broker's
+    and a channel's, pass a deadline to the step or none;
+  - **`maelys_egress_server_stop` is never called from a signal handler.**
+    It stops the server's loop through a wakeup that takes a lock, which
+    maelys-system now says of its own call. `egress.h` said that any thread
+    may ask for the stop and was silent on handlers; it now says so, and how
+    a process that stops on a signal does it: block the signal and wait for
+    it in a thread, or have the handler write one byte to a pipe a thread
+    reads. The `maelys-egress` command already did the first. This is a
+    comment of the header: no declaration moves and no ABI number rises.
+
 ## 0.30.1 — 2026-10-08
 
 - **The example of `channel exec` is one line to copy.** In 0.30.0, `help
