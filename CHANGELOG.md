@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **No line of `maelys-egress help` passes 80 columns.** 0.29.0 left one:
+  the paragraph this product adds to the general help, one sentence of 533
+  columns, which the framework printed as written. maelys-cli **0.6.1**
+  wraps a product's `agent_guidance` to the width of the help, each line of
+  it being a paragraph; this product's text, written on one line, is
+  unchanged in `cli/main.c` and now takes seven lines of 80 columns at
+  most, in a pipe and in `data.text` of `help --format json`. The words are
+  the same, in the same order, and every line above that paragraph is that
+  of 0.29.0. `describe` moves by one value, `framework`; the completion
+  scripts do not move. agent-cli-spec stays at 2.12.0, the version 0.6.1
+  targets.
+
 ## 0.29.0 — 2026-10-08
 
 - **maelys-cli 0.6.0 and agent-cli-spec 2.12.0, the version it targets: the
