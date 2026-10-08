@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.29.0 — 2026-10-08
 
 - **maelys-cli 0.6.0 and agent-cli-spec 2.12.0, the version it targets: the
   text of `help` changes, and `COMMAND --help` answers as `help`.** The two
