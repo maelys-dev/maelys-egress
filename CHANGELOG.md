@@ -11,6 +11,19 @@
   release, `build` after 45, `verify` after 10, `publish` after 15, and in
   the tap `render` after 10, each `bottle` after 30, `publish` after 15.
   Nothing a user receives changes.
+- **`apt-get update` is stopped after two minutes on this repository's own
+  jobs, and the install goes on.** The bound of 20 minutes a job has since
+  0.29.0 turned an hour's wait into a failure to run again by hand; it
+  repaired nothing. The step that stalled is now `timeout 120 apt-get
+  update`, which on a runner takes 1 to 13 seconds when the mirror answers.
+  Tried in a container of Ubuntu 24.04 with a source that accepts the
+  connection and never answers: left alone, `apt-get update` had not
+  returned after 100 seconds; stopped after 5, it leaves the lists it had
+  and no lock, and `apt-get install` that follows succeeds in 2 seconds.
+  What is not known is whether the install succeeds on a runner whose
+  mirror is down for the packages too: it then fails or the job's own bound
+  stops it. The image builds of the `docker` job are not changed: an image
+  has no lists to fall back on.
 
 ## 0.29.1 — 2026-10-08
 
