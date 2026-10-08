@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.30.0 — 2026-10-08
 
 - **Each command declares an example, and the command lines of the README
   are those examples.** `maelys-egress help COMMAND_ID` has an `EXAMPLES`
