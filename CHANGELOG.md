@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- maelys-cli **0.6.3**, to stay on its latest tag. It brings this product
+  nothing: between 0.6.2 and 0.6.3 no source of `libmaelys_cli` moves, only
+  its pin of maelys-json, which the extension library reads and this
+  product does not link, its own release socle and its version. Compared
+  with the published 0.30.2 on the binary built at this pin: `describe`
+  differs by one value, `framework`, now `0.6.3`; `help` in its nine forms
+  and the three completion scripts are byte for byte the same.
+  agent-cli-spec stays at 2.12.0, the version 0.6.3 targets.
+
 ## 0.30.2 — 2026-10-08
 
 - maelys-system **0.12.3**. It corrects the fairness of a loop's step, where
