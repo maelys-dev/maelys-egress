@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Each command declares an example, and the command lines of the README
+  are those examples.** `maelys-egress help COMMAND_ID` has an `EXAMPLES`
+  section for `config describe`, `config validate`, `serve`, `channel
+  broker` and `channel exec`, and `describe` lists them as `examples`, each
+  `{"words": [...], "summary": "..."}`; `describe --summary` omits them, as
+  it omits the output schema. The framework parses each one when the program
+  starts and refuses the catalog if the command no longer accepts it, so an
+  example cannot outlive the option it names. A README has no such check:
+  `tests/test_examples.py` now requires every `maelys-egress` line of a
+  shell block of the README to be a declared example, and every command
+  this product adds to have one. No command, option or behaviour changes;
+  `docs/cli-contract.json` gains the `examples` members.
+
 - maelys-release **0.63.1**: the three workflow pins, and no managed file.
   Its impact line asks nothing of a product. What this repository gains is
   what it reported after 0.28.3, when two of its own jobs sat for an hour in

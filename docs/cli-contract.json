@@ -304,6 +304,17 @@
         {
           "available": true,
           "effect": "read",
+          "examples": [
+            {
+              "summary": "Read every configuration key, its type and its constraints as JSON.",
+              "words": [
+                "config",
+                "describe",
+                "--format",
+                "json"
+              ]
+            }
+          ],
           "exitCodes": {
             "0": "command completed",
             "1": "execution failed",
@@ -416,6 +427,17 @@
         {
           "available": true,
           "effect": "read",
+          "examples": [
+            {
+              "summary": "Check a configuration before starting anything; exit 2 lists what it violates.",
+              "words": [
+                "config",
+                "validate",
+                "--config",
+                "/etc/maelys-egress.conf"
+              ]
+            }
+          ],
           "exitCodes": {
             "0": "command completed",
             "1": "execution failed",
@@ -510,6 +532,16 @@
         {
           "available": true,
           "effect": "stream",
+          "examples": [
+            {
+              "summary": "Run the proxy until SIGINT or SIGTERM, its lifecycle events on stdout.",
+              "words": [
+                "serve",
+                "--config",
+                "/etc/maelys-egress.conf"
+              ]
+            }
+          ],
           "exitCodes": {
             "0": "command completed",
             "1": "execution failed",
@@ -552,6 +584,17 @@
         {
           "available": true,
           "effect": "stream",
+          "examples": [
+            {
+              "summary": "Serve native channels on the private socket the configuration names.",
+              "words": [
+                "channel",
+                "broker",
+                "--config",
+                "/etc/maelys-egress.conf"
+              ]
+            }
+          ],
           "exitCodes": {
             "0": "command completed",
             "1": "execution failed",
@@ -595,6 +638,20 @@
         {
           "available": true,
           "effect": "stream",
+          "examples": [
+            {
+              "summary": "Start a program with a channel on descriptor 4 unless the configuration names another; what follows -- is the program's own.",
+              "words": [
+                "channel",
+                "exec",
+                "--config",
+                "/etc/maelys-egress.conf",
+                "--",
+                "/usr/local/bin/agent",
+                "--once"
+              ]
+            }
+          ],
           "exitCodes": {
             "0": "command completed",
             "1": "execution failed",

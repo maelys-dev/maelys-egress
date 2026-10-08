@@ -19,34 +19,70 @@ static const maelys_cli_operand_t exec_operands[] = {
     {MAELYS_CLI_OPERAND_REST("argument", "Argument passed to the program, verbatim.")},
 };
 
+/* The invocations worth showing, checked by the framework at startup: an
+ * example that the command no longer accepts refuses the catalog. The lines
+ * the README shows are these, and tests/test_examples.py holds it to that. */
+static const maelys_cli_example_t config_describe_examples[] = {
+    {MAELYS_CLI_EXAMPLE("config describe --format json",
+     "Read every configuration key, its type and its constraints as JSON.")},
+};
+
+static const maelys_cli_example_t config_validate_examples[] = {
+    {MAELYS_CLI_EXAMPLE("config validate --config /etc/maelys-egress.conf",
+     "Check a configuration before starting anything; exit 2 lists what it "
+     "violates.")},
+};
+
+static const maelys_cli_example_t serve_examples[] = {
+    {MAELYS_CLI_EXAMPLE("serve --config /etc/maelys-egress.conf",
+     "Run the proxy until SIGINT or SIGTERM, its lifecycle events on stdout.")},
+};
+
+static const maelys_cli_example_t broker_examples[] = {
+    {MAELYS_CLI_EXAMPLE("channel broker --config /etc/maelys-egress.conf",
+     "Serve native channels on the private socket the configuration names.")},
+};
+
+static const maelys_cli_example_t exec_examples[] = {
+    {MAELYS_CLI_EXAMPLE(
+     "channel exec --config /etc/maelys-egress.conf -- /usr/local/bin/agent --once",
+     "Start a program with a channel on descriptor 4 unless the configuration "
+     "names another; what follows -- is the program's own.")},
+};
+
 static const maelys_cli_command_t commands[] = {
     {MAELYS_CLI_READ("config.describe", "config describe",
      "Describe every supported configuration key and constraint.",
      egress_cli_command_config_describe),
-     MAELYS_CLI_SCHEMA(egress_config_describe_schema)},
+     MAELYS_CLI_SCHEMA(egress_config_describe_schema),
+     MAELYS_CLI_EXAMPLES(config_describe_examples)},
     {MAELYS_CLI_READ("config.validate", "config validate",
      "Validate a complete configuration without opening listeners; exit 2 "
      "reports violations in data.",
      egress_cli_command_config_validate),
      MAELYS_CLI_OPTIONS(config_options),
-     MAELYS_CLI_SCHEMA(egress_config_validate_schema)},
+     MAELYS_CLI_SCHEMA(egress_config_validate_schema),
+     MAELYS_CLI_EXAMPLES(config_validate_examples)},
     {MAELYS_CLI_PROTOCOL_STREAM("serve", "serve",
      "Start mediation and run until SIGINT or SIGTERM; stdout carries the "
      "lifecycle JSON Lines stream.",
      egress_cli_command_serve, "maelys-egress-lifecycle/1"),
-     MAELYS_CLI_OPTIONS(config_options)},
+     MAELYS_CLI_OPTIONS(config_options),
+     MAELYS_CLI_EXAMPLES(serve_examples)},
     {MAELYS_CLI_PROTOCOL_STREAM("channel.broker", "channel broker",
      "Serve native channels through a private Unix socket until SIGINT or SIGTERM; "
      "stdout carries the lifecycle JSON Lines stream.",
      egress_cli_command_channel_broker, "maelys-egress-lifecycle/1"),
-     MAELYS_CLI_OPTIONS(config_options)},
+     MAELYS_CLI_OPTIONS(config_options),
+     MAELYS_CLI_EXAMPLES(broker_examples)},
     {MAELYS_CLI_STREAM("channel.exec", "channel exec",
      "Start one program with a native channel on an inherited descriptor and exit "
      "with its status, 128 + signal if a signal ended it; stdout and stderr are the "
      "program's. Not a sandbox: the program keeps its own network access.",
      egress_cli_command_channel_exec),
      MAELYS_CLI_OPTIONS(config_options),
-     MAELYS_CLI_OPERANDS(exec_operands)},
+     MAELYS_CLI_OPERANDS(exec_operands),
+     MAELYS_CLI_EXAMPLES(exec_examples)},
 };
 
 int main(int argc, char **argv) {
