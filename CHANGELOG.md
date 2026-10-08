@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.30.3 — 2026-10-08
 
 - maelys-cli **0.6.3**, to stay on its latest tag. It brings this product
   nothing: between 0.6.2 and 0.6.3 no source of `libmaelys_cli` moves, only
