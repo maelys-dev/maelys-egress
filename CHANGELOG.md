@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.30.2 — 2026-10-08
 
 - maelys-system **0.12.3**. It corrects the fairness of a loop's step, where
   a timer due at every step kept the descriptors unheard, and says in every
