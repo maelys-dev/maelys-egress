@@ -28,6 +28,8 @@ jobs:
   # Every job below is bounded. A job without a bound runs until GitHub's own
   # limit of six hours: two of them sat for an hour in `apt-get update`, on a
   # mirror that had stopped answering, until they were cancelled by hand.
+  # That step has its own bound of two minutes since; this one is for
+  # whatever else stops answering.
   # Over thirty green runs no job but `docker` took more than 4 minutes, and
   # `docker`, whose image builds download their packages, took up to 26:
   # hence 20 minutes, and 45 for it. The `socle` job calls a reusable
@@ -64,8 +66,10 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           # A broken third-party apt source of the runner image must not fail an
-          # install of Ubuntu archive packages: the update reports, the install decides.
-          sudo apt-get update || echo "::warning::apt-get update reported errors; the install decides"
+          # install of Ubuntu archive packages, and a mirror that stops answering
+          # must not hold the job: the update is stopped after two minutes, it
+          # reports, and the install decides with the lists the image has.
+          sudo timeout --kill-after=10 120 apt-get update || echo "::warning::apt-get update did not finish or reported errors; the install decides"
           sudo apt-get install -y clang gcc g++ fish zsh
       # macOS ships zsh and bash and no fish: without it the conformance kit
       # skips the fish completion script on every macOS job.
@@ -101,8 +105,10 @@ jobs:
       - run: sh scripts/checkout-dependencies.sh "$RUNNER_TEMP/dependencies" >>"$GITHUB_ENV"
       - run: |
           # A broken third-party apt source of the runner image must not fail an
-          # install of Ubuntu archive packages: the update reports, the install decides.
-          sudo apt-get update || echo "::warning::apt-get update reported errors; the install decides"
+          # install of Ubuntu archive packages, and a mirror that stops answering
+          # must not hold the job: the update is stopped after two minutes, it
+          # reports, and the install decides with the lists the image has.
+          sudo timeout --kill-after=10 120 apt-get update || echo "::warning::apt-get update did not finish or reported errors; the install decides"
           sudo apt-get install -y clang g++ libclang-rt-18-dev fish zsh
       - run: make asan-ubsan
       - run: make tsan
@@ -117,8 +123,10 @@ jobs:
       - run: sh scripts/checkout-dependencies.sh "$RUNNER_TEMP/dependencies" >>"$GITHUB_ENV"
       - run: |
           # A broken third-party apt source of the runner image must not fail an
-          # install of Ubuntu archive packages: the update reports, the install decides.
-          sudo apt-get update || echo "::warning::apt-get update reported errors; the install decides"
+          # install of Ubuntu archive packages, and a mirror that stops answering
+          # must not hold the job: the update is stopped after two minutes, it
+          # reports, and the install decides with the lists the image has.
+          sudo timeout --kill-after=10 120 apt-get update || echo "::warning::apt-get update did not finish or reported errors; the install decides"
           sudo apt-get install -y build-essential clang g++
       - run: make mutation-check
 
@@ -138,8 +146,10 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           # A broken third-party apt source of the runner image must not fail an
-          # install of Ubuntu archive packages: the update reports, the install decides.
-          sudo apt-get update || echo "::warning::apt-get update reported errors; the install decides"
+          # install of Ubuntu archive packages, and a mirror that stops answering
+          # must not hold the job: the update is stopped after two minutes, it
+          # reports, and the install decides with the lists the image has.
+          sudo timeout --kill-after=10 120 apt-get update || echo "::warning::apt-get update did not finish or reported errors; the install decides"
           sudo apt-get install -y clang g++ pkg-config libmbedtls-dev libwolfssl-dev
       - name: Install TLS development packages
         if: runner.os == 'macOS'
@@ -201,8 +211,10 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           # A broken third-party apt source of the runner image must not fail an
-          # install of Ubuntu archive packages: the update reports, the install decides.
-          sudo apt-get update || echo "::warning::apt-get update reported errors; the install decides"
+          # install of Ubuntu archive packages, and a mirror that stops answering
+          # must not hold the job: the update is stopped after two minutes, it
+          # reports, and the install decides with the lists the image has.
+          sudo timeout --kill-after=10 120 apt-get update || echo "::warning::apt-get update did not finish or reported errors; the install decides"
           sudo apt-get install -y build-essential dpkg-dev file rpm fish zsh
       # The packaging script runs `make check`, as the release build does
       # with the packages `dependencies/packages` declares for macOS.
