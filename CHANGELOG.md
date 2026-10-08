@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.30.1 — 2026-10-08
 
 - **The example of `channel exec` is one line to copy.** In 0.30.0, `help
   channel.exec` showed it cut in two at 80 columns, after the `--` and with
