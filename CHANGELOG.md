@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.29.1 — 2026-10-08
 
 - **No line of `maelys-egress help` passes 80 columns.** 0.29.0 left one:
   the paragraph this product adds to the general help, one sentence of 533
