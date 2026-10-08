@@ -4,6 +4,7 @@ set -eu
 binary=${1:?maelys-egress binary required}
 python3 "$(dirname "$0")/test_broker_cli.py" "$binary"
 python3 "$(dirname "$0")/test_broker_shutdown.py" "$binary"
+python3 "$(dirname "$0")/test_examples.py" "$binary"
 if test "$(uname -s)" = Darwin; then
     root=$(mktemp -d /private/tmp/maelys-egress-cli-XXXXXX)
 else

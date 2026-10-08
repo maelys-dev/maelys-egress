@@ -305,7 +305,9 @@ command line.
 
 - [CLI reference](docs/cli.md) and
   [machine-readable CLI contract](docs/cli-contract.json): generated from the
-  executable catalog;
+  executable catalog. `maelys-egress help COMMAND_ID` shows an example of
+  each command, which the binary checks against itself when it starts; the
+  command lines of this page are those examples;
 - [configuration-key reference](docs/generated/config-reference.md): generated
   from the standalone configuration catalog;
 - [Maelys CLI integration guide](docs/maelys-cli-guide.md): framework and
