@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.31.0 — 2026-10-12
 
 - **maelys-cli 0.7.0 and agent-cli-spec 2.15.0, the version it targets: two
   kinds of line that worked are refused.** The pins move together, the kit
