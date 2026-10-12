@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.30.4 — 2026-10-12
 
 - maelys-system **0.13.0**. A consumer that builds this product from source
   beside another Maelys library must give both one maelys-system, and this
