@@ -381,6 +381,87 @@ static void test_receipt_canonical(void) {
     CHECK(egress_receipt_canonical(NULL, canonical, sizeof(canonical)) == -1);
 }
 
+/* A record at its longest is written, and read again. Every string of the
+ * receipt is at its bound, every integer at its widest, the signature at
+ * EGRESS_MAX_ATTESTATION_BYTES: a 4096-bit RSA signature is that long. The
+ * record did not fit the buffer it was built in, and the one append that
+ * failed left the journal unhealthy for every receipt after it. */
+static void fill(char *field, size_t size, char byte) {
+    memset(field, byte, size - 1u);
+    field[size - 1u] = '\0';
+}
+
+static void test_audit_longest_record(void) {
+    char path[] = "/tmp/maelys-egress-longest-XXXXXX";
+    int fd = mkstemp(path);
+    CHECK(fd >= 0);
+    if (fd >= 0) { CHECK(fchmod(fd, 0600) == 0); (void)close(fd); }
+    static const unsigned char key[] = "0123456789abcdef0123456789abcdef";
+    char key_id[64];
+    fill(key_id, sizeof(key_id), 'k');
+    maelys_egress_audit_t *audit = NULL;
+    char *error = NULL;
+    CHECK(maelys_egress_audit_file_create(path, key, sizeof(key) - 1u, key_id,
+        &audit, &error) == MAELYS_EGRESS_OK);
+    maelys_egress_error_free(error);
+    error = NULL;
+
+    maelys_egress_receipt_t receipt;
+    memset(&receipt, 0, sizeof(receipt));
+    receipt.id = UINT64_MAX;
+    receipt.protocol = MAELYS_EGRESS_PROTOCOL_CONNECTOR;
+    receipt.port = 65535u;
+    receipt.result = MAELYS_EGRESS_ERR_DENIED;
+    receipt.started_unix_ms = UINT64_MAX;
+    receipt.duration_ms = UINT64_MAX;
+    receipt.bytes_from_client = UINT64_MAX;
+    receipt.bytes_to_client = UINT64_MAX;
+    receipt.quota_scope = MAELYS_EGRESS_QUOTA_EXECUTION_BYTES;
+    receipt.quota_connection_max_bytes = UINT64_MAX;
+    receipt.quota_execution_max_bytes = UINT64_MAX;
+    receipt.quota_connection_observed_bytes = UINT64_MAX;
+    receipt.quota_execution_before_bytes = UINT64_MAX;
+    receipt.quota_execution_after_bytes = UINT64_MAX;
+    receipt.policy_generation = UINT64_MAX;
+    receipt.tls_sni_verified = 1;
+    fill(receipt.host, sizeof(receipt.host), 'h');
+    fill(receipt.policy_digest_hex, sizeof(receipt.policy_digest_hex), 'd');
+    fill(receipt.invocation_id, sizeof(receipt.invocation_id), 'i');
+    fill(receipt.principal, sizeof(receipt.principal), 'p');
+    fill(receipt.attestor, sizeof(receipt.attestor), 'a');
+    fill(receipt.attestation_key_id, sizeof(receipt.attestation_key_id), 'y');
+    fill(receipt.attestation_hex, sizeof(receipt.attestation_hex), 'f');
+
+    CHECK(audit && egress_audit_append(audit, &receipt) == 1);
+    CHECK(maelys_egress_audit_healthy(audit));
+    CHECK(maelys_egress_audit_record_count(audit) == 1u);
+    /* A second one, so that the chain runs through the first. */
+    CHECK(audit && egress_audit_append(audit, &receipt) == 1);
+    char chain[65] = {0};
+    CHECK(maelys_egress_audit_chain_copy(audit, chain) == MAELYS_EGRESS_OK);
+    maelys_egress_audit_release(audit);
+    audit = NULL;
+
+    /* Longer than the 2048 bytes it was built in: the case is the one meant. */
+    struct stat status;
+    CHECK(stat(path, &status) == 0 && status.st_size > 2 * 2048);
+
+    /* What was written verifies: a journal that could be appended to and not
+     * resumed would be lost at the next start. */
+    maelys_egress_result_t resumed = maelys_egress_audit_file_create(
+        path, key, sizeof(key) - 1u, key_id, &audit, &error);
+    if (resumed != MAELYS_EGRESS_OK)
+        fprintf(stderr, "longest record: %s\n", error ? error : "no diagnostic");
+    maelys_egress_error_free(error);
+    CHECK(resumed == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_audit_record_count(audit) == 2u);
+    char resumed_chain[65] = {0};
+    CHECK(maelys_egress_audit_chain_copy(audit, resumed_chain) == MAELYS_EGRESS_OK);
+    CHECK(strcmp(chain, resumed_chain) == 0);
+    maelys_egress_audit_release(audit);
+    (void)unlink(path);
+}
+
 static void test_operations(void) {
     uint16_t upstream_port = 0u;
     int upstream_listener = listener_create(&upstream_port);
@@ -1544,6 +1625,7 @@ static void test_stop_ends_relayed_connections(void) {
 int main(void) {
     fixture_limits();
     test_receipt_canonical();
+    test_audit_longest_record();
     test_operations();
     test_connector_guard_and_timeout();
     test_connector_concurrency();
