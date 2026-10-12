@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+- maelys-system **0.13.0**. A consumer that builds this product from source
+  beside another Maelys library must give both one maelys-system, and this
+  product's build asks for exactly the commit it pins: maelys-warden could
+  not take maelys-oci 0.9.7, which needs 0.13.0, while this product pinned
+  0.12.3. Read for what reaches this product:
+  - 0.13.0 adds `maelys/sys/process.h`, to start and follow a program. This
+    product does not use it: `channel exec` starts its program through the
+    CLI framework;
+  - it corrects `maelys_sys_socket_receive` on a Unix **datagram** handle,
+    which took an empty datagram for the end of a stream. Every handle this
+    product makes through that API is a stream, whose reading does not
+    change; the channel's datagram pair is read by this product's own code,
+    not through a handle. A handle now reads `SO_TYPE` once when it is made;
+  - of its public headers, outside comments, only the new one, `version.h`
+    and the umbrella `sys.h` differ. `MAELYS_SYS_ABI_VERSION` stays 1.
+
+  No header of this product changes and no ABI number moves.
+
 ## 0.30.3 — 2026-10-08
 
 - maelys-cli **0.6.3**, to stay on its latest tag. It brings this product
