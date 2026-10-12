@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.31.1 — 2026-10-12
 
 - **An audit record at its longest is written.** The journal built a record
   in 2048 bytes, and a record can need about 2.4 KiB: the receipt's fields
