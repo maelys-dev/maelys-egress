@@ -250,6 +250,18 @@ def test():
                      ("channel", "exec", "--config", str(config), "--format", "json",
                       "--", str(PROBE), "exit", "0")]:
             invoke(*args, status=1)
+        # The program's line is written after `--`. Before it, a word that
+        # starts with one dash is this command's to judge: it is refused in
+        # the command's name and nothing starts. After it, the same word
+        # reaches the program, whose status says so.
+        dashed = subprocess.run(
+            [str(BINARY), "channel", "exec", "--config", str(config), "--non-interactive",
+             "/bin/sh", "-c", "exit 7"], env=ENV, capture_output=True, text=True, timeout=60)
+        assert dashed.returncode == 1 and not dashed.stdout, (dashed.returncode, dashed.stdout)
+        envelope = json.loads(dashed.stderr)
+        assert envelope["command"] == "channel.exec", envelope
+        assert envelope["error"]["code"] == "VALIDATION_FAILED", envelope
+        run(config, "/bin/sh", "-c", "exit 7", status=7)
 
         # Started: the status is the program's, 0 and 2 included, and Egress
         # adds nothing to either stream.

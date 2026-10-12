@@ -673,7 +673,7 @@
               {
                 "name": "argument",
                 "required": false,
-                "summary": "Argument passed to the program, verbatim.",
+                "summary": "Argument passed to the program, verbatim. Write the program and its arguments after --: before it, a word that starts with a dash is this command's to judge, and is refused.",
                 "variadic": true
               }
             ],
