@@ -16,7 +16,10 @@ static const maelys_cli_option_t config_options[] = {
 static const maelys_cli_operand_t exec_operands[] = {
     {MAELYS_CLI_OPERAND_KIND("program", "Absolute path of the program to start.",
      MAELYS_CLI_VALUE_ABSOLUTE_PATH)},
-    {MAELYS_CLI_OPERAND_REST("argument", "Argument passed to the program, verbatim.")},
+    {MAELYS_CLI_OPERAND_REST("argument",
+     "Argument passed to the program, verbatim. Write the program and its "
+     "arguments after --: before it, a word that starts with a dash is this "
+     "command's to judge, and is refused.")},
 };
 
 /* The invocations worth showing, checked by the framework at startup: an

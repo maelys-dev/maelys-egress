@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+- **maelys-cli 0.7.0 and agent-cli-spec 2.15.0, the version it targets: two
+  kinds of line that worked are refused.** The pins move together, the kit
+  of 2.15.0 failing a binary built on an earlier framework. Compared with
+  the published 0.30.3 on the binary built at these pins:
+  - **Consumer notice: `channel exec` takes the program's line after `--`.**
+    Before `--`, a word that starts with one dash was handed to the program
+    as an argument; it is now refused with `VALIDATION_FAILED`, in the name
+    of `channel.exec`, and nothing starts. `maelys-egress channel exec
+    --config F /bin/sh -c 'exit 7'` ran and now is refused; `maelys-egress
+    channel exec --config F -- /bin/sh -c 'exit 7'` runs as it did. A line
+    without such a word runs with or without `--`. The README, the declared
+    example and this repository's tests already wrote `--`; the summary of
+    the `argument` operand now says so, in `help channel.exec` and in
+    `describe`, and a test holds both the refusal and the accepted form.
+  - **Consumer notice: `-h` is not `--help`.** As the first word it showed
+    the help; it now names no command (`INVALID_COMMAND`). The help is
+    `help` and `--help`.
+  - `help -x` is refused as `VALIDATION_FAILED` where it was
+    `INVALID_COMMAND`.
+  - `describe` differs by `framework` and by that operand's summary. `help`
+    in its other eight forms and the three completion scripts are byte for
+    byte the same.
+
+  Not concerned: this product declares no size option, and its catalog has
+  none of the three shapes a catalog is now refused for at startup.
+  agent-cli-spec 2.15.1 exists and is not pinned: 2.15.0 is what the
+  framework targets.
 - maelys-release **0.64.3**, re-adopted as the impact line of 0.64.0 asks,
   managed files moving: the two checkout scripts, the three workflow pins
   and the managed texts. `scripts/checkout-dependency.sh` now stops on a
