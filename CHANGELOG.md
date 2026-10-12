@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- **An audit record at its longest is written.** The journal built a record
+  in 2048 bytes, and a record can need about 2.4 KiB: the receipt's fields
+  at their bounds, then the attestor's name, its key id and its signature
+  in hexadecimal, which alone is twice the 512 bytes a signature may be. A
+  receipt signed with 512 bytes, the size of a 4096-bit RSA signature, for
+  a host, an invocation and a principal near their bounds, did not fit. The
+  append failed, the journal was marked unhealthy, **and no receipt after
+  it was written**; the server went on serving, with a counter and the
+  health report to say so. Without an attestor, or with a signature of 256
+  bytes, the longest record always fitted. Found by a review of the receipt
+  encoding, not by a failure in use. The record is now built and read back
+  in 4096 bytes, with a compile-time check tying that size to the bound of
+  a signature. A test appends the longest record twice, closes the journal
+  and resumes it; it fails on the old size, and a mutant restores that size
+  to hold it.
+  **Rolling back**: a journal that holds such a record is refused by 0.31.0
+  and earlier, which read a record back in 2048 bytes; before this change
+  no such record could be written at all.
+
 ## 0.31.0 — 2026-10-12
 
 - **maelys-cli 0.7.0 and agent-cli-spec 2.15.0, the version it targets: two

@@ -60,6 +60,24 @@ int egress_hmac_sha256(
     return 1;
 }
 
+/* What one record needs at its longest, on the side that writes it and on
+ * the side that reads it again. The canonical string is the receipt's core,
+ * under 1 KiB with every string at its bound and every integer at twenty
+ * digits, then the attestor's name, its key id, and its signature in
+ * hexadecimal, which alone is twice EGRESS_MAX_ATTESTATION_BYTES: about
+ * 2.3 KiB in all. It was built in 2048 bytes, so a receipt carrying a
+ * 512-byte signature with a long host, invocation and principal did not
+ * fit, and the append that failed left the journal unhealthy for every
+ * receipt after it. A record is the canonical string in its envelope: the
+ * sequence, the key id, two 64-digit values and the keys' own spelling.
+ * tests/test_operations.c appends the longest record and resumes it. */
+#define AUDIT_CANONICAL_CAPACITY 4096u
+#define AUDIT_RECORD_CAPACITY (AUDIT_CANONICAL_CAPACITY + 512u)
+/* Everything but the signature stays under 2 KiB: raising the bound of a
+ * signature is the one change that can outgrow the buffer unseen. */
+_Static_assert(AUDIT_CANONICAL_CAPACITY >= 2u * EGRESS_MAX_ATTESTATION_BYTES + 2048u,
+    "an audit record must hold the longest attestation");
+
 static int quoted_field(
     const char *line, const char *marker, char *output, size_t capacity) {
     const char *begin = strstr(line, marker);
@@ -75,7 +93,7 @@ static int quoted_field(
 
 static int resume_audit(maelys_egress_audit_t *audit, char **out_error) {
     if (lseek(audit->fd, 0, SEEK_SET) < 0) return 0;
-    char line[4096];
+    char line[AUDIT_RECORD_CAPACITY];
     size_t used = 0u;
     uint64_t sequence = 0u;
     for (;;) {
@@ -93,7 +111,7 @@ static int resume_audit(maelys_egress_audit_t *audit, char **out_error) {
         if (byte != '\n') continue;
         line[used] = '\0';
         const char *sequence_marker = strstr(line, "{\"v\":1,\"seq\":");
-        char key_id[64], previous[65], mac_hex[65], canonical[2048];
+        char key_id[64], previous[65], mac_hex[65], canonical[AUDIT_CANONICAL_CAPACITY];
         char *number_end = NULL;
         unsigned long long parsed_sequence = sequence_marker ?
             strtoull(sequence_marker + 13u, &number_end, 10) : 0u;
@@ -119,7 +137,7 @@ static int resume_audit(maelys_egress_audit_t *audit, char **out_error) {
             hex_encode(expected, sizeof(expected), expected_hex);
             valid = egress_constant_time_equal(expected_hex, mac_hex);
         }
-        char exact[4096];
+        char exact[AUDIT_RECORD_CAPACITY];
         int exact_length = valid ? snprintf(exact, sizeof(exact),
             "{\"v\":1,\"seq\":%llu,\"key_id\":\"%s\",\"previous\":\"%s\","
             "\"mac\":\"%s\",\"canonical\":\"%s\"}\n",
@@ -272,7 +290,7 @@ int egress_audit_append(maelys_egress_audit_t *audit,
                       const maelys_egress_receipt_t *receipt) {
     if (!audit || !receipt || !atomic_load(&audit->healthy)) return 0;
     (void)pthread_mutex_lock(&audit->lock);
-    char canonical[2048];
+    char canonical[AUDIT_CANONICAL_CAPACITY];
     char core[2048];
     uint64_t sequence = atomic_load(&audit->records) + 1u;
     int core_length = egress_receipt_canonical(receipt, core, sizeof(core));
@@ -288,7 +306,7 @@ int egress_audit_append(maelys_egress_audit_t *audit,
                          canonical, (size_t)needed, mac);
         if (ok) hex_encode(mac, sizeof(mac), mac_hex);
     }
-    char record[3072];
+    char record[AUDIT_RECORD_CAPACITY];
     if (ok) {
         needed = snprintf(record, sizeof(record),
             "{\"v\":1,\"seq\":%llu,\"key_id\":\"%s\",\"previous\":\"%s\","
