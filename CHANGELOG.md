@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- maelys-release **0.64.3**, re-adopted as the impact line of 0.64.0 asks,
+  managed files moving: the two checkout scripts, the three workflow pins
+  and the managed texts. `scripts/checkout-dependency.sh` now stops on a
+  `repository` line it cannot read where it cloned the organisation's
+  repository; this repository's three pins carry none and clone what they
+  cloned. `scripts/checkout-dependencies.sh` labels the socle's checkout
+  with its tag. No declaration changes and a build reads what it read. The
+  checks `main` requires keep their names, and the `release` environment
+  already limits deployments to tags `v*`, which `protect` now reads.
+  Nothing a user receives changes.
+
 ## 0.30.4 — 2026-10-12
 
 - maelys-system **0.13.0**. A consumer that builds this product from source
