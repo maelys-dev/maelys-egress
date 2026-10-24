@@ -21,7 +21,7 @@
               {
                 "name": "COMMAND_ID",
                 "required": false,
-                "summary": "Stable command identifier whose help is shown, the family of commands under an identifier, or `conventions`.",
+                "summary": "Stable command identifier whose help is shown, or the family of commands under an identifier.",
                 "variadic": false
               }
             ],
@@ -52,7 +52,7 @@
           "pattern": [
             "help"
           ],
-          "purpose": "Show the generated CLI guide or one command's help.",
+          "purpose": "Show the help of the program, of one command or of one family.",
           "usage": "help [COMMAND_ID] | --help"
         },
         {
@@ -109,7 +109,7 @@
           "pattern": [
             "version"
           ],
-          "purpose": "Return product identity.",
+          "purpose": "Show the product, program, version and contract.",
           "usage": "version | --version"
         },
         {
@@ -186,7 +186,7 @@
           "pattern": [
             "describe"
           ],
-          "purpose": "Return the machine-readable catalog, summary or one descriptor.",
+          "purpose": "Show the machine-readable catalog, its summary or one descriptor.",
           "usage": "describe [COMMAND_ID] [--summary] [--prefix PREFIX]"
         },
         {
@@ -859,7 +859,9 @@
       },
       "product": "Maelys Egress",
       "program": "maelys-egress",
-      "schemaVersion": 1
+      "schemaVersion": 1,
+      "x-maelys-guidance": "'serve' and 'channel broker' reserve stdout for maelys-egress-lifecycle/1 JSON Lines: wait for event == \"ready\", then keep draining receipts and reload events until the process exits; 'fatal' or a non-zero exit is a failure. 'config validate' exits 2 when data.valid is false and lists the violations in data.diagnostics. 'channel exec' leaves stdout and stderr to the program it starts and exits with that program's status: a JSON error envelope on stderr means the program never started, and only then is exit 1 this command's own.",
+      "x-maelys-summary": "policy-enforced forward proxy for sandboxed workloads"
     }
   }
 }

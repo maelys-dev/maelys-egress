@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- **maelys-cli 0.10.0 and agent-cli-spec 2.19.0, the version it targets:
+  `help` is laid out for a person, and `help conventions` is gone.**
+  Compared with the published 0.31.1 on the binary built at these pins:
+  - **Consumer notice: `maelys-egress help conventions` is refused** with
+    `INVALID_COMMAND`, where 0.29.0 had introduced it. The global options
+    it listed are now in `maelys-egress --help` whole; `help` names only
+    commands and their families.
+  - The general help and the help of each command change their layout:
+    the usage of a command ends in `[options]`, its examples come before
+    its operands and options, and the `EFFECT` and `OUTPUT` sections are
+    gone. All of that is in `describe`, which is the contract; a script
+    that read a line of `help` reads `describe` instead.
+  - `describe` gains `x-maelys-summary` and `x-maelys-guidance`, and the
+    purposes of `help`, `version` and `describe` read differently.
+    `docs/cli.md` and `docs/cli-contract.json` follow. The descriptors of
+    this product's five commands do not change, and the three completion
+    scripts are byte for byte those of 0.31.1.
+  - Error envelopes may carry `issues` from this version of the framework;
+    this product's codes are already the listed ones, as 2.19.0 asks, and
+    it adds no issue.
+
 - maelys-release **0.64.6**: the three workflow pins, and no managed file.
   No version since 0.64.3 asks anything of a product. Nothing a user
   receives changes.
