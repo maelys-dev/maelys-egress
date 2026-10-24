@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- maelys-release **0.64.6**: the three workflow pins, and no managed file.
+  No version since 0.64.3 asks anything of a product. Nothing a user
+  receives changes.
+
 ## 0.31.1 — 2026-10-12
 
 - **An audit record at its longest is written.** The journal built a record
