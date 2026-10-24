@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- maelys-system **0.14.3**. Read for what reaches this product:
+  - 0.14.0 adds owned process groups, `maelys/sys/owned.h`, and the program
+    that keeps them, `libexec/maelys-sys/keeper`, which maelys-system's own
+    install now writes. This product uses neither, but its install runs
+    maelys-system's, and its packages carry the foundation they are built
+    on: **the archives, the .deb and the .rpm gain `owned.h` and
+    `libexec/maelys-sys/keeper`**, the program a consumer of the bundled
+    `libmaelys_sys.a` would need to start an owned group. The .rpm lists
+    its files and now lists that directory, without which `rpmbuild` would
+    have refused the file installed and not packaged. The Homebrew formula
+    builds against the tap's `libmaelys-sys` and does not change.
+  - 0.13.1 corrects `maelys_sys_process_spawn`, which handed a program the
+    signals its caller blocked or ignored. This product does not call it:
+    `channel exec` starts its program through the CLI framework. Measured
+    on 0.31.1 all the same: a program `channel exec` starts has no signal
+    blocked, and TERM, INT, PIPE, HUP and USR1 at their default action.
+  - 0.14.3 corrects two defects of its build that 0.14.2 brought here:
+    parallel makes on one `BUILD`, as `mutation-check` runs them, raced on
+    the keeper's path stamp and failed to build some mutants, and the
+    keeper did not link under the fuzzer's flags of `socle / fuzz`.
+  - 0.13.2, 0.14.1, 0.14.2 and 0.14.3 do not change the library.
+  - Outside comments, three of its public headers differ: the new one,
+    `version.h` and the umbrella `sys.h`. `MAELYS_SYS_ABI_VERSION` stays 1.
+
+  No header of this product changes and no ABI number moves.
+
 - **A make that a recipe or a test starts computes its parent's build line,
   whatever the caller's environment holds.** The `Makefile` rewrote
   `CPPFLAGS`, `CFLAGS`, `LDFLAGS` and `LDLIBS` in place. A variable that
