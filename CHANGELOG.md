@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- **`test-operations` finishes in a few seconds on a macOS runner, and an
+  alarm says which case it stopped.** `test_channel` keeps one relayed stream
+  open from its "still" step to its end, and three waits after that step
+  waited for no session at all: they could not succeed and spent their whole
+  budget, 2000 turns of a 1 ms sleep each. A 1 ms sleep lasts 5 to 10 ms on
+  the macOS runners, so the binary took 30 to 49 s there against 7 on Linux,
+  and from time to time passed the 60 s alarm of `tests/tls_socket_fixture.h`
+  with no check failed: `make: *** [test] Alarm clock: 14` on `macos-26` and
+  `macos-15`, nothing else. The waits now expect the sessions the test still
+  holds, check that they got them, and are bounded by the clock rather than
+  by a count of turns; the binary takes about one second here, and under 3 s
+  with every sleep eight times longer, where it used to reach the alarm. The
+  alarm now prints the case still running, and the upstream threads accept
+  and read within a deadline, so that a session that never reaches them
+  fails its checks instead of leaving the test joined on them forever. No
+  library code changes.
+
 ## 0.32.1 — 2026-10-24
 
 - maelys-system **0.14.3**. Read for what reaches this product:

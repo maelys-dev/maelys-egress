@@ -16,6 +16,7 @@
 #include <pthread.h>
 #include <netinet/in.h>
 #include <poll.h>
+#include <signal.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -23,12 +24,64 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
 
 static int failures;
 #define CHECK(test) do { if (!(test)) { \
     fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #test); ++failures; \
 } } while (0)
+
+/* Every wait is bounded by the clock, never by a count of turns. A 1 ms
+ * nanosleep lasts 5 to 10 ms on a loaded macOS runner: three waits of 2000
+ * turns that could not succeed took the binary past fixture_limits' 60 s
+ * alarm with no check failed, and the alarm said nothing of where. */
+#define SETTLE_MS 5000u
+#define UPSTREAM_WAIT_MS 10000
+
+static uint64_t monotonic_ms(void) {
+    struct timespec now;
+    (void)clock_gettime(CLOCK_MONOTONIC, &now);
+    return (uint64_t)now.tv_sec * 1000u + (uint64_t)now.tv_nsec / 1000000u;
+}
+
+static void pause_one_ms(void) {
+    struct timespec delay = {.tv_sec = 0, .tv_nsec = 1000000L};
+    (void)nanosleep(&delay, NULL);
+}
+
+/* The case running when the alarm fires is named on stderr: its default
+ * action killed the binary with nothing but make's "Alarm clock". */
+static const char *volatile running_case = "setup";
+
+static void report_alarm(int signal_number) {
+    (void)signal_number;
+    static const char prefix[] = "FAIL test-operations: ";
+    static const char suffix[] = " still running when the 60 s alarm fired\n";
+    const char *name = running_case;
+    (void)(write(STDERR_FILENO, prefix, sizeof(prefix) - 1u) >= 0 &&
+           write(STDERR_FILENO, name, strlen(name)) >= 0 &&
+           write(STDERR_FILENO, suffix, sizeof(suffix) - 1u) >= 0);
+    _exit(1);
+}
+
+/* An upstream waits for each connection within a deadline, and reads with
+ * one: a session that never reaches it is a failure the test reports, not
+ * a thread the test then joins forever. */
+static int accept_within(int listener) {
+    struct pollfd item = {.fd = listener, .events = POLLIN};
+    int ready;
+    do { ready = poll(&item, 1u, UPSTREAM_WAIT_MS); } while (ready < 0 && errno == EINTR);
+    if (ready != 1) return -1;
+    int client;
+    do { client = accept(listener, NULL, NULL); } while (client < 0 && errno == EINTR);
+    if (client >= 0) {
+        struct timeval limit = {.tv_sec = UPSTREAM_WAIT_MS / 1000};
+        (void)setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &limit, sizeof(limit));
+    }
+    return client;
+}
 
 static int send_all(int fd, const void *data, size_t length) {
     const unsigned char *bytes = data;
@@ -113,9 +166,8 @@ static maelys_egress_result_t test_attest(
 typedef struct upstream_context { int listener; int failed; } upstream_context_t;
 static void *upstream_main(void *opaque) {
     upstream_context_t *context = opaque;
-    int client;
-    do { client = accept(context->listener, NULL, NULL); }
-    while (client < 0 && errno == EINTR);
+    int client = accept_within(context->listener);
+    if (client < 0) context->failed = 1;
     char bytes[16];
     while (client >= 0) {
         ssize_t amount = recv(client, bytes, sizeof(bytes), 0);
@@ -160,9 +212,7 @@ typedef struct guard_upstream_context {
 
 static void *guard_upstream_main(void *opaque) {
     guard_upstream_context_t *context = opaque;
-    int client;
-    do { client = accept(context->listener, NULL, NULL); }
-    while (client < 0 && errno == EINTR);
+    int client = accept_within(context->listener);
     unsigned char byte;
     ssize_t amount;
     do { amount = client >= 0 ? recv(client, &byte, 1u, 0) : -1; }
@@ -184,9 +234,8 @@ typedef struct multi_upstream_context {
 static void *multi_upstream_main(void *opaque) {
     multi_upstream_context_t *context = opaque;
     for (size_t i = 0; i < context->expected; ++i) {
-        int client;
-        do { client = accept(context->listener, NULL, NULL); }
-        while (client < 0 && errno == EINTR);
+        int client = accept_within(context->listener);
+        if (client < 0) { context->failed = 1; break; }
         unsigned char byte = 0u;
         ssize_t amount;
         do { amount = client >= 0 ? recv(client, &byte, 1u, 0) : -1; }
@@ -214,9 +263,8 @@ typedef struct quota_upstream_context {
 static void *quota_upstream_main(void *opaque) {
     quota_upstream_context_t *context = opaque;
     for (size_t i = 0; i < context->expected; ++i) {
-        int client;
-        do { client = accept(context->listener, NULL, NULL); }
-        while (client < 0 && errno == EINTR);
+        int client = accept_within(context->listener);
+        if (client < 0) break;
         unsigned char bytes[32];
         for (;;) {
             ssize_t amount;
@@ -260,14 +308,14 @@ static void quota_receipt_sink(
 }
 
 static void wait_for_quota_receipts(quota_receipts_t *capture, size_t expected) {
-    for (unsigned int attempt = 0u; attempt < 3000u; ++attempt) {
+    uint64_t deadline = monotonic_ms() + SETTLE_MS;
+    do {
         (void)pthread_mutex_lock(&capture->lock);
         size_t count = capture->count;
         (void)pthread_mutex_unlock(&capture->lock);
         if (count >= expected) return;
-        struct timespec delay = {.tv_sec = 0, .tv_nsec = 1000000L};
-        (void)nanosleep(&delay, NULL);
-    }
+        pause_one_ms();
+    } while (monotonic_ms() < deadline);
 }
 
 static void *connector_client_main(void *opaque) {
@@ -1037,28 +1085,38 @@ static void *channel_upstream_main(void *opaque) {
 /* Descriptors close a moment after the peer that made them go away: the
  * relay's ends and the upstream's accepted socket follow the stream. */
 static int descriptors_settle_at(int expected) {
-    for (unsigned int attempt = 0u; attempt < 3000u; ++attempt) {
+    uint64_t deadline = monotonic_ms() + SETTLE_MS;
+    do {
         if (open_descriptors() == expected) return 1;
-        struct timespec delay = {.tv_sec = 0, .tv_nsec = 1000000L};
-        (void)nanosleep(&delay, NULL);
-    }
+        pause_one_ms();
+    } while (monotonic_ms() < deadline);
     return open_descriptors() == expected;
 }
 
-static uint64_t active_sessions(maelys_egress_server_t *server) {
+static uint64_t server_metric(maelys_egress_server_t *server,
+                              uint64_t (*field)(const maelys_egress_metrics_t *)) {
     maelys_egress_metrics_t *metrics = NULL;
     char *error = NULL;
     CHECK(maelys_egress_server_metrics_snapshot(server, &metrics, &error) == MAELYS_EGRESS_OK);
-    uint64_t active = metrics ? maelys_egress_metrics_active(metrics) : UINT64_MAX;
+    uint64_t value = metrics ? field(metrics) : UINT64_MAX;
     maelys_egress_metrics_destroy(metrics);
     maelys_egress_error_free(error);
-    return active;
+    return value;
 }
 
-static void wait_until_idle(maelys_egress_server_t *server) {
-    for (unsigned int attempt = 0u; attempt < 2000u && active_sessions(server) != 0u; ++attempt) {
-        struct timespec delay = {.tv_sec = 0, .tv_nsec = 1000000L};
-        (void)nanosleep(&delay, NULL);
+/* Waits for the sessions to fall back to the count the caller expects, once
+ * at least the receipts it expects are out. The count includes every stream
+ * the test still holds: test_channel keeps one from its "still" step to its
+ * end, and the wait for zero it once did there could only spend its whole
+ * budget, report nothing and let the steps after it race the session. */
+static int wait_for_sessions(maelys_egress_server_t *server, uint64_t active,
+                             uint64_t receipts) {
+    uint64_t deadline = monotonic_ms() + SETTLE_MS;
+    for (;;) {
+        int settled = server_metric(server, maelys_egress_metrics_receipts) >= receipts &&
+            server_metric(server, maelys_egress_metrics_active) == active;
+        if (settled || monotonic_ms() >= deadline) return settled;
+        pause_one_ms();
     }
 }
 
@@ -1169,11 +1227,12 @@ static unsigned bootstrap_read(int peer, int *out_channel) {
 
 static void settle_fds(int expected) {
     unsigned stable = 0u;
-    for (unsigned i = 0u; i < 3000u; ++i) {
+    uint64_t deadline = monotonic_ms() + SETTLE_MS;
+    do {
         if (fixture_fd_count() == expected) { if (++stable == 4u) return; }
         else stable = 0u;
-        struct timespec delay = {.tv_nsec = 1000000L}; nanosleep(&delay, NULL);
-    }
+        pause_one_ms();
+    } while (monotonic_ms() < deadline);
     REQUIRE(fixture_fd_count() == expected);
 }
 
@@ -1184,6 +1243,8 @@ static void test_bootstrap_broker(maelys_egress_connector_t *connector,
     char *directory = realpath(directory_template, NULL); REQUIRE(directory);
     char path[104]; REQUIRE(snprintf(path, sizeof(path), "%s/s", directory) > 0);
     int before = fixture_fd_count();
+    /* The caller's "still" stream stays active through this whole test. */
+    uint64_t sessions = server_metric(server, maelys_egress_metrics_active);
     maelys_egress_channel_broker_t *broker = NULL;
     REQUIRE(maelys_egress_channel_broker_create(connector, path, 2000u, 120u, 1u, &broker, NULL) == MAELYS_EGRESS_OK);
     int idle = fixture_fd_count();
@@ -1204,7 +1265,7 @@ static void test_bootstrap_broker(maelys_egress_connector_t *connector,
     maelys_egress_client_channel_close(client);
     REQUIRE(send_all(stream, "live", 4u)); char echoed[4]; fixture_readable(stream);
     REQUIRE(recv(stream, echoed, sizeof(echoed), 0) == 4 && !memcmp(echoed, "live", 4u));
-    close(stream); wait_until_idle(server); settle_fds(idle);
+    close(stream); REQUIRE(wait_for_sessions(server, sessions, 0u)); settle_fds(idle);
 
     unsigned char request[8]; egress_bootstrap_request(request);
     for (size_t split = 1u; split <= 8u; ++split) {
@@ -1262,7 +1323,8 @@ static void test_bootstrap_broker(maelys_egress_connector_t *connector,
     REQUIRE(access(path, F_OK) != 0);
     REQUIRE(send_all(stream, "kept", 4u)); fixture_readable(stream);
     REQUIRE(recv(stream, echoed, 4u, 0) == 4 && !memcmp(echoed, "kept", 4u));
-    maelys_egress_client_channel_close(client); close(stream); wait_until_idle(server); settle_fds(before);
+    maelys_egress_client_channel_close(client); close(stream);
+    REQUIRE(wait_for_sessions(server, sessions, 0u)); settle_fds(before);
 
     /* Group-capability mode: readable/traversable, never writable by clients. */
     REQUIRE(chown(directory, (uid_t)-1, getegid()) == 0);
@@ -1357,7 +1419,7 @@ static void test_channel(void) {
     ssize_t got = recv(stream, echoed, sizeof(echoed), 0);
     CHECK(got == 4 && memcmp(echoed, "ping", 4u) == 0);
     (void)close(stream);
-    wait_until_idle(server.server);
+    CHECK(wait_for_sessions(server.server, 0u, 0u));
     CHECK(descriptors_settle_at(with_channel));
 
     /* DENIED: a port the policy does not allow. The client end is bound to
@@ -1434,7 +1496,7 @@ static void test_channel(void) {
     channel_send_raw(client_fd, request, request_length);
     CHECK(channel_read_raw(client_fd, &version, &rights) == MAELYS_EGRESS_CHANNEL_OK && rights == 1u);
     CHECK(channel_read_raw(client_fd, &version, &rights) == MAELYS_EGRESS_CHANNEL_OK && rights == 1u);
-    wait_until_idle(server.server);
+    CHECK(wait_for_sessions(server.server, 0u, 0u));
     CHECK(descriptors_settle_at(with_channel));
 
     /* A stream survives the channel that carried it; the channel's end
@@ -1466,8 +1528,10 @@ static void test_channel(void) {
     CHECK(maelys_egress_channel_create(connector, 3000u, &channel, &second_client, &error) ==
           MAELYS_EGRESS_OK);
     CHECK(shutdown(second_client, SHUT_RD) == 0);
+    uint64_t issued = server_metric(server.server, maelys_egress_metrics_receipts);
     channel_send_raw(second_client, request, request_length);
-    wait_until_idle(server.server);
+    /* Its session has ended, and only the "still" stream remains. */
+    CHECK(wait_for_sessions(server.server, 1u, issued + 1u));
     (void)close(second_client);
     maelys_egress_channel_destroy(channel);
     channel = NULL;
@@ -1622,16 +1686,23 @@ static void test_stop_ends_relayed_connections(void) {
     (void)pthread_mutex_destroy(&server->lock);
 }
 
+#define RUN(test) do { running_case = #test; test(); } while (0)
+
 int main(void) {
+    struct sigaction alarm_action;
+    memset(&alarm_action, 0, sizeof(alarm_action));
+    alarm_action.sa_handler = report_alarm;
+    (void)sigemptyset(&alarm_action.sa_mask);
+    REQUIRE(sigaction(SIGALRM, &alarm_action, NULL) == 0);
     fixture_limits();
-    test_receipt_canonical();
-    test_audit_longest_record();
-    test_operations();
-    test_connector_guard_and_timeout();
-    test_connector_concurrency();
-    test_cumulative_quota();
-    test_channel();
-    test_stop_ends_relayed_connections();
+    RUN(test_receipt_canonical);
+    RUN(test_audit_longest_record);
+    RUN(test_operations);
+    RUN(test_connector_guard_and_timeout);
+    RUN(test_connector_concurrency);
+    RUN(test_cumulative_quota);
+    RUN(test_channel);
+    RUN(test_stop_ends_relayed_connections);
     if (failures) return 1;
     puts("all operational checks passed");
     return 0;
