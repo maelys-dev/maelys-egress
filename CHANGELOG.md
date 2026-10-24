@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.32.0 — 2026-10-24
 
 - **maelys-cli 0.10.0 and agent-cli-spec 2.19.0, the version it targets:
   `help` is laid out for a person, and `help conventions` is gone.**
