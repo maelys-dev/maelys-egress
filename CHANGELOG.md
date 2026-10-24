@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- maelys-system **0.14.4**: `KEEPER_PATH` becomes a build variable of its
+  own, the path of the keeper the library records, which this product never
+  reads. Its default follows `PREFIX`, as the keeper this product's install
+  writes does, so the packages do not change; a caller may fix it on the
+  command line, as maelys-warden does. The library does not change, outside
+  `version.h` and a comment of `owned.h`. Nothing a user receives changes.
+
 - maelys-release **0.65.0**: the three workflow pins, and no managed file.
   No version since 0.64.6 asks anything of this product; 0.64.8 has the
   release's publish step say so, with the replay command, when the approval
