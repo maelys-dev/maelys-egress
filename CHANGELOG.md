@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- **A make that a recipe or a test starts computes its parent's build line,
+  whatever the caller's environment holds.** The `Makefile` rewrote
+  `CPPFLAGS`, `CFLAGS`, `LDFLAGS` and `LDLIBS` in place. A variable that
+  came from the environment is handed to every command with the value it has
+  then, so a make started by a recipe or by `tests/test_install.py` read the
+  rewritten value as its caller's and prefixed it again. Its build line was
+  not its parent's, and the stamp that keeps a build directory to one
+  command line emptied the directory the parent was still using. Seen on a
+  machine whose environment sets `CPPFLAGS` and `LDFLAGS`, as a Homebrew
+  setup does: `make tsan` lost its test binaries and failed on its last
+  step. The CI and the release builds set neither and never met it. The
+  rules now read `EGRESS_CPPFLAGS`, `EGRESS_CFLAGS`, `EGRESS_LDFLAGS` and
+  `EGRESS_LDLIBS`, and the caller's four stay as given. `build-line-check`,
+  part of `make check`, starts a nested make under such flags and requires
+  its parent's line; it failed on the old `Makefile`. A top-level make
+  computes byte for byte the line it computed before, so a build directory
+  made before this change keeps its objects. Nothing a user receives
+  changes.
+
 ## 0.32.0 — 2026-10-24
 
 - **maelys-cli 0.10.0 and agent-cli-spec 2.19.0, the version it targets:
