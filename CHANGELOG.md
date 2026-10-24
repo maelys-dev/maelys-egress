@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- maelys-release **0.65.0**: the three workflow pins, and no managed file.
+  No version since 0.64.6 asks anything of this product; 0.64.8 has the
+  release's publish step say so, with the replay command, when the approval
+  comes after the build artifacts expired. Nothing a user receives changes.
+
 - **`test-operations` finishes in a few seconds on a macOS runner, and an
   alarm says which case it stopped.** `test_channel` keeps one relayed stream
   open from its "still" step to its end, and three waits after that step
