@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.32.1 — 2026-10-24
 
 - maelys-system **0.14.3**. Read for what reaches this product:
   - 0.14.0 adds owned process groups, `maelys/sys/owned.h`, and the program
