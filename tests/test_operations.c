@@ -1709,6 +1709,195 @@ static void test_bootstrap_broker(maelys_egress_connector_t *connector,
     settle_fds(before); REQUIRE(rmdir(directory) == 0); free(directory);
 }
 
+#if defined(__APPLE__)
+static uint64_t test_now_ms(void) {
+    uint64_t now = 0u;
+    CHECK(maelys_sys_monotonic_ms(&now) == MAELYS_SYS_OK);
+    return now;
+}
+
+/* When the active sessions came back to expected, by the clock;
+ * UINT64_MAX past the limit. The stream test_channel keeps open across the
+ * broker test is one of them. */
+static uint64_t idle_at(maelys_egress_server_t *server, uint64_t expected, uint64_t limit_ms) {
+    uint64_t start = test_now_ms();
+    for (;;) {
+        uint64_t now = test_now_ms();
+        if (server_metric(server, maelys_egress_metrics_active) == expected) return now;
+        if (now - start >= limit_ms) return UINT64_MAX;
+        struct timespec delay = {.tv_sec = 0, .tv_nsec = 1000000L};
+        (void)nanosleep(&delay, NULL);
+    }
+}
+
+/* macOS: the channel keeps its copy of a stream until the client shows it
+ * has it (src/channel_server.c). Each way the copy goes is seen from the
+ * session: a client's close sends its FIN only once that copy is gone. */
+static void test_channel_stream_hold(maelys_egress_connector_t *connector,
+    maelys_egress_server_t *server, uint16_t upstream_port) {
+    maelys_egress_channel_t *channel = NULL;
+    int client_fd = -1;
+    int stream = -1;
+    char *error = NULL;
+    CHECK(maelys_egress_channel_create(connector, 3000u, &channel, &client_fd, &error) ==
+          MAELYS_EGRESS_OK);
+    uint64_t kept = server_metric(server, maelys_egress_metrics_active);
+
+    /* Unused, the copy stays to its bound: the session outlives the
+     * client's close until 1000 ms after the answer at least. */
+    uint64_t asked = test_now_ms();
+    CHECK(maelys_egress_client_connect(client_fd, "localhost", upstream_port, 5000u, &stream,
+                                       &error) == MAELYS_EGRESS_CLIENT_OK);
+    (void)close(stream);
+    uint64_t idle = idle_at(server, kept, 10000u);
+    CHECK(idle != UINT64_MAX && idle - asked >= 1000u);
+
+    /* Used, a write releases it long before the bound. */
+    asked = test_now_ms();
+    CHECK(maelys_egress_client_connect(client_fd, "localhost", upstream_port, 5000u, &stream,
+                                       &error) == MAELYS_EGRESS_CLIENT_OK);
+    CHECK(send_all(stream, "used", 4u));
+    char echoed[4] = {0};
+    CHECK(recv(stream, echoed, sizeof(echoed), 0) == 4 && memcmp(echoed, "used", 4u) == 0);
+    (void)close(stream);
+    idle = idle_at(server, kept, 10000u);
+    CHECK(idle != UINT64_MAX && idle - asked < 1000u);
+
+    /* The next request releases it, a refused one as much as any. */
+    uint16_t other_port = (uint16_t)(upstream_port == UINT16_MAX ? upstream_port - 1u
+                                                                : upstream_port + 1u);
+    asked = test_now_ms();
+    CHECK(maelys_egress_client_connect(client_fd, "localhost", upstream_port, 5000u, &stream,
+                                       &error) == MAELYS_EGRESS_CLIENT_OK);
+    (void)close(stream);
+    int refused = -1;
+    CHECK(maelys_egress_client_connect(client_fd, "localhost", other_port, 5000u, &refused,
+                                       &error) == MAELYS_EGRESS_CLIENT_ERR_DENIED);
+    maelys_egress_client_error_free(error); error = NULL;
+    idle = idle_at(server, kept, 10000u);
+    CHECK(idle != UINT64_MAX && idle - asked < 1000u);
+
+    /* The end of the channel releases it. */
+    asked = test_now_ms();
+    CHECK(maelys_egress_client_connect(client_fd, "localhost", upstream_port, 5000u, &stream,
+                                       &error) == MAELYS_EGRESS_CLIENT_OK);
+    (void)close(stream);
+    maelys_egress_channel_destroy(channel);
+    idle = idle_at(server, kept, 10000u);
+    CHECK(idle != UINT64_MAX && idle - asked < 1000u);
+    (void)close(client_fd);
+}
+
+/* Closes Unix sockets with rights in flight, which runs the kernel's unp_gc
+ * over every descriptor in flight on the machine. */
+static void *gc_churn_main(void *opaque) {
+    atomic_int *stop = opaque;
+    while (!atomic_load(stop)) {
+        int pair[2];
+        if (socketpair(AF_UNIX, SOCK_DGRAM, 0, pair) != 0) continue;
+        int carried[2];
+        if (socketpair(AF_UNIX, SOCK_STREAM, 0, carried) == 0) {
+            (void)maelys_sys_fd_send(pair[0], "c", 1u, carried[0]);
+            (void)close(carried[0]);
+            (void)close(carried[1]);
+        }
+        (void)close(pair[0]);
+        (void)close(pair[1]);
+    }
+    return NULL;
+}
+
+/* Whether the stream carries a round trip; a flushed one reads EOF. */
+static int stream_echoes(int stream) {
+    if (!send_all(stream, "ping", 4u)) return 0;
+    char echoed[4];
+    size_t got = 0u;
+    while (got < sizeof(echoed)) {
+        struct pollfd item = {.fd = stream, .events = POLLIN};
+        if (poll(&item, 1u, 5000) <= 0) return 0;
+        ssize_t amount = recv(stream, echoed + got, sizeof(echoed) - got, 0);
+        if (amount < 0 && errno == EINTR) continue;
+        if (amount <= 0) return 0;
+        got += (size_t)amount;
+    }
+    return memcmp(echoed, "ping", 4u) == 0;
+}
+
+/* macOS: under unp_gc churn, every stream and every brokered channel
+ * arrives alive. Closing each copy at once after sending lost about one in
+ * ten of them on a 12-core host; this asks for hundreds of each. */
+static void test_descriptors_in_flight(maelys_egress_connector_t *connector,
+    maelys_egress_server_t *server, uint16_t upstream_port) {
+    uint64_t kept = server_metric(server, maelys_egress_metrics_active);
+    atomic_int stop;
+    atomic_init(&stop, 0);
+    pthread_t churn[2];
+    for (size_t i = 0u; i < 2u; ++i)
+        CHECK(pthread_create(&churn[i], NULL, gc_churn_main, &stop) == 0);
+
+    maelys_egress_channel_t *channel = NULL;
+    int client_fd = -1;
+    char *error = NULL;
+    CHECK(maelys_egress_channel_create(connector, 3000u, &channel, &client_fd, &error) ==
+          MAELYS_EGRESS_OK);
+    unsigned streams = 0u, dead_streams = 0u;
+    uint64_t start = test_now_ms();
+    while (streams < 400u && test_now_ms() - start < 8000u) {
+        int stream = -1;
+        if (maelys_egress_client_connect(client_fd, "localhost", upstream_port, 5000u, &stream,
+                                         NULL) != MAELYS_EGRESS_CLIENT_OK) {
+            ++dead_streams;
+            break;
+        }
+        if (!stream_echoes(stream)) ++dead_streams;
+        (void)close(stream);
+        ++streams;
+    }
+    maelys_egress_channel_destroy(channel);
+    (void)close(client_fd);
+
+    char directory_template[] = "/tmp/egress-inflight-XXXXXX";
+    REQUIRE(mkdtemp(directory_template));
+    char *directory = realpath(directory_template, NULL); REQUIRE(directory);
+    char path[104]; REQUIRE(snprintf(path, sizeof(path), "%s/s", directory) > 0);
+    maelys_egress_channel_broker_t *broker = NULL;
+    /* Room for channels the reaper has not joined yet: a slow host must not
+     * turn reaping into BUSY here. */
+    REQUIRE(maelys_egress_channel_broker_create(connector, path, 3000u, 3000u, 32u, &broker,
+                                                NULL) == MAELYS_EGRESS_OK);
+    unsigned channels = 0u, dead_channels = 0u;
+    start = test_now_ms();
+    while (channels < 200u && test_now_ms() - start < 8000u) {
+        maelys_egress_client_channel_t *client = NULL;
+        CHECK(maelys_egress_client_channel_open(path, 3000u, &client, NULL) ==
+              MAELYS_EGRESS_CLIENT_OK);
+        if (!client) break;
+        int stream = -1;
+        if (maelys_egress_client_connect(maelys_egress_client_channel_fd(client), "localhost",
+                upstream_port, 3000u, &stream, NULL) != MAELYS_EGRESS_CLIENT_OK ||
+            !stream_echoes(stream)) {
+            ++dead_channels;
+        }
+        if (stream >= 0) (void)close(stream);
+        maelys_egress_client_channel_close(client);
+        ++channels;
+    }
+    REQUIRE(maelys_egress_channel_broker_destroy(broker, NULL) == MAELYS_EGRESS_OK);
+    REQUIRE(rmdir(directory) == 0);
+    free(directory);
+
+    atomic_store(&stop, 1);
+    for (size_t i = 0u; i < 2u; ++i) CHECK(pthread_join(churn[i], NULL) == 0);
+    if (dead_streams || dead_channels || streams < 100u || channels < 50u) {
+        fprintf(stderr, "in flight: %u of %u streams and %u of %u channels arrived dead\n",
+                dead_streams, streams, dead_channels, channels);
+    }
+    CHECK(dead_streams == 0u && streams >= 100u);
+    CHECK(dead_channels == 0u && channels >= 50u);
+    CHECK(idle_at(server, kept, 10000u) != UINT64_MAX);
+}
+#endif
+
 
 static void test_channel(void) {
     /* Everything this test opens — upstream, server, channels, streams —
@@ -1899,6 +2088,10 @@ static void test_channel(void) {
 
     test_channel_response_backpressure(connector);
     test_bootstrap_broker(connector, server.server, upstream_port);
+#if defined(__APPLE__)
+    test_channel_stream_hold(connector, server.server, upstream_port);
+    test_descriptors_in_flight(connector, server.server, upstream_port);
+#endif
 
     /* Stopping the server ends the stream handed over earlier. */
     (void)close(stream);

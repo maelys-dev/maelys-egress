@@ -5,6 +5,9 @@
  * like everything else a socket does here — the pair, the wakeup, the loop,
  * the thread, the closes.
  */
+#if defined(__APPLE__) && !defined(_DARWIN_C_SOURCE)
+#define _DARWIN_C_SOURCE
+#endif
 #include "src/internal.h"
 #include "maelys/egress_channel.h"
 #include "maelys/sys/fdpass.h"
@@ -12,9 +15,29 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(__APPLE__)
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#endif
 
 #define CHANNEL_TOKEN_REQUESTS UINT64_C(1)
 #define CHANNEL_TOKEN_WAKEUP UINT64_C(2)
+
+/*
+ * On macOS a descriptor whose every reference is in flight in SCM_RIGHTS can
+ * be flushed by the kernel's unp_gc while the client receives it, whenever
+ * any process closes a Unix socket with rights in flight: the client gets a
+ * stream that reads end of file while its peer is still connected, and the
+ * relay's bytes are dropped. So the channel keeps its copy of the stream it
+ * sent until the client shows it has it: its next request (a client asks
+ * one at a time), the stream seen in use from this copy, which is the same
+ * socket, or the end of the channel; CHANNEL_HOLD_MS bounds the wait. While
+ * the copy is kept, a close by the client sends no FIN; a shutdown does.
+ * Linux collects only Unix sockets in flight, without this race, and keeps
+ * nothing.
+ */
+#define CHANNEL_HOLD_MS UINT64_C(1000)
+#define CHANNEL_HOLD_PAUSE_MAX_MS UINT64_C(8)
 
 /*
  * The loop belongs to the thread that steps it: registration, step and
@@ -33,6 +56,12 @@ struct maelys_egress_channel {
     maelys_sys_condition_t *condition;
     int armed;
     maelys_sys_result_t armed_result;
+    /* The stream of the last OK response, kept until the client has it
+     * (macOS only; -1 elsewhere), with its bound and its next check. */
+    int held_fd;
+    uint64_t held_until;
+    uint64_t held_check;
+    uint64_t held_pause;
 };
 
 static void report_armed(maelys_egress_channel_t *channel, maelys_sys_result_t result) {
@@ -66,7 +95,7 @@ static maelys_egress_channel_status_t status_of(maelys_egress_result_t result) {
 
 /* Sends one response, with the stream attached when there is one. Returns
  * whether the kernel took the datagram; the caller closes its copy of the
- * stream in every case, so a refused send leaves nothing open here. */
+ * stream when it did not, so a refused send leaves nothing open here. */
 static int send_response(
     int server_fd, maelys_egress_channel_status_t status, int stream_fd) {
     unsigned char response[MAELYS_EGRESS_CHANNEL_RESPONSE_SIZE];
@@ -76,6 +105,65 @@ static int send_response(
     }
     return maelys_sys_fd_send(server_fd, response, sizeof(response), stream_fd) ==
         MAELYS_SYS_OK;
+}
+
+static void release_held(maelys_egress_channel_t *channel) {
+    (void)maelys_sys_fd_close(&channel->held_fd);
+}
+
+#if defined(__APPLE__)
+/* Whether the client shows it has the stream: bytes it sent, or bytes it
+ * read of those the relay sent. An unreadable state releases the copy. */
+static int held_in_use(int fd) {
+    struct tcp_connection_info info;
+    socklen_t length = sizeof(info);
+    int unread = 0;
+    socklen_t unread_length = sizeof(unread);
+    if (getsockopt(fd, IPPROTO_TCP, TCP_CONNECTION_INFO, &info, &length) != 0 ||
+        getsockopt(fd, SOL_SOCKET, SO_NREAD, &unread, &unread_length) != 0 || unread < 0) {
+        return 1;
+    }
+    return info.tcpi_txbytes > 0u || info.tcpi_rxbytes > (uint64_t)unread;
+}
+#endif
+
+/* Takes the stream of a delivered response: kept on macOS, closed elsewhere
+ * or when the clock fails. */
+static void hold_stream(maelys_egress_channel_t *channel, int *stream_fd) {
+#if defined(__APPLE__)
+    uint64_t now = 0u;
+    if (*stream_fd >= 0 && maelys_sys_monotonic_ms(&now) == MAELYS_SYS_OK) {
+        channel->held_fd = *stream_fd;
+        *stream_fd = -1;
+        channel->held_until = now + CHANNEL_HOLD_MS;
+        channel->held_pause = 1u;
+        channel->held_check = now + channel->held_pause;
+    }
+#else
+    (void)channel;
+#endif
+    (void)maelys_sys_fd_close(stream_fd);
+}
+
+/* Releases the kept stream once in use or at its bound, and otherwise sets
+ * the next check, the pause doubling up to CHANNEL_HOLD_PAUSE_MAX_MS. */
+static void check_held(maelys_egress_channel_t *channel) {
+#if defined(__APPLE__)
+    if (channel->held_fd < 0) return;
+    uint64_t now = 0u;
+    if (maelys_sys_monotonic_ms(&now) != MAELYS_SYS_OK || now >= channel->held_until ||
+        held_in_use(channel->held_fd)) {
+        release_held(channel);
+        return;
+    }
+    if (now >= channel->held_check) {
+        if (channel->held_pause < CHANNEL_HOLD_PAUSE_MAX_MS) channel->held_pause *= 2u;
+        channel->held_check = now + channel->held_pause;
+        if (channel->held_check > channel->held_until) channel->held_check = channel->held_until;
+    }
+#else
+    (void)channel;
+#endif
 }
 
 /* Reads one datagram and answers it. Returns 0 when the channel is gone. */
@@ -94,6 +182,8 @@ static int serve_one(maelys_egress_channel_t *channel) {
         NULL, 0u, &attached, &flags);
     if (got == MAELYS_SYS_ERR_WOULD_BLOCK) return 1;
     if (got != MAELYS_SYS_OK) return 0;
+    /* A client asks once it has its previous answer: that stream is its. */
+    release_held(channel);
     maelys_egress_channel_request_t decoded;
     maelys_egress_channel_status_t status;
     if (flags & (MAELYS_SYS_FDPASS_TRUNCATED | MAELYS_SYS_FDPASS_CONTROL_TRUNCATED |
@@ -115,15 +205,16 @@ static int serve_one(maelys_egress_channel_t *channel) {
         }
         status = status_of(result);
     }
-    /* Whether or not the kernel took the datagram, the copy here closes and
-     * the session is released: the client end of the relay is then gone
-     * when the send failed, and Egress treats the session as any client
-     * that closed before writing. A response the nonblocking channel cannot
-     * queue ends the channel: leaving it open would leave this request
-     * unanswered and let a client that does not read block its supervisor.
-     * Delivery is confirmed only by the client's own receipt of the message;
-     * the contract has no acknowledgement. */
+    /* The session is released and the copy here leaves it: closed when the
+     * kernel refused the datagram, so that the client end of the relay is
+     * gone and Egress treats the session as any client that closed before
+     * writing; kept on macOS until the client has it when the datagram was
+     * queued (hold_stream). A response the nonblocking channel cannot queue
+     * ends the channel: leaving it open would leave this request unanswered
+     * and let a client that does not read block its supervisor. The
+     * contract has no acknowledgement. */
     int delivered = send_response(channel->server_fd, status, stream_fd);
+    if (delivered) hold_stream(channel, &stream_fd);
     (void)maelys_sys_fd_close(&stream_fd);
     maelys_egress_session_release(session);
     return delivered;
@@ -150,7 +241,10 @@ static void *channel_main(void *opaque) {
     while (serving) {
         size_t count = 0u;
         maelys_sys_step_result_t step;
-        if (maelys_sys_loop_step(loop, MAELYS_SYS_DEADLINE_INFINITE, events,
+        check_held(channel);
+        uint64_t deadline = channel->held_fd >= 0 ? channel->held_check :
+            MAELYS_SYS_DEADLINE_INFINITE;
+        if (maelys_sys_loop_step(loop, deadline, events,
                                  sizeof(events) / sizeof(events[0]), &count, &step) !=
             MAELYS_SYS_OK) {
             break;
@@ -171,7 +265,8 @@ static void *channel_main(void *opaque) {
     }
     /* Closing here makes every way the worker stops observable by the
      * client, including response backpressure. destroy joins before it
-     * touches the descriptor again, so its close remains idempotent. */
+     * touches the descriptors again, so its closes remain idempotent. */
+    release_held(channel);
     (void)maelys_sys_fd_close(&channel->server_fd);
     return NULL;
 }
@@ -193,6 +288,7 @@ maelys_egress_result_t maelys_egress_channel_create(
     maelys_egress_channel_t *channel = calloc(1, sizeof(*channel));
     if (!channel) return MAELYS_EGRESS_ERR_MEMORY;
     channel->server_fd = -1;
+    channel->held_fd = -1;
     channel->connect_timeout_ms = connect_timeout_ms;
     int pair[2] = {-1, -1};
     maelys_egress_result_t result = MAELYS_EGRESS_ERR_IO;
@@ -250,6 +346,7 @@ void maelys_egress_channel_destroy(maelys_egress_channel_t *channel) {
     maelys_sys_condition_destroy(channel->condition);
     maelys_sys_mutex_destroy(channel->lock);
     maelys_sys_wakeup_destroy(channel->wakeup);
+    release_held(channel);
     (void)maelys_sys_fd_close(&channel->server_fd);
     maelys_egress_connector_release(channel->connector);
     free(channel);

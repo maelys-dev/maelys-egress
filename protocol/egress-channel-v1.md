@@ -179,6 +179,20 @@ promises no receipt field. There is no acknowledgement message in v1: the
 client's successful `recvmsg` of an `OK` response with one descriptor is the
 only confirmation, and a client that receives nothing (EOF, error) treats the
 request as failed with no stream.
+*Erratum of 0.32.2:* on macOS the server closes its copy of a delivered
+stream only once the client shows it has it: its next request on the channel,
+the stream seen in use from that copy (bytes the client sent, or bytes it
+read), or the end of the channel, and at the latest 1000 ms after the
+response. XNU's `unp_gc`, which any process runs by closing a Unix socket while
+rights are in flight, can flush a descriptor whose every reference is in
+flight while the client receives it: the client then holds a stream that reads
+end of file while the relay is still connected, and what the relay sends is
+lost. Until 0.32.1 the server closed its copy at once, and under such activity
+a stream could arrive dead. While the copy is kept, a client's `close` sends
+the relay no FIN, so a stream abandoned without a byte either way ends up to
+1000 ms later; `shutdown` sends it at once. A refused send still closes the
+copy at once. Linux keeps nothing: its collector concerns Unix sockets in
+flight only, without this race. The bytes of the protocol do not change.
 On the client side, the received descriptor is set `CLOEXEC` before anything
 else is done with it; the kernel does not carry that flag across `SCM_RIGHTS`
 on every platform (`MSG_CMSG_CLOEXEC` exists on Linux, not on macOS).
@@ -190,7 +204,11 @@ after the refused send, the process's descriptor count is what it was before
 the request and no session is active. A descriptor received by the client has
 `FD_CLOEXEC` set. A client that fills the response queue without reading sees
 the channel close, and the supervisor destroys it before closing the client
-end. (`tests/test_operations.c`, `tests/test_client.c`.)
+end. On macOS, a stream closed unused ends no sooner than 1000 ms after its
+answer; one in use, a next request or the end of the channel releases the
+copy before; and while other threads close Unix sockets with rights in
+flight, hundreds of streams all carry a round trip.
+(`tests/test_operations.c`, `tests/test_client.c`.)
 
 ### 3. Bounds, deadlines and shutdown
 

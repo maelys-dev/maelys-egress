@@ -49,12 +49,21 @@ The returned descriptor must be a connected Unix datagram socket and have
 set after receipt, not atomically against concurrent `fork` plus `exec`;
 embedders must coordinate such execution when that race matters.
 
-A positive partial send queues the descriptor once. The sender closes its
-local copy and sends remaining bytes without attaching it again. A retry
-after zero progress retains that copy. Any failed or incomplete delivery
-closes remaining local copies and retires the channel. Success means bytes
-and rights were queued, not that the application acknowledged receipt.
-Empty rights-bearing sends are forbidden.
+A positive partial send queues the descriptor once. The sender sends the
+remaining bytes without attaching it again, and keeps its local copy until
+the lease ends. A retry after zero progress retains that copy. Any failed or
+incomplete delivery closes remaining local copies and retires the channel.
+Success means bytes and rights were queued, not that the application
+acknowledged receipt. Empty rights-bearing sends are forbidden.
+
+*Erratum of 0.32.2:* until 0.32.1 the broker closed its copy once the
+descriptor was queued. On macOS, XNU's `unp_gc`, which any process runs by
+closing a Unix socket while rights are in flight, can flush a descriptor
+whose every reference is in flight while the client receives it: the client
+then held a channel that never read an answer. The broker now keeps its copy
+for the lease, which already bounds the channel's life, on every host, at the
+cost of one descriptor per lease. Lease closure closes it with the channel.
+The bytes and the descriptor cardinality do not change.
 
 macOS can deliver zero bytes with rights: this is malformed control, not
 EOF or a harmless retry. Linux can deliver credentials with EOF when
@@ -152,7 +161,8 @@ UNSUPPORTED:     4d454250 01 05 01 00 0000000000000000  (no FD)
 ## Lease, ownership and shutdown
 
 After `OK`, neither endpoint sends any more bootstrap data. The broker owns
-the accepted lease, channel server handle and capacity slot. EOF, extra
+the accepted lease, channel server handle, its copy of the channel's client
+end and capacity slot. EOF, extra
 bytes or ancillary data close the lease and request channel stop. Destruction
 runs on a fixed cleanup worker, never on the broker or Egress server reactor.
 The bounded retirement queue uses existing slots, with no new allocation or

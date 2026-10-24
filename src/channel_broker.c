@@ -20,7 +20,7 @@ typedef struct broker_slot {
     maelys_egress_channel_t *channel;
     struct broker_slot *reap_next;
     atomic_int reaped;
-    int passed;
+    int passed; /* The channel's client end, kept for the whole lease. */
     enum broker_phase phase;
     unsigned status;
     size_t progress;
@@ -218,9 +218,11 @@ static int serve_slot(maelys_egress_channel_broker_t *broker, broker_slot_t *slo
         if (retry_io(result)) return 1;
         if (result != MAELYS_SYS_OK || !sent) return 0;
         slot->progress += sent;
-        /* Positive progress transfers rights once. Keep no duplicate while
-         * awaiting the remaining bytes; failure still destroys the channel. */
-        (void)maelys_sys_fd_close(&slot->passed);
+        /* Positive progress transfers rights once; the remaining bytes go
+         * without them. The copy here stays until the lease ends: on macOS a
+         * descriptor whose every reference is in flight can be flushed by
+         * the kernel's unp_gc while the client receives it, and the channel
+         * would then never read an answer. drop_slot closes it. */
         if (slot->progress == EGRESS_BOOTSTRAP_RESPONSE_SIZE) {
             if (slot->status != EGRESS_BOOTSTRAP_OK) return 0;
             slot->phase = BROKER_LEASE;
