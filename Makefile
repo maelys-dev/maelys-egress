@@ -718,11 +718,23 @@ build-line-check:
 build-line:
 	@printf 'BUILD_LINE=%s\n' '$(BUILD_COMMAND_LINE)'
 
-# As tests/test_install.py starts it: from the environment the recipe has,
-# without what make passes through MAKEFLAGS.
+# What install-metadata-check hands tests/test_install.py, which gives it to
+# the make it starts: that make has these and the environment, not MAKEFLAGS.
+INSTALL_TEST_OVERRIDES = PREFIX="$(PREFIX)" \
+	VERSION="$(VERSION)" \
+	MAELYS_DEPENDENCIES_DIR="$(MAELYS_DEPENDENCIES_DIR)" \
+	MAELYS_SYSTEM_DIR="$(MAELYS_SYSTEM_DIR)" \
+	MAELYS_SYSTEM_PIN="$(MAELYS_SYSTEM_PIN)" \
+	MAELYS_SYSTEM_PREFIX="$(MAELYS_SYSTEM_PREFIX)" \
+	MAELYS_CLI_DIR="$(MAELYS_CLI_DIR)" \
+	MAELYS_CLI_PIN="$(MAELYS_CLI_PIN)" \
+	MAELYS_SPEC_DIR="$(MAELYS_SPEC_DIR)" \
+	MAELYS_SPEC_PIN="$(MAELYS_SPEC_PIN)"
+
+# As tests/test_install.py starts it.
 build-line-nested:
 	@env -u MAKEFLAGS -u MFLAGS -u MAKELEVEL $(MAKE) -s --no-print-directory \
-		BUILD=$(BUILD) build-line
+		BUILD=$(BUILD) $(INSTALL_TEST_OVERRIDES) build-line
 
 mutation-check:
 	scripts/mutation-check.sh
@@ -942,16 +954,7 @@ reproducible-check: $(STATIC_LIB)
 # the installation itself; this stages one under two prefixes and reads back
 # what the dispatcher would read.
 install-metadata-check: all
-	python3 tests/test_install.py $(BUILD) PREFIX="$(PREFIX)" \
-		VERSION="$(VERSION)" \
-		MAELYS_DEPENDENCIES_DIR="$(MAELYS_DEPENDENCIES_DIR)" \
-		MAELYS_SYSTEM_DIR="$(MAELYS_SYSTEM_DIR)" \
-		MAELYS_SYSTEM_PIN="$(MAELYS_SYSTEM_PIN)" \
-		MAELYS_SYSTEM_PREFIX="$(MAELYS_SYSTEM_PREFIX)" \
-		MAELYS_CLI_DIR="$(MAELYS_CLI_DIR)" \
-		MAELYS_CLI_PIN="$(MAELYS_CLI_PIN)" \
-		MAELYS_SPEC_DIR="$(MAELYS_SPEC_DIR)" \
-		MAELYS_SPEC_PIN="$(MAELYS_SPEC_PIN)"
+	python3 tests/test_install.py $(BUILD) $(INSTALL_TEST_OVERRIDES)
 
 install-check: all
 	@set -e; stage="$$(mktemp -d)"; trap 'rm -rf "$$stage"' EXIT; \
