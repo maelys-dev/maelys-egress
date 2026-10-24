@@ -187,6 +187,7 @@ cp -a ${linux_stage}/. %{buildroot}/
 /usr/lib/pkgconfig/maelys-egress.pc
 /usr/lib/pkgconfig/maelys-egress-client.pc
 /usr/lib/pkgconfig/maelys-sys.pc
+/usr/libexec/maelys-sys/
 /usr/share/doc/maelys-egress/
 /usr/share/maelys/commands/egress.json
 EOF
