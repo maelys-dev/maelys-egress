@@ -63,14 +63,23 @@ MAELYS_SPEC_PIN := $(word 2,$(shell cat dependencies/agent-cli-spec.pin))
 GENERATED := $(BUILD)/generated
 SANITIZE_FLAGS ?=
 
-override CPPFLAGS := -Iinclude -I. -I$(MAELYS_SYSTEM_INCLUDE) $(CPPFLAGS) \
+# CPPFLAGS, CFLAGS, LDFLAGS and LDLIBS stay as the caller gave them, and the
+# rules read EGRESS_* instead. A variable that came from the environment is
+# handed to every command make starts with the value it has then: these four
+# were rewritten in place, so a make started by a recipe or by a test read
+# the rewritten value as its caller's and prefixed it again. The build line
+# it computed was not its parent's, and the stamp below emptied the build
+# directory the parent was still using (build-line-check).
+EGRESS_CPPFLAGS := -Iinclude -I. -I$(MAELYS_SYSTEM_INCLUDE) $(CPPFLAGS) \
 	-DMAELYS_EGRESS_BUILD_VERSION='"$(VERSION)"'
 CFLAGS ?= -O2 -g
-override CFLAGS += -std=c11 -Wall -Wextra -Wpedantic -Werror -Wconversion \
+EGRESS_CFLAGS = $(CFLAGS) -std=c11 -Wall -Wextra -Wpedantic -Werror -Wconversion \
 	-Wshadow -Wstrict-prototypes -Wmissing-prototypes -Wformat=2 \
 	-D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -pthread $(SANITIZE_FLAGS)
-LDFLAGS += $(SANITIZE_FLAGS)
-LDLIBS += $(MAELYS_SYSTEM_LIB) -pthread
+# Joined as += joined them, so that the build line of a directory made before
+# this change reads the same and its objects are kept.
+EGRESS_LDFLAGS = $(if $(LDFLAGS),$(LDFLAGS) $(SANITIZE_FLAGS),$(SANITIZE_FLAGS))
+EGRESS_LDLIBS = $(if $(LDLIBS),$(LDLIBS) $(MAELYS_SYSTEM_LIB) -pthread,$(MAELYS_SYSTEM_LIB) -pthread)
 
 # The build directory remembers the command line it was made with, and drops
 # what it holds when that line changes. Each profile already has its own
@@ -88,8 +97,8 @@ LDLIBS += $(MAELYS_SYSTEM_LIB) -pthread
 # object written in the same second as the stamp reads as up to date and is
 # silently kept.
 BUILD_LINE_STAMP := $(BUILD)/command-line.stamp
-BUILD_COMMAND_LINE := CC=$(CC) CXX=$(CXX) CPPFLAGS=$(CPPFLAGS) CFLAGS=$(CFLAGS) \
-	LDFLAGS=$(LDFLAGS) LDLIBS=$(LDLIBS)
+BUILD_COMMAND_LINE := CC=$(CC) CXX=$(CXX) CPPFLAGS=$(EGRESS_CPPFLAGS) CFLAGS=$(EGRESS_CFLAGS) \
+	LDFLAGS=$(EGRESS_LDFLAGS) LDLIBS=$(EGRESS_LDLIBS)
 # Neither on `make clean`, nor on a dry run: `make -n` prints what a build
 # would do and must write nothing.
 DRY_RUN := $(findstring n,$(firstword -$(MAKEFLAGS)))
@@ -200,7 +209,7 @@ all: $(STATIC_LIB) $(CLIENT_LIB) $(CLI) $(TEST) $(PC) $(CLIENT_PC) $(MANIFEST)
 	tls-mbedtls-check tls-wolfssl-check tls-providers-check tls-provider-mutation-check tls-binaries \
 	asan-ubsan tsan analyze fuzz fuzz-smoke install install-tls-modules install-check \
 	public-check reproducible-check install-metadata-check dist client-standalone-check consumer-source-check abi-floor-check \
-	compose-proxy-check compose-channel-check
+	compose-proxy-check compose-channel-check build-line-check build-line build-line-nested
 
 ifeq ($(MAELYS_SYSTEM_PREFIX),)
 check-system-contract:
@@ -289,7 +298,7 @@ $(GENERATED)/egress_schemas.h: $(CLI_SCHEMAS) | $(MAELYS_CLI_LIB)
 
 $(CLI_SCHEMA_OBJECT): $(GENERATED)/egress_schemas.c
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) -c $< -o $@
 
 $(OBJECTS): | $(MAELYS_SYSTEM_LIB)
 
@@ -309,11 +318,11 @@ $(VERSION_STAMP): force-version
 # pattern rule, newer versions the shortest stem, and both must choose it.
 $(OBJ)/cli/%.o: cli/%.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
-	$(CC) $(CLI_CPPFLAGS) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
+	$(CC) $(CLI_CPPFLAGS) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) -MMD -MP -c $< -o $@
 
 $(OBJ)/%.o: %.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) -MMD -MP -c $< -o $@
 
 # rm -f so the archive is exactly its objects rather than an accumulation
 # across builds, and ZERO_AR_DATE so the same objects always give the same
@@ -325,7 +334,7 @@ $(STATIC_LIB): $(OBJECTS)
 
 $(OBJ)/providers/tls_mbedtls.o: providers/tls_mbedtls.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $$(pkg-config --cflags mbedtls) -MMD -MP -c $< -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $$(pkg-config --cflags mbedtls) -MMD -MP -c $< -o $@
 
 $(MBEDTLS_LIB): $(OBJ)/providers/tls_mbedtls.o $(TLS_SOCKET_OBJECT)
 	@mkdir -p $(@D)
@@ -333,7 +342,7 @@ $(MBEDTLS_LIB): $(OBJ)/providers/tls_mbedtls.o $(TLS_SOCKET_OBJECT)
 
 $(OBJ)/providers/tls_wolfssl.o: providers/tls_wolfssl.c $(VERSION_STAMP)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $$(pkg-config --cflags wolfssl) -MMD -MP -c $< -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $$(pkg-config --cflags wolfssl) -MMD -MP -c $< -o $@
 
 $(WOLFSSL_LIB): $(OBJ)/providers/tls_wolfssl.o $(TLS_SOCKET_OBJECT)
 	@mkdir -p $(@D)
@@ -343,51 +352,51 @@ $(CLI_OBJECTS): | $(MAELYS_SYSTEM_LIB) $(MAELYS_CLI_LIB) $(GENERATED)/egress_sch
 
 $(CLI): $(CLI_OBJECTS) $(CLI_SCHEMA_OBJECT) $(STATIC_LIB) $(MAELYS_CLI_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
+	$(CC) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $^ $(EGRESS_LDLIBS) -o $@
 
 $(OBJ)/cli/tls_listener-mbedtls.o: cli/tls_listener.c $(VERSION_STAMP) | $(MAELYS_CLI_LIB) $(GENERATED)/egress_schemas.h
 	@mkdir -p $(@D)
-	$(CC) $(CLI_CPPFLAGS) $(CPPFLAGS) $(CFLAGS) \
+	$(CC) $(CLI_CPPFLAGS) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) \
 		-DMAELYS_EGRESS_TLS_FACTORY=maelys_egress_tls_mbedtls_create \
 		-MMD -MP -c $< -o $@
 
 $(MBEDTLS_CLI): $(OBJ)/cli/tls_listener-mbedtls.o $(CLI_COMMON_OBJECTS) $(CLI_SCHEMA_OBJECT) $(MBEDTLS_LIB) $(STATIC_LIB) $(MAELYS_CLI_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) \
+	$(CC) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $^ $(EGRESS_LDLIBS) \
 		$$(pkg-config --libs mbedtls mbedx509 mbedcrypto) -o $@
 
 $(OBJ)/cli/tls_listener-wolfssl.o: cli/tls_listener.c $(VERSION_STAMP) | $(MAELYS_CLI_LIB) $(GENERATED)/egress_schemas.h
 	@mkdir -p $(@D)
-	$(CC) $(CLI_CPPFLAGS) $(CPPFLAGS) $(CFLAGS) \
+	$(CC) $(CLI_CPPFLAGS) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) \
 		-DMAELYS_EGRESS_TLS_FACTORY=maelys_egress_tls_wolfssl_create \
 		-MMD -MP -c $< -o $@
 
 $(WOLFSSL_CLI): $(OBJ)/cli/tls_listener-wolfssl.o $(CLI_COMMON_OBJECTS) $(CLI_SCHEMA_OBJECT) $(WOLFSSL_LIB) $(STATIC_LIB) $(MAELYS_CLI_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) $$(pkg-config --libs wolfssl) -o $@
+	$(CC) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $^ $(EGRESS_LDLIBS) $$(pkg-config --libs wolfssl) -o $@
 
 $(OBJ)/tests/test_egress.o: tests/test_egress.c $(VERSION_STAMP) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) -MMD -MP -c $< -o $@
 
 $(TEST): $(OBJ)/tests/test_egress.o $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
+	$(CC) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $^ $(EGRESS_LDLIBS) -o $@
 
 $(OBJ)/tests/test_operations.o: tests/test_operations.c $(VERSION_STAMP) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) -MMD -MP -c $< -o $@
 
 # The operations test drives the channel from both ends: it links the
 # client archive before the library, so the codec comes from the archive a
 # confined process would hold.
 $(OPERATIONS_TEST): $(OBJ)/tests/test_operations.o $(CLIENT_LIB) $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
+	$(CC) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $^ $(EGRESS_LDLIBS) -o $@
 
 $(CHANNEL_TEST): tests/test_channel.c $(CHANNEL_CODEC)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $^ -o $@
 
 $(FDPASS_OBJECT): $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
@@ -446,30 +455,30 @@ client-standalone-check: $(CLIENT_LIB)
 
 $(CLIENT_TEST): tests/test_client.c $(CLIENT_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $^ -o $@
 
 $(BOOTSTRAP_CLIENT_TEST): tests/test_bootstrap_client.c common/bootstrap.h tests/tls_socket_fixture.h $(CLIENT_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(filter-out -pthread,$(CFLAGS)) $(LDFLAGS) $< $(CLIENT_LIB) -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(filter-out -pthread,$(EGRESS_CFLAGS)) $(EGRESS_LDFLAGS) $< $(CLIENT_LIB) -o $@
 
 $(BIN)/bootstrap-cli-client: tests/bootstrap_cli_client.c $(CLIENT_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(filter-out -pthread,$(CFLAGS)) $(LDFLAGS) $< $(CLIENT_LIB) -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(filter-out -pthread,$(EGRESS_CFLAGS)) $(EGRESS_LDFLAGS) $< $(CLIENT_LIB) -o $@
 
 # The program `channel exec` starts under test: the client archive alone.
 $(BIN)/exec-probe: tests/exec_probe.c $(CLIENT_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(filter-out -pthread,$(CFLAGS)) $(LDFLAGS) $< $(CLIENT_LIB) -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(filter-out -pthread,$(EGRESS_CFLAGS)) $(EGRESS_LDFLAGS) $< $(CLIENT_LIB) -o $@
 
 $(BROKER_FAULTS_TEST): tests/test_broker_faults.c tests/tls_socket_fixture.h common/bootstrap.h src/channel_broker.c src/channel_server.c client/channel_open.c $(CLIENT_LIB) $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(CLIENT_LIB) $(STATIC_LIB) $(LDLIBS) -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $< $(CLIENT_LIB) $(STATIC_LIB) $(EGRESS_LDLIBS) -o $@
 
 # maelys-sandbox-policy's destination corpus, played against the sealing
 # code with the resolver substituted: the source is compiled in, not linked.
 $(POLICY_CORPUS_TEST): tests/test_policy_corpus.c src/core/policy.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(STATIC_LIB) $(LDLIBS) -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $< $(STATIC_LIB) $(EGRESS_LDLIBS) -o $@
 
 # The copy is the tag's: every file has the digest PROVENANCE records, and a
 # case edited here instead of in maelys-sandbox-policy is refused.
@@ -483,23 +492,23 @@ policy-corpus-check: $(POLICY_CORPUS_TEST)
 
 $(BOOTSTRAP_GATES_TEST): tests/test_bootstrap_gates.c tests/tls_socket_fixture.h common/bootstrap.h src/connector.c src/channel_broker.c src/channel_server.c client/channel_open.c $(CLIENT_LIB) $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< $(CLIENT_LIB) $(STATIC_LIB) $(LDLIBS) -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $< $(CLIENT_LIB) $(STATIC_LIB) $(EGRESS_LDLIBS) -o $@
 
 $(BIN)/example-%: examples/%.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $^ $(EGRESS_LDLIBS) -o $@
 
 # The confined side links the client archive alone: no library, no
 # maelys-system, no -pthread. That is what makes it an example.
 $(BIN)/example-channel_client: examples/channel_client.c $(CLIENT_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $^ -o $@
 
 # Compile the container consumer on every host, without the core or pthread.
 # Its deployment assertions are executed by compose-channel-check on Linux.
 $(BIN)/example-compose-channel-client: examples/compose-channel/app.c $(CLIENT_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(filter-out -pthread,$(CFLAGS)) $(LDFLAGS) $^ -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(filter-out -pthread,$(EGRESS_CFLAGS)) $(EGRESS_LDFLAGS) $^ -o $@
 
 $(TLS_TEST_STAMP):
 	@mkdir -p $(@D)
@@ -511,25 +520,25 @@ $(TLS_TEST_STAMP):
 
 $(TLS_SOCKET_TEST): tests/test_tls_socket.c tests/tls_socket_fixture.h $(TLS_SOCKET_OBJECT) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) tests/test_tls_socket.c $(TLS_SOCKET_OBJECT) $(LDLIBS) -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) tests/test_tls_socket.c $(TLS_SOCKET_OBJECT) $(EGRESS_LDLIBS) -o $@
 
 $(TLS_SOCKET_ERRORS_TEST): tests/test_tls_socket_errors.c tests/tls_socket_fixture.h providers/socket_io.c providers/socket_io.h
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) tests/test_tls_socket_errors.c -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) tests/test_tls_socket_errors.c -o $@
 
 $(MBEDTLS_TEST): tests/test_tls_provider.c tests/tls_socket_fixture.h $(MBEDTLS_LIB) $(STATIC_LIB) $(TLS_TEST_STAMP) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) \
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) \
 		-DMAELYS_TLS_FACTORY=maelys_egress_tls_mbedtls_create \
 		tests/test_tls_provider.c $(MBEDTLS_LIB) $(STATIC_LIB) \
-		$(LDLIBS) $$(pkg-config --libs mbedtls mbedx509 mbedcrypto) -o $@
+		$(EGRESS_LDLIBS) $$(pkg-config --libs mbedtls mbedx509 mbedcrypto) -o $@
 
 $(WOLFSSL_TEST): tests/test_tls_provider.c tests/tls_socket_fixture.h $(WOLFSSL_LIB) $(STATIC_LIB) $(TLS_TEST_STAMP) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) \
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) \
 		-DMAELYS_TLS_FACTORY=maelys_egress_tls_wolfssl_create \
 		tests/test_tls_provider.c $(WOLFSSL_LIB) $(STATIC_LIB) \
-		$(LDLIBS) $$(pkg-config --libs wolfssl) -o $@
+		$(EGRESS_LDLIBS) $$(pkg-config --libs wolfssl) -o $@
 
 # The pkg-config file and the manifest read by the `maelys` dispatcher both
 # describe the installation: the manifest binds `maelys egress` to the
@@ -683,9 +692,49 @@ conformance-check: $(CLI) check-spec-contract
 
 check: test examples-check sdk-check audit docs-check system-integration-check contract-check schema-check channel-exec-check policy-corpus-check \
 	conformance-check public-check reproducible-check install-metadata-check \
-	client-standalone-check consumer-source-check abi-floor-check
+	client-standalone-check consumer-source-check abi-floor-check build-line-check
 	$(CXX) -Iinclude -std=c++17 -Wall -Wextra -Wpedantic -Werror \
 		tests/header_cpp.cpp -c -o $(BUILD)/header-cpp.o
+
+# A make that a recipe or a test starts computes the build line of the make
+# that started it, whatever the caller's environment holds. When it did not,
+# the stamp above saw another line and emptied the build directory under the
+# make that was using it: on a machine whose environment set CPPFLAGS and
+# LDFLAGS, as a Homebrew setup does, `make tsan` lost its test binaries to
+# tests/test_install.py, which starts make again, and failed on its last
+# step. The caller's flags are given here as such an environment gives them.
+BUILD_LINE_CHECK_ENV := CPPFLAGS=-I/build-line-check LDFLAGS=-L/build-line-check \
+	CFLAGS='-O1 -g' LDLIBS=-lm
+build-line-check:
+	@expected=$$($(BUILD_LINE_CHECK_ENV) $(MAKE) -s --no-print-directory \
+		BUILD=$(BUILD)/build-line-check build-line | sed -n 's/^BUILD_LINE=//p'); \
+	nested=$$($(BUILD_LINE_CHECK_ENV) $(MAKE) -s --no-print-directory \
+		BUILD=$(BUILD)/build-line-check build-line-nested | sed -n 's/^BUILD_LINE=//p'); \
+	if test -z "$$expected" || test "$$expected" != "$$nested"; then \
+		printf '%s\n' "build-line-check: a nested make computes another build line" \
+			"  started: $$expected" "  nested:  $$nested" >&2; exit 1; fi; \
+	echo "build-line-check: a nested make computes the build line of the make that started it"
+
+build-line:
+	@printf 'BUILD_LINE=%s\n' '$(BUILD_COMMAND_LINE)'
+
+# What install-metadata-check hands tests/test_install.py, which gives it to
+# the make it starts: that make has these and the environment, not MAKEFLAGS.
+INSTALL_TEST_OVERRIDES = PREFIX="$(PREFIX)" \
+	VERSION="$(VERSION)" \
+	MAELYS_DEPENDENCIES_DIR="$(MAELYS_DEPENDENCIES_DIR)" \
+	MAELYS_SYSTEM_DIR="$(MAELYS_SYSTEM_DIR)" \
+	MAELYS_SYSTEM_PIN="$(MAELYS_SYSTEM_PIN)" \
+	MAELYS_SYSTEM_PREFIX="$(MAELYS_SYSTEM_PREFIX)" \
+	MAELYS_CLI_DIR="$(MAELYS_CLI_DIR)" \
+	MAELYS_CLI_PIN="$(MAELYS_CLI_PIN)" \
+	MAELYS_SPEC_DIR="$(MAELYS_SPEC_DIR)" \
+	MAELYS_SPEC_PIN="$(MAELYS_SPEC_PIN)"
+
+# As tests/test_install.py starts it.
+build-line-nested:
+	@env -u MAKEFLAGS -u MFLAGS -u MAKELEVEL $(MAKE) -s --no-print-directory \
+		BUILD=$(BUILD) $(INSTALL_TEST_OVERRIDES) build-line
 
 mutation-check:
 	scripts/mutation-check.sh
@@ -720,28 +769,28 @@ tsan:
 # plain --analyze and even -Werror report findings and still exit 0.
 analyze: | $(MAELYS_SYSTEM_LIB)
 	$(CC) --analyze -Xclang -analyzer-output=text -Xclang -analyzer-werror \
-		$(CPPFLAGS) -std=c11 -D_POSIX_C_SOURCE=200809L \
+		$(EGRESS_CPPFLAGS) -std=c11 -D_POSIX_C_SOURCE=200809L \
 		-D_XOPEN_SOURCE=700 $(SOURCES) $(CLIENT_SOURCES) providers/socket_io.c
 
 $(BIN)/fuzz-http: tests/fuzz/fuzz_http.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $^ $(EGRESS_LDLIBS) -o $@
 
 $(BIN)/fuzz-socks: tests/fuzz/fuzz_socks.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $^ $(EGRESS_LDLIBS) -o $@
 
 $(BIN)/fuzz-clienthello: tests/fuzz/fuzz_clienthello.c $(STATIC_LIB) | $(MAELYS_SYSTEM_LIB)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $^ $(EGRESS_LDLIBS) -o $@
 
 $(BIN)/fuzz-channel: tests/fuzz/fuzz_channel.c $(CHANNEL_CODEC) $(BOOTSTRAP_CODEC)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $^ -o $@
 
 $(BIN)/fuzz-bootstrap: tests/fuzz/fuzz_bootstrap.c $(BOOTSTRAP_CODEC)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
+	$(CC) $(EGRESS_CPPFLAGS) $(EGRESS_CFLAGS) $(EGRESS_LDFLAGS) $^ -o $@
 
 # A bounded bootstrap-only gate on macOS as well as Linux. Do not clean the
 # other profiles: this follows make check in an already required native job.
@@ -876,7 +925,7 @@ public-check: all
 	done; \
 	flags="$$(PKG_CONFIG_PATH="$$stage$(PREFIX)/lib/pkgconfig" \
 		pkg-config --static --cflags --libs maelys-egress)"; \
-	$(CC) $(CFLAGS) tests/public/consumer.c $$flags $(LDFLAGS) \
+	$(CC) $(EGRESS_CFLAGS) tests/public/consumer.c $$flags $(EGRESS_LDFLAGS) \
 		-o "$$stage/consumer"; \
 	"$$stage/consumer"; \
 	client_flags="$$(PKG_CONFIG_PATH="$$stage$(PREFIX)/lib/pkgconfig" \
@@ -886,7 +935,7 @@ public-check: all
 		examples/channel_client.c) example_flags="$$client_flags" ;; \
 		*) example_flags="$$flags" ;; \
 		esac; \
-		$(CC) $(CFLAGS) "$$example" $$example_flags $(LDFLAGS) -o "$$stage/example" || \
+		$(CC) $(EGRESS_CFLAGS) "$$example" $$example_flags $(EGRESS_LDFLAGS) -o "$$stage/example" || \
 			{ echo "public-check: $$example does not build against the installed library" >&2; \
 			  exit 1; }; \
 	done; \
@@ -905,16 +954,7 @@ reproducible-check: $(STATIC_LIB)
 # the installation itself; this stages one under two prefixes and reads back
 # what the dispatcher would read.
 install-metadata-check: all
-	python3 tests/test_install.py $(BUILD) PREFIX="$(PREFIX)" \
-		VERSION="$(VERSION)" \
-		MAELYS_DEPENDENCIES_DIR="$(MAELYS_DEPENDENCIES_DIR)" \
-		MAELYS_SYSTEM_DIR="$(MAELYS_SYSTEM_DIR)" \
-		MAELYS_SYSTEM_PIN="$(MAELYS_SYSTEM_PIN)" \
-		MAELYS_SYSTEM_PREFIX="$(MAELYS_SYSTEM_PREFIX)" \
-		MAELYS_CLI_DIR="$(MAELYS_CLI_DIR)" \
-		MAELYS_CLI_PIN="$(MAELYS_CLI_PIN)" \
-		MAELYS_SPEC_DIR="$(MAELYS_SPEC_DIR)" \
-		MAELYS_SPEC_PIN="$(MAELYS_SPEC_PIN)"
+	python3 tests/test_install.py $(BUILD) $(INSTALL_TEST_OVERRIDES)
 
 install-check: all
 	@set -e; stage="$$(mktemp -d)"; trap 'rm -rf "$$stage"' EXIT; \
