@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.33.0 — 2026-10-25
 
 - **The help, and the text of a failure, in French or in English.**
   `--lang fr`, `MAELYS_CLI_LANG=fr` or a French locale (`LANG=fr_FR.UTF-8`)
