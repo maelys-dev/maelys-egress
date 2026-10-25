@@ -307,7 +307,10 @@ command line.
   [machine-readable CLI contract](docs/cli-contract.json): generated from the
   executable catalog. `maelys-egress help COMMAND_ID` shows an example of
   each command, which the binary checks against itself when it starts; the
-  command lines of this page are those examples;
+  command lines of this page are those examples. The help and the text of a
+  failure are in English or in French, as `--lang`, `MAELYS_CLI_LANG` or the
+  locale asks; `describe` and the JSON envelopes are the same in every
+  language;
 - [configuration-key reference](docs/generated/config-reference.md): generated
   from the standalone configuration catalog;
 - [Maelys CLI integration guide](docs/maelys-cli-guide.md): framework and

@@ -129,7 +129,8 @@ SERVER_SOURCES := src/server/server.c src/server/listener.c \
 SOURCES := $(CORE_SOURCES) $(HOST_SOURCES) $(SERVER_SOURCES)
 OBJECTS := $(SOURCES:%.c=$(OBJ)/%.o)
 CLI_COMMON_SOURCES := cli/main.c cli/commands.c cli/config_catalog.c cli/config_file.c \
-	cli/secrets.c cli/serve.c cli/channel_broker.c cli/channel_exec.c cli/reload.c cli/output.c
+	cli/secrets.c cli/serve.c cli/channel_broker.c cli/channel_exec.c cli/reload.c cli/output.c \
+	cli/languages.c
 CLI_SOURCES := $(CLI_COMMON_SOURCES) cli/tls_listener.c
 CLI_COMMON_OBJECTS := $(CLI_COMMON_SOURCES:%.c=$(OBJ)/%.o)
 CLI_OBJECTS := $(CLI_SOURCES:%.c=$(OBJ)/%.o)
