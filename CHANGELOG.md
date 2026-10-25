@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- **The help, and the text of a failure, in French or in English.**
+  `--lang fr`, `MAELYS_CLI_LANG=fr` or a French locale (`LANG=fr_FR.UTF-8`)
+  shows the help of the program and of each command in French, with the
+  examples, the operands, the options and the guidance; `--lang en`, the
+  locale `C` or any language this product does not declare gives English,
+  as before. The framework's own texts follow: headings, global options,
+  `Conseil :`. A failure is shown in French with the hints and messages this
+  product's handlers write; a detail the library composes, such as the
+  reason a policy is refused, stays in English. **What an agent reads does
+  not change with the language**: `describe`, the JSON envelopes, their
+  `message` and `hint` included, `version` and the lifecycle stream are the
+  same bytes in every language. The table is `cli/languages.c`;
+  `tests/test_languages.py` requires every text of the catalog there and
+  holds the bytes an agent reads. The catalog form of `describe` gains
+  `x-maelys-translations`, which `maelys-cli-man --lang fr` renders the
+  manual page from.
+- The summary of `--config` reads "The daemon's complete configuration file
+  (schema_version = 1).", which fits its column of the help, where the
+  former sentence broke inside `schema_version = 1`.
+
 - **maelys-cli 0.12.3 and agent-cli-spec 2.21.0, the version it targets: a
   global option `--lang`, and `version` names the language of the
   catalog.** Compared with 0.32.1 on the binary built at these pins:

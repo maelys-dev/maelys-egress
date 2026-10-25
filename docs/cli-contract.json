@@ -464,7 +464,7 @@
                 "repeatable": false,
                 "required": true,
                 "requires": [],
-                "summary": "Complete daemon configuration file declaring schema_version = 1."
+                "summary": "The daemon's complete configuration file (schema_version = 1)."
               }
             ],
             "passthrough": false,
@@ -568,7 +568,7 @@
                 "repeatable": false,
                 "required": true,
                 "requires": [],
-                "summary": "Complete daemon configuration file declaring schema_version = 1."
+                "summary": "The daemon's complete configuration file (schema_version = 1)."
               }
             ],
             "passthrough": false,
@@ -621,7 +621,7 @@
                 "repeatable": false,
                 "required": true,
                 "requires": [],
-                "summary": "Complete daemon configuration file declaring schema_version = 1."
+                "summary": "The daemon's complete configuration file (schema_version = 1)."
               }
             ],
             "passthrough": false,
@@ -692,7 +692,7 @@
                 "repeatable": false,
                 "required": true,
                 "requires": [],
-                "summary": "Complete daemon configuration file declaring schema_version = 1."
+                "summary": "The daemon's complete configuration file (schema_version = 1)."
               }
             ],
             "passthrough": false,
@@ -878,7 +878,55 @@
       "program": "maelys-egress",
       "schemaVersion": 1,
       "x-maelys-guidance": "'serve' and 'channel broker' reserve stdout for maelys-egress-lifecycle/1 JSON Lines: wait for event == \"ready\", then keep draining receipts and reload events until the process exits; 'fatal' or a non-zero exit is a failure. 'config validate' exits 2 when data.valid is false and lists the violations in data.diagnostics. 'channel exec' leaves stdout and stderr to the program it starts and exits with that program's status: a JSON error envelope on stderr means the program never started, and only then is exit 1 this command's own.",
-      "x-maelys-summary": "policy-enforced forward proxy for sandboxed workloads"
+      "x-maelys-summary": "policy-enforced forward proxy for sandboxed workloads",
+      "x-maelys-translations": {
+        "canonical": "en",
+        "languages": {
+          "fr": {
+            "%s: missing required key: schema_version": "%s : cl\u00e9 obligatoire absente : schema_version",
+            "%s:%lu: %s requires a TLS-enabled binary": "%s:%lu: %s demande un binaire compil\u00e9 avec TLS",
+            "'serve' and 'channel broker' reserve stdout for maelys-egress-lifecycle/1 JSON Lines: wait for event == \"ready\", then keep draining receipts and reload events until the process exits; 'fatal' or a non-zero exit is a failure. 'config validate' exits 2 when data.valid is false and lists the violations in data.diagnostics. 'channel exec' leaves stdout and stderr to the program it starts and exits with that program's status: a JSON error envelope on stderr means the program never started, and only then is exit 1 this command's own.": "'serve' et 'channel broker' r\u00e9servent stdout au flux JSON Lines maelys-egress-lifecycle/1 : attendez event == \"ready\", puis continuez \u00e0 lire les re\u00e7us et les \u00e9v\u00e9nements de rechargement jusqu'\u00e0 la fin du processus ; 'fatal' ou une sortie non nulle est un \u00e9chec. 'config validate' sort avec 2 quand data.valid vaut false et \u00e9num\u00e8re les violations dans data.diagnostics. 'channel exec' laisse stdout et stderr au programme qu'il lance et sort avec le code de ce programme : une enveloppe d'erreur JSON sur stderr signifie que le programme n'a jamais d\u00e9marr\u00e9, et c'est seulement alors que la sortie 1 est celle de cette commande.",
+            "Absolute path of the program to start.": "Chemin absolu du programme \u00e0 lancer.",
+            "Argument passed to the program, verbatim. Write the program and its arguments after --: before it, a word that starts with a dash is this command's to judge, and is refused.": "Argument transmis tel quel au programme. \u00c9crivez le programme et ses arguments apr\u00e8s -- : avant, un mot qui commence par un tiret rel\u00e8ve de cette commande, qui le refuse.",
+            "Check a configuration before starting anything; exit 2 lists what it violates.": "V\u00e9rifie une configuration avant de lancer quoi que ce soit ; le code de sortie 2 accompagne la liste de ce qu'elle enfreint.",
+            "Check available process/thread resources.": "V\u00e9rifiez les ressources disponibles en processus et en threads.",
+            "Check channel socket parent ownership/mode, path availability and process resources.": "V\u00e9rifiez le propri\u00e9taire et le mode du r\u00e9pertoire parent du socket de canal, la disponibilit\u00e9 du chemin et les ressources du processus.",
+            "Check process and descriptor limits.": "V\u00e9rifiez les limites de processus et de descripteurs.",
+            "Check that the program can be executed by this user.": "V\u00e9rifiez que cet utilisateur peut ex\u00e9cuter le programme.",
+            "Describe every supported configuration key and constraint.": "D\u00e9crit chaque cl\u00e9 de configuration prise en charge et ses contraintes.",
+            "Fix the configuration and validate again.": "Corrigez la configuration et validez-la de nouveau.",
+            "Fix the configuration file, then run 'maelys-egress config validate --config FILE'.": "Corrigez le fichier de configuration, puis lancez 'maelys-egress config validate --config FILE'.",
+            "Fix the reported line, then run 'maelys-egress config describe' for the accepted keys.": "Corrigez la ligne signal\u00e9e, puis lancez 'maelys-egress config describe' pour les cl\u00e9s accept\u00e9es.",
+            "Inspect the configuration and process resources.": "Examinez la configuration et les ressources du processus.",
+            "Inspect the configuration, referenced files and listener availability.": "Examinez la configuration, les fichiers qu'elle r\u00e9f\u00e9rence et la disponibilit\u00e9 des \u00e9coutes.",
+            "Inspect the configuration, referenced files and process resources.": "Examinez la configuration, les fichiers qu'elle r\u00e9f\u00e9rence et les ressources du processus.",
+            "Make the file a regular, single-link file owned by root or the daemon user, without group or world write permission, and not a symbolic link.": "Faites-en un fichier ordinaire \u00e0 un seul lien, appartenant \u00e0 root ou \u00e0 l'utilisateur du d\u00e9mon, sans droit d'\u00e9criture pour le groupe ni pour les autres, et qui ne soit pas un lien symbolique.",
+            "Name a regular executable by its absolute path, not writable by group or others, in a directory only its owner or root can modify.": "Nommez un ex\u00e9cutable ordinaire par son chemin absolu, que ni le groupe ni les autres ne peuvent modifier, dans un r\u00e9pertoire que seuls son propri\u00e9taire ou root peuvent modifier.",
+            "Name an existing configuration file readable by the daemon.": "Nommez un fichier de configuration existant, lisible par le d\u00e9mon.",
+            "Read every configuration key, its type and its constraints as JSON.": "Lit chaque cl\u00e9 de configuration, son type et ses contraintes, en JSON.",
+            "Run the proxy until SIGINT or SIGTERM, its lifecycle events on stdout.": "Fait tourner le proxy jusqu'\u00e0 SIGINT ou SIGTERM, ses \u00e9v\u00e9nements de cycle de vie sur stdout.",
+            "Serve native channels on the private socket the configuration names.": "Sert des canaux natifs sur le socket priv\u00e9 que nomme la configuration.",
+            "Serve native channels through a private Unix socket until SIGINT or SIGTERM; stdout carries the lifecycle JSON Lines stream.": "Sert des canaux natifs par un socket Unix priv\u00e9 jusqu'\u00e0 SIGINT ou SIGTERM ; stdout porte le flux JSON Lines du cycle de vie.",
+            "Start a program with a channel on descriptor 4 unless the configuration names another; what follows -- is the program's own.": "Lance un programme avec un canal sur le descripteur 4, sauf si la configuration en nomme un autre ; ce qui suit -- appartient au programme.",
+            "Start mediation and run until SIGINT or SIGTERM; stdout carries the lifecycle JSON Lines stream.": "D\u00e9marre la m\u00e9diation et tourne jusqu'\u00e0 SIGINT ou SIGTERM ; stdout porte le flux JSON Lines du cycle de vie.",
+            "Start one program with a native channel on an inherited descriptor and exit with its status, 128 + signal if a signal ended it; stdout and stderr are the program's. Not a sandbox: the program keeps its own network access.": "Lance un programme avec un canal natif sur un descripteur h\u00e9rit\u00e9 et sort avec son code, 128 + signal si un signal l'a termin\u00e9 ; stdout et stderr sont ceux du programme. Ce n'est pas un bac \u00e0 sable : le programme garde son propre acc\u00e8s au r\u00e9seau.",
+            "The daemon's complete configuration file (schema_version = 1).": "Fichier de configuration complet du d\u00e9mon (schema_version = 1).",
+            "Use maelys-egress-mbedtls or maelys-egress-wolfssl, or remove the key.": "Utilisez maelys-egress-mbedtls ou maelys-egress-wolfssl, ou retirez la cl\u00e9.",
+            "Use serve for a proxy configuration, channel broker when channel_listen_unix is set, and channel exec for channel_principal alone.": "Utilisez serve pour une configuration de proxy, channel broker quand channel_listen_unix est d\u00e9fini, et channel exec pour channel_principal seul.",
+            "Validate a complete configuration without opening listeners; exit 2 reports violations in data.": "Valide une configuration compl\u00e8te sans ouvrir d'\u00e9coute ; le code de sortie 2 signale des violations, d\u00e9crites dans data.",
+            "cannot build the program's environment": "impossible de construire l'environnement du programme",
+            "cannot create broker coordinator": "impossible de cr\u00e9er le coordinateur du broker",
+            "cannot create the launch coordinator": "impossible de cr\u00e9er le coordinateur de lancement",
+            "cannot read the monotonic clock": "impossible de lire l'horloge monotone",
+            "configuration mode does not match the command": "le mode de la configuration ne correspond pas \u00e0 la commande",
+            "invalid channel default in configuration catalog": "valeur par d\u00e9faut de canal invalide dans le catalogue de configuration",
+            "out of memory": "m\u00e9moire \u00e9puis\u00e9e",
+            "policy-enforced forward proxy for sandboxed workloads": "proxy sortant sous politique pour charges en bac \u00e0 sable",
+            "the server did not start": "le serveur n'a pas d\u00e9marr\u00e9"
+          }
+        },
+        "version": 1
+      }
     }
   }
 }

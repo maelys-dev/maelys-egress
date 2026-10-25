@@ -9,7 +9,7 @@
 
 static const maelys_cli_option_t config_options[] = {
     {MAELYS_CLI_PATH("config", "FILE",
-     "Complete daemon configuration file declaring schema_version = 1."),
+     "The daemon's complete configuration file (schema_version = 1)."),
      .required = 1},
 };
 
@@ -105,6 +105,9 @@ int main(int argc, char **argv) {
             "and stderr to the program it starts and exits with that program's "
             "status: a JSON error envelope on stderr means the program never started, "
             "and only then is exit 1 this command's own.",
+        /* French besides English, in cli/languages.c. */
+        .languages = egress_cli_languages,
+        .language_count = egress_cli_language_count,
     };
     return maelys_cli_main(&app, argc, argv);
 }

@@ -195,4 +195,8 @@ int egress_cli_channel_run(maelys_egress_server_t *server,
     const egress_cli_settings_t *settings, const char *path, const sigset_t *signals,
     const char *digest, egress_cli_output_gate_t *gate, maelys_cli_error_t *error);
 
+/* languages.c: the human text in the languages besides English. */
+extern const maelys_cli_language_t egress_cli_languages[];
+extern const size_t egress_cli_language_count;
+
 #endif
