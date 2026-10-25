@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **maelys-cli 0.12.3 and agent-cli-spec 2.21.0, the version it targets: a
+  global option `--lang`, and `version` names the language of the
+  catalog.** Compared with 0.32.1 on the binary built at these pins:
+  - **Consumer notice: every command accepts `--lang TAG`**, a language tag
+    `language[-Script][-REGION]`, which chooses the language of the human
+    text before `MAELYS_CLI_LANG` and the locale. This product declares
+    English only, so the text stays English whatever is asked. It is in
+    `globalOptions` of `describe`, in `--help` and in the completion.
+  - **`version` gains `lang`**, the language the catalog is written in:
+    `en`.
+  - describe, the envelopes, the exit codes and the descriptors of this
+    product's five commands do not change otherwise.
+  - Through 0.11.0, the framework reads `argument.pattern` itself, as
+    agent-cli/v2 section 3 writes it; this product declares no pattern of
+    its own.
+
 - maelys-system **0.14.4**: `KEEPER_PATH` becomes a build variable of its
   own, the path of the keeper the library records, which this product never
   reads. Its default follows `PREFIX`, as the keeper this product's install
