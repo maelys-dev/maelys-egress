@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.34.0 — 2026-10-26
 
 - **The receipt names the address the upstream connection was established
   to.** A destination is pinned to up to sixteen addresses, and a receipt
