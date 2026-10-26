@@ -43,6 +43,27 @@ def type_matches(value: object, expected: str) -> bool:
     }[expected](value)
 
 
+def ecma_pattern(pattern: str) -> re.Pattern[str]:
+    """A schema pattern read as ECMA-262 reads it. Its `$`, outside a class and
+    unescaped, is the end of the value; Python's `$` also holds before a final
+    newline, which let "127.0.0.1\\n" pass for an address."""
+    translated, escaped, in_class = [], False, False
+    for character in pattern:
+        if escaped:
+            escaped = False
+        elif character == "\\":
+            escaped = True
+        elif character == "[":
+            in_class = True
+        elif character == "]":
+            in_class = False
+        elif character == "$" and not in_class:
+            translated.append(r"\Z")
+            continue
+        translated.append(character)
+    return re.compile("".join(translated))
+
+
 def validate(value: object, schema: dict, path: str = "$") -> list[str]:
     errors: list[str] = []
     if "type" in schema:
@@ -56,7 +77,7 @@ def validate(value: object, schema: dict, path: str = "$") -> list[str]:
     if isinstance(value, str):
         if "minLength" in schema and len(value) < schema["minLength"]:
             errors.append(f"{path}: shorter than {schema['minLength']}")
-        if "pattern" in schema and not re.search(schema["pattern"], value):
+        if "pattern" in schema and not ecma_pattern(schema["pattern"]).search(value):
             errors.append(f"{path}: does not match {schema['pattern']}")
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         if "minimum" in schema and value < schema["minimum"]:
@@ -255,12 +276,17 @@ def check_receipt_refusals(schema: dict) -> None:
     def event(receipt: dict) -> dict:
         return {"schemaVersion": 1, "contract": "maelys-egress-lifecycle/1",
                 "event": "receipt", "receipt": receipt}
-    for address in ("", "127.0.0.1", "2001:db8::1", "::ffff:192.0.2.1"):
+    for address in ("", "127.0.0.1", "0.0.0.0", "255.255.255.255", "::", "::1",
+                    "2001:db8::1", "1:2:3:4:5:6:7:8", "::ffff:192.0.2.1",
+                    "ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255"):
         check(f"receipt with address {address!r}", event({"address": address}), schema)
     refused = {"address 42": {"address": 42}, "address null": {"address": None},
-               "address missing": {}, "address with a port": {"address": "127.0.0.1:443"},
-               "address in brackets": {"address": "[::1]"},
-               "address with a scope": {"address": "fe80::1%en0"}}
+               "address missing": {}}
+    for address in ("127.0.0.1:443", "[::1]", "fe80::1%en0", "999.999.999.999",
+                    "256.1.1.1", "01.2.3.4", "1.2.3", "1:2:3", "::::", "1::2::3",
+                    "1:2:3:4:5:6:7:8:9", "0001::", "2001:DB8::1", "127.0.0.1\n", "::1\n",
+                    " ::1", "::ffff:1.2.3", "example.test"):
+        refused[f"address {address!r}"] = {"address": address}
     for label, receipt in refused.items():
         if not validate(event(receipt), schema):
             fail(f"lifecycle schema accepts a receipt with {label}")

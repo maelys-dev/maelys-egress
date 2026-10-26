@@ -20,9 +20,13 @@
   - **Consumer notice, for whoever reads the lifecycle `receipt` event**: it
     gains `address`, a string, empty when none was established.
     `protocol/egress-lifecycle-v1.schema.json` declares it, required, in one
-    of the forms `inet_ntop` writes or empty; `tools/check_schemas.py`
-    refuses a number, `null`, a missing member, a port, brackets and a
-    scope identifier.
+    of the forms `inet_ntop` writes or empty: dotted decimal without leading
+    zeros, IPv6 as RFC 5952 writes it. `tools/check_schemas.py` refuses a
+    number, `null`, a missing member, a port, brackets, a scope identifier,
+    an octet above 255, a leading zero, three groups without `::`, `::::`,
+    upper case and a final newline. It now reads a schema's `$` as
+    ECMA-262 does, the end of the value: Python's also held before a final
+    newline.
   - `maelys_egress_receipt_upstream_address()` reads it, NULL when none was
     established. **`MAELYS_EGRESS_ABI_VERSION` becomes 6**;
     `MAELYS_EGRESS_ABI_COMPATIBLE_SINCE` stays 3, and `tests/public/abi-5.h`,
