@@ -34,8 +34,8 @@
   - `tests/vectors/audit/journal-0.33.0.jsonl`, written by the published
     0.33.0 binary, is resumed, appended to and resumed again; an address
     changed in a record fails the verification; the attestor signs the
-    address; a destination pinned to a port of `::1` held without a
-    listener, then to `127.0.0.1`, names `127.0.0.1`; a connection
+    address; a destination pinned to port 0 of `::1`, which refuses at once,
+    then to `127.0.0.1`, names `127.0.0.1`; a connection
     established over IPv6 names `::1`; the longest record holds the longest
     address. Two mutants of `scripts/mutation-check.sh` remove the address
     from the encoding and name the first pinned address instead of the one

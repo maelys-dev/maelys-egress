@@ -127,10 +127,8 @@ static int listener_create(uint16_t *out_port) {
     return fd;
 }
 
-/* An IPv6 loopback socket on a port of its own, listening or not: bound
- * without listen(), it holds the port so that a connection to it is refused,
- * whatever else runs on the host. -1 when the host has no IPv6 loopback. */
-static int loopback6_create(int listening, uint16_t *out_port) {
+/* A listener on the IPv6 loopback, -1 when the host has none. */
+static int loopback6_create(uint16_t *out_port) {
     int fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
     if (fd < 0) return -1;
     struct sockaddr_in6 address;
@@ -139,7 +137,7 @@ static int loopback6_create(int listening, uint16_t *out_port) {
     address.sin6_addr = in6addr_loopback;
     socklen_t length = sizeof(address);
     if (bind(fd, (struct sockaddr *)&address, sizeof(address)) != 0 ||
-        (listening && listen(fd, 8) != 0) ||
+        listen(fd, 8) != 0 ||
         getsockname(fd, (struct sockaddr *)&address, &length) != 0) {
         (void)close(fd); return -1;
     }
@@ -675,10 +673,11 @@ static void address_receipt_sink(void *opaque, const maelys_egress_receipt_t *re
 /* The receipt names the pinned address the upstream connection was
  * established to, and nothing for a request refused before any connection.
  * The destination is pinned to two addresses here, the first of which
- * refuses: a port of ::1 this test holds without listening, or, on a host
- * without IPv6 loopback, an address that cannot even be tried. Either way
- * the refusal does not depend on what else runs on the host. The receipt
- * must name the second. */
+ * refuses: port 0 of ::1, which no socket can listen on and which connect()
+ * refuses at once on Linux and macOS, or, on a host without IPv6 loopback,
+ * an address that cannot even be tried. A port bound without a listener
+ * would not do: XNU drops the SYN to it and the connection waits for its
+ * deadline. The receipt must name the second. */
 static void test_receipt_upstream_address(void) {
     uint16_t upstream_port = 0u;
     int upstream_listener = listener_create(&upstream_port);
@@ -686,8 +685,6 @@ static void test_receipt_upstream_address(void) {
     upstream_context_t upstream = {.listener = upstream_listener};
     pthread_t upstream_thread;
     CHECK(pthread_create(&upstream_thread, NULL, upstream_main, &upstream) == 0);
-    uint16_t refusing_port = upstream_port;
-    int held = loopback6_create(0, &refusing_port);
 
     address_capture_t capture = {
         .lock = PTHREAD_MUTEX_INITIALIZER, .condition = PTHREAD_COND_INITIALIZER
@@ -710,7 +707,7 @@ static void test_receipt_upstream_address(void) {
         refusing.sin6_len = (uint8_t)sizeof(refusing);
 #endif
         refusing.sin6_family = AF_INET6;
-        refusing.sin6_port = htons(refusing_port);
+        refusing.sin6_port = 0u;
         refusing.sin6_addr = in6addr_loopback;
         memset(&destination->addresses[0].storage, 0, sizeof(destination->addresses[0].storage));
         memcpy(&destination->addresses[0].storage, &refusing, sizeof(refusing));
@@ -764,7 +761,6 @@ static void test_receipt_upstream_address(void) {
     CHECK(maelys_egress_server_stop(server.server) == MAELYS_EGRESS_OK);
     CHECK(pthread_join(server_thread, NULL) == 0);
     CHECK(pthread_join(upstream_thread, NULL) == 0 && upstream.failed == 0);
-    if (held >= 0) (void)close(held);
 
     /* The two receipts close in either order: each is told by its result. */
     for (size_t i = 0u; i < 2u && receipts == 2u; ++i) {
@@ -796,7 +792,7 @@ static void test_receipt_upstream_address(void) {
  * without IPv6 loopback cannot run it, and says so. */
 static void test_receipt_ipv6_address(void) {
     uint16_t upstream_port = 0u;
-    int upstream_listener = loopback6_create(1, &upstream_port);
+    int upstream_listener = loopback6_create(&upstream_port);
     if (upstream_listener < 0) {
         fprintf(stderr, "receipt over IPv6: skipped, no IPv6 loopback on this host\n");
         return;
