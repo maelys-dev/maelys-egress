@@ -112,6 +112,16 @@ PY
                 printf 'invalid (no bootstrap assertion)\n' >"$work/$name.result"
                 tail -20 "$work/$name.log" >&2
             fi ;;
+        receipt-address-*)
+            # Only an assertion on the address is evidence: a timeout or an
+            # unrelated failure says nothing of what the receipt names.
+            if grep -Eq '^FAIL (\./)?tests/test_operations\.c:[0-9]+: .*address' "$work/$name.log"; then
+                printf 'killed\n' >"$work/$name.result"
+                grep -E '^FAIL ' "$work/$name.log" | sed "s/^/$name: /"
+            else
+                printf 'invalid (no receipt address assertion)\n' >"$work/$name.result"
+                tail -20 "$work/$name.log" >&2
+            fi ;;
         *) printf 'killed\n' >"$work/$name.result" ;;
         esac
     fi
@@ -205,6 +215,14 @@ schedule_mutant audit-longest-record src/audit.c \
     char core[2048];' \
     '    char canonical[2048];
     char core[2048];'
+schedule_mutant receipt-address-absent src/core/receipt.c \
+    '        (unsigned long long)receipt->quota_execution_after_bytes,
+        receipt->upstream_address);' \
+    '        (unsigned long long)receipt->quota_execution_after_bytes,
+        "");'
+schedule_mutant receipt-address-first-pinned src/server/connection.c \
+    '&connection->destination->addresses[connection->address_index - 1u],' \
+    '&connection->destination->addresses[0],'
 schedule_mutant exec-signal-stops-server cli/reload.c \
     '                (void)maelys_cli_process_signal(context->program, signal_number);' \
     '                (void)maelys_egress_server_stop(context->server); (void)maelys_cli_process_signal(context->program, signal_number);'

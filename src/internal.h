@@ -19,6 +19,9 @@
 #define EGRESS_MAX_INVOCATION_ID 127u
 #define EGRESS_MAX_PRINCIPALS 64u
 #define EGRESS_MAX_ATTESTATION_BYTES 512u
+/* An upstream address in numeric form, as inet_ntop writes it: the longest
+ * is an IPv6 address ending in IPv4 form, 45 bytes. */
+#define EGRESS_MAX_ADDRESS_TEXT 46u
 #define EGRESS_HANDSHAKE_MAX 16384u
 #define EGRESS_DEFAULT_MAX_CONNECTIONS 128u
 #define EGRESS_DEFAULT_BUFFER_BYTES 32768u
@@ -119,6 +122,7 @@ struct maelys_egress_receipt {
     char attestor[64];
     char attestation_key_id[128];
     char attestation_hex[EGRESS_MAX_ATTESTATION_BYTES * 2u + 1u];
+    char upstream_address[EGRESS_MAX_ADDRESS_TEXT];
 };
 
 struct maelys_egress_metrics {

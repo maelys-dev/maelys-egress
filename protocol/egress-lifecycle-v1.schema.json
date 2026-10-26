@@ -76,7 +76,17 @@
       },
       "additionalProperties": false
     },
-    "receipt": { "type": "object" }
+    "receipt": {
+      "type": "object",
+      "required": ["address"],
+      "properties": {
+        "address": {
+          "description": "The pinned address the upstream connection was established to, in the numeric form inet_ntop writes (93.184.216.34, 2001:db8::1), without port, scope identifier or brackets. Empty when no upstream connection was established: a request refused by the policy or a quota, or an upstream that refused every pinned address. Since 0.34.0.",
+          "type": "string",
+          "pattern": "^(|[0-9]{1,3}(\\.[0-9]{1,3}){3}|[0-9a-f]{0,4}(:[0-9a-f]{0,4}){2,7}|[0-9a-f:]*:[0-9]{1,3}(\\.[0-9]{1,3}){3})$"
+        }
+      }
+    }
   },
   "additionalProperties": false,
   "allOf": [

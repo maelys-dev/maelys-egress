@@ -127,6 +127,24 @@ static int listener_create(uint16_t *out_port) {
     return fd;
 }
 
+/* A listener on the IPv6 loopback, -1 when the host has none. */
+static int loopback6_create(uint16_t *out_port) {
+    int fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
+    if (fd < 0) return -1;
+    struct sockaddr_in6 address;
+    memset(&address, 0, sizeof(address));
+    address.sin6_family = AF_INET6;
+    address.sin6_addr = in6addr_loopback;
+    socklen_t length = sizeof(address);
+    if (bind(fd, (struct sockaddr *)&address, sizeof(address)) != 0 ||
+        listen(fd, 8) != 0 ||
+        getsockname(fd, (struct sockaddr *)&address, &length) != 0) {
+        (void)close(fd); return -1;
+    }
+    *out_port = ntohs(address.sin6_port);
+    return fd;
+}
+
 static int connect_loopback(uint16_t port) {
     int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     struct sockaddr_in address = {.sin_family = AF_INET, .sin_port = htons(port)};
@@ -418,12 +436,21 @@ static void test_receipt_canonical(void) {
         "id=7|principal=maelys|invocation=inv-1|protocol=%d|host=example.test|port=443|"
         "result=%d|started=1000|duration=5|from=10|to=20|policy=abcd|generation=3|sni=1|"
         "quota-scope=%d|quota-connection-max=100|quota-execution-max=200|"
-        "quota-connection-observed=30|quota-execution-before=40|quota-execution-after=70";
+        "quota-connection-observed=30|quota-execution-before=40|quota-execution-after=70|"
+        "address=";
     char rendered[512];
     int expected_length = snprintf(rendered, sizeof(rendered), expected,
         (int)MAELYS_EGRESS_PROTOCOL_HTTP_CONNECT, (int)MAELYS_EGRESS_OK,
         (int)MAELYS_EGRESS_QUOTA_CONNECTION_BYTES);
     CHECK(length == expected_length && strcmp(canonical, rendered) == 0);
+    /* The address of the upstream connection is the last field, inside the
+     * bytes an attestor signs; empty above, where none was established. */
+    (void)snprintf(receipt.upstream_address, sizeof(receipt.upstream_address), "%s",
+                   "2001:db8::1");
+    length = egress_receipt_canonical(&receipt, canonical, sizeof(canonical));
+    CHECK(length == expected_length + 11 &&
+          strncmp(canonical, rendered, (size_t)expected_length) == 0 &&
+          strcmp(canonical + expected_length, "2001:db8::1") == 0);
     char small[16];
     CHECK(egress_receipt_canonical(&receipt, small, sizeof(small)) == -1);
     CHECK(egress_receipt_canonical(NULL, canonical, sizeof(canonical)) == -1);
@@ -479,6 +506,9 @@ static void test_audit_longest_record(void) {
     fill(receipt.attestor, sizeof(receipt.attestor), 'a');
     fill(receipt.attestation_key_id, sizeof(receipt.attestation_key_id), 'y');
     fill(receipt.attestation_hex, sizeof(receipt.attestation_hex), 'f');
+    /* As long as an address inet_ntop writes can be: an IPv6 address that
+     * ends in IPv4 form, ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255. */
+    fill(receipt.upstream_address, sizeof(receipt.upstream_address), 'a');
 
     CHECK(audit && egress_audit_append(audit, &receipt) == 1);
     CHECK(maelys_egress_audit_healthy(audit));
@@ -508,6 +538,336 @@ static void test_audit_longest_record(void) {
     CHECK(strcmp(chain, resumed_chain) == 0);
     maelys_egress_audit_release(audit);
     (void)unlink(path);
+}
+
+/* A journal written before the receipt carried an address resumes, takes a
+ * record that carries one, and resumes again: one journal holds both forms.
+ * tests/vectors/audit/journal-0.33.0.jsonl was written by the published
+ * 0.33.0 binary, `serve` with audit_key_id = fixture-key and the test key
+ * below, which holds no secret: a CONNECT admitted to a local echo upstream,
+ * then one the policy refused. Never edit it: a new fixture is written by a
+ * released binary. */
+static void test_audit_journal_of_0_33_0(void) {
+    static const unsigned char key[] = "0123456789abcdef0123456789abcdef";
+    char path[] = "/tmp/maelys-egress-journal-XXXXXX";
+    int fd = mkstemp(path);
+    CHECK(fd >= 0);
+    FILE *fixture = fopen("tests/vectors/audit/journal-0.33.0.jsonl", "rb");
+    CHECK(fixture != NULL);
+    char bytes[8192];
+    size_t length = fixture ? fread(bytes, 1u, sizeof(bytes), fixture) : 0u;
+    if (fixture) (void)fclose(fixture);
+    CHECK(length > 0u && length < sizeof(bytes));
+    CHECK(fd >= 0 && fchmod(fd, 0600) == 0 && write(fd, bytes, length) == (ssize_t)length);
+    if (fd >= 0) (void)close(fd);
+
+    maelys_egress_audit_t *audit = NULL;
+    char *error = NULL;
+    maelys_egress_result_t resumed = maelys_egress_audit_file_create(
+        path, key, sizeof(key) - 1u, "fixture-key", &audit, &error);
+    if (resumed != MAELYS_EGRESS_OK)
+        fprintf(stderr, "0.33.0 journal: %s\n", error ? error : "no diagnostic");
+    maelys_egress_error_free(error);
+    error = NULL;
+    CHECK(resumed == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_audit_record_count(audit) == 2u);
+
+    maelys_egress_receipt_t receipt;
+    memset(&receipt, 0, sizeof(receipt));
+    receipt.id = 3u;
+    receipt.protocol = MAELYS_EGRESS_PROTOCOL_HTTP_CONNECT;
+    (void)snprintf(receipt.host, sizeof(receipt.host), "%s", "example.test");
+    receipt.port = 443u;
+    receipt.result = MAELYS_EGRESS_OK;
+    (void)snprintf(receipt.policy_digest_hex, sizeof(receipt.policy_digest_hex),
+                   "%s", "abcd");
+    (void)snprintf(receipt.upstream_address, sizeof(receipt.upstream_address), "%s",
+                   "192.0.2.7");
+    CHECK(audit && egress_audit_append(audit, &receipt) == 1);
+    char chain[65] = {0};
+    CHECK(maelys_egress_audit_chain_copy(audit, chain) == MAELYS_EGRESS_OK);
+    maelys_egress_audit_release(audit);
+    audit = NULL;
+
+    resumed = maelys_egress_audit_file_create(
+        path, key, sizeof(key) - 1u, "fixture-key", &audit, &error);
+    if (resumed != MAELYS_EGRESS_OK)
+        fprintf(stderr, "both forms: %s\n", error ? error : "no diagnostic");
+    maelys_egress_error_free(error);
+    error = NULL;
+    CHECK(resumed == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_audit_record_count(audit) == 3u);
+    char resumed_chain[65] = {0};
+    CHECK(maelys_egress_audit_chain_copy(audit, resumed_chain) == MAELYS_EGRESS_OK);
+    CHECK(strcmp(chain, resumed_chain) == 0);
+    maelys_egress_audit_release(audit);
+    audit = NULL;
+
+    /* The address is inside the bytes the MAC covers: another address in
+     * the record fails the verification. */
+    fd = open(path, O_RDWR);
+    CHECK(fd >= 0);
+    char journal[16384];
+    ssize_t read_length = fd >= 0 ? read(fd, journal, sizeof(journal) - 1u) : -1;
+    CHECK(read_length > 0);
+    if (read_length > 0) {
+        journal[read_length] = '\0';
+        char *address = strstr(journal, "|address=192.0.2.7|");
+        CHECK(address != NULL);
+        if (address) {
+            char changed = '8';
+            CHECK(pwrite(fd, &changed, 1u, (off_t)(address - journal) + 17) == 1);
+        }
+    }
+    if (fd >= 0) (void)close(fd);
+    CHECK(maelys_egress_audit_file_create(path, key, sizeof(key) - 1u, "fixture-key",
+        &audit, &error) == MAELYS_EGRESS_ERR_CRYPTO);
+    CHECK(audit == NULL && error != NULL);
+    maelys_egress_error_free(error);
+    (void)unlink(path);
+}
+
+/* What an attestor signs and a receipt sink sees of the upstream address. */
+typedef struct address_capture {
+    pthread_mutex_t lock;
+    pthread_cond_t condition;
+    size_t receipts;
+    maelys_egress_result_t results[2];
+    char addresses[2][EGRESS_MAX_ADDRESS_TEXT];
+    int named[2];
+    size_t attested;
+    char canonical[2][2048];
+} address_capture_t;
+
+static maelys_egress_result_t capture_attest(
+    void *context, const void *canonical, size_t canonical_length,
+    unsigned char *signature, size_t signature_capacity,
+    size_t *out_signature_length, char **out_error) {
+    address_capture_t *capture = context;
+    (void)pthread_mutex_lock(&capture->lock);
+    if (capture->attested < 2u && canonical_length < sizeof(capture->canonical[0])) {
+        memcpy(capture->canonical[capture->attested], canonical, canonical_length);
+        capture->canonical[capture->attested][canonical_length] = '\0';
+    }
+    ++capture->attested;
+    (void)pthread_mutex_unlock(&capture->lock);
+    return test_attest(NULL, canonical, canonical_length, signature,
+                       signature_capacity, out_signature_length, out_error);
+}
+
+static void address_receipt_sink(void *opaque, const maelys_egress_receipt_t *receipt) {
+    address_capture_t *capture = opaque;
+    (void)pthread_mutex_lock(&capture->lock);
+    if (capture->receipts < 2u) {
+        const char *address = maelys_egress_receipt_upstream_address(receipt);
+        capture->named[capture->receipts] = address != NULL;
+        (void)snprintf(capture->addresses[capture->receipts],
+                       sizeof(capture->addresses[0]), "%s", address ? address : "");
+        capture->results[capture->receipts] = maelys_egress_receipt_result(receipt);
+    }
+    ++capture->receipts;
+    (void)pthread_cond_broadcast(&capture->condition);
+    (void)pthread_mutex_unlock(&capture->lock);
+}
+
+/* The receipt names the pinned address the upstream connection was
+ * established to, and nothing for a request refused before any connection.
+ * The destination is pinned to two addresses here, the first of which
+ * refuses: port 0 of ::1, which no socket can listen on and which connect()
+ * refuses at once on Linux and macOS, or, on a host without IPv6 loopback,
+ * an address that cannot even be tried. A port bound without a listener
+ * would not do: XNU drops the SYN to it and the connection waits for its
+ * deadline. The receipt must name the second. */
+static void test_receipt_upstream_address(void) {
+    uint16_t upstream_port = 0u;
+    int upstream_listener = listener_create(&upstream_port);
+    CHECK(upstream_listener >= 0);
+    upstream_context_t upstream = {.listener = upstream_listener};
+    pthread_t upstream_thread;
+    CHECK(pthread_create(&upstream_thread, NULL, upstream_main, &upstream) == 0);
+
+    address_capture_t capture = {
+        .lock = PTHREAD_MUTEX_INITIALIZER, .condition = PTHREAD_COND_INITIALIZER
+    };
+    maelys_egress_policy_t *policy = NULL;
+    maelys_egress_config_t *config = NULL;
+    maelys_egress_attestor_t *attestor = NULL;
+    char *error = NULL;
+    CHECK(maelys_egress_policy_create(&policy, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_allow_tcp(policy, "127.0.0.1", upstream_port, 1,
+        &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_seal(policy, &error) == MAELYS_EGRESS_OK);
+    CHECK(policy->count == 1u && policy->destinations[0].address_count == 1u);
+    if (policy->count == 1u && policy->destinations[0].address_count == 1u) {
+        egress_destination_t *destination = &policy->destinations[0];
+        destination->addresses[1] = destination->addresses[0];
+        struct sockaddr_in6 refusing;
+        memset(&refusing, 0, sizeof(refusing));
+#ifdef SIN6_LEN
+        refusing.sin6_len = (uint8_t)sizeof(refusing);
+#endif
+        refusing.sin6_family = AF_INET6;
+        refusing.sin6_port = 0u;
+        refusing.sin6_addr = in6addr_loopback;
+        memset(&destination->addresses[0].storage, 0, sizeof(destination->addresses[0].storage));
+        memcpy(&destination->addresses[0].storage, &refusing, sizeof(refusing));
+        destination->addresses[0].length = (socklen_t)sizeof(refusing);
+        destination->address_count = 2u;
+    }
+    CHECK(maelys_egress_attestor_create("test-attestor", "test-signing-key", 4u,
+        capture_attest, &capture, NULL, &attestor, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_create(&config, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_set_authentication(config, "maelys",
+        "0123456789abcdef", &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_set_receipt_attestor(config, attestor, &error) ==
+          MAELYS_EGRESS_OK);
+    maelys_egress_attestor_release(attestor);
+    maelys_egress_config_set_receipt_sink(config, address_receipt_sink, &capture);
+
+    server_context_t server = {
+        .lock = PTHREAD_MUTEX_INITIALIZER,
+        .condition = PTHREAD_COND_INITIALIZER,
+        .policy = policy,
+        .config = config
+    };
+    pthread_t server_thread;
+    CHECK(pthread_create(&server_thread, NULL, server_main, &server) == 0);
+    (void)pthread_mutex_lock(&server.lock);
+    while (!server.ready) (void)pthread_cond_wait(&server.condition, &server.lock);
+    (void)pthread_mutex_unlock(&server.lock);
+    CHECK(server.result == MAELYS_EGRESS_OK && server.port != 0u);
+
+    int tunnel = proxy_connect(server.port, upstream_port);
+    CHECK(tunnel >= 0);
+    if (tunnel >= 0) {
+        char pong[4];
+        CHECK(send_all(tunnel, "ping", 4u));
+        CHECK(recv(tunnel, pong, sizeof(pong), MSG_WAITALL) == 4 &&
+              memcmp(pong, "ping", 4u) == 0);
+        (void)close(tunnel);
+    }
+    CHECK(proxy_connect(server.port, 9u) == -2);
+
+    struct timespec deadline;
+    (void)clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec += 10;
+    (void)pthread_mutex_lock(&capture.lock);
+    while (capture.receipts < 2u &&
+           pthread_cond_timedwait(&capture.condition, &capture.lock, &deadline) == 0) {}
+    size_t receipts = capture.receipts;
+    (void)pthread_mutex_unlock(&capture.lock);
+    CHECK(receipts == 2u && capture.attested == 2u);
+
+    CHECK(maelys_egress_server_stop(server.server) == MAELYS_EGRESS_OK);
+    CHECK(pthread_join(server_thread, NULL) == 0);
+    CHECK(pthread_join(upstream_thread, NULL) == 0 && upstream.failed == 0);
+
+    /* The two receipts close in either order: each is told by its result. */
+    for (size_t i = 0u; i < 2u && receipts == 2u; ++i) {
+        if (capture.results[i] == MAELYS_EGRESS_OK) {
+            CHECK(capture.named[i] && strcmp(capture.addresses[i], "127.0.0.1") == 0);
+        } else {
+            CHECK(capture.results[i] == MAELYS_EGRESS_ERR_DENIED && !capture.named[i]);
+        }
+        const char *canonical = capture.canonical[i];
+        const char *tail = strstr(canonical, "|address=");
+        CHECK(tail != NULL);
+        if (tail && strstr(canonical, "|port=9|")) {
+            CHECK(strcmp(tail, "|address=") == 0);
+        } else if (tail) {
+            CHECK(strcmp(tail, "|address=127.0.0.1") == 0);
+        }
+    }
+    maelys_egress_error_free(error);
+    maelys_egress_config_destroy(config);
+    maelys_egress_policy_destroy(policy);
+    (void)pthread_cond_destroy(&server.condition);
+    (void)pthread_mutex_destroy(&server.lock);
+    (void)pthread_cond_destroy(&capture.condition);
+    (void)pthread_mutex_destroy(&capture.lock);
+}
+
+/* An upstream connection established over IPv6: the receipt names the
+ * address as inet_ntop writes it, "::1", without brackets or scope. A host
+ * without IPv6 loopback cannot run it, and says so. */
+static void test_receipt_ipv6_address(void) {
+    uint16_t upstream_port = 0u;
+    int upstream_listener = loopback6_create(&upstream_port);
+    if (upstream_listener < 0) {
+        fprintf(stderr, "receipt over IPv6: skipped, no IPv6 loopback on this host\n");
+        return;
+    }
+    upstream_context_t upstream = {.listener = upstream_listener};
+    pthread_t upstream_thread;
+    CHECK(pthread_create(&upstream_thread, NULL, upstream_main, &upstream) == 0);
+
+    address_capture_t capture = {
+        .lock = PTHREAD_MUTEX_INITIALIZER, .condition = PTHREAD_COND_INITIALIZER
+    };
+    maelys_egress_policy_t *policy = NULL;
+    maelys_egress_config_t *config = NULL;
+    char *error = NULL;
+    CHECK(maelys_egress_policy_create(&policy, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_allow_tcp(policy, "::1", upstream_port, 1,
+        &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_seal(policy, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_create(&config, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_set_authentication(config, "maelys",
+        "0123456789abcdef", &error) == MAELYS_EGRESS_OK);
+    maelys_egress_config_set_receipt_sink(config, address_receipt_sink, &capture);
+
+    server_context_t server = {
+        .lock = PTHREAD_MUTEX_INITIALIZER,
+        .condition = PTHREAD_COND_INITIALIZER,
+        .policy = policy,
+        .config = config
+    };
+    pthread_t server_thread;
+    CHECK(pthread_create(&server_thread, NULL, server_main, &server) == 0);
+    (void)pthread_mutex_lock(&server.lock);
+    while (!server.ready) (void)pthread_cond_wait(&server.condition, &server.lock);
+    (void)pthread_mutex_unlock(&server.lock);
+    CHECK(server.result == MAELYS_EGRESS_OK);
+
+    maelys_egress_connector_t *connector = NULL;
+    maelys_egress_session_t *session = NULL;
+    CHECK(maelys_egress_server_connector_create(server.server, "maelys",
+        "0123456789abcdef", &connector, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_connector_session_open(connector, "::1", upstream_port, 3000u,
+        &session, &error) == MAELYS_EGRESS_OK);
+    int fd = -1;
+    CHECK(session && maelys_egress_session_take_fd(session, &fd, &error) == MAELYS_EGRESS_OK);
+    maelys_egress_session_release(session);
+    if (fd >= 0) {
+        char pong[4];
+        CHECK(send_all(fd, "ping", 4u));
+        CHECK(recv(fd, pong, sizeof(pong), MSG_WAITALL) == 4 &&
+              memcmp(pong, "ping", 4u) == 0);
+        (void)close(fd);
+    }
+    maelys_egress_connector_release(connector);
+
+    struct timespec deadline;
+    (void)clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec += 10;
+    (void)pthread_mutex_lock(&capture.lock);
+    while (capture.receipts < 1u &&
+           pthread_cond_timedwait(&capture.condition, &capture.lock, &deadline) == 0) {}
+    size_t receipts = capture.receipts;
+    (void)pthread_mutex_unlock(&capture.lock);
+    CHECK(receipts == 1u && capture.results[0] == MAELYS_EGRESS_OK);
+    CHECK(capture.named[0] && strcmp(capture.addresses[0], "::1") == 0);
+
+    CHECK(maelys_egress_server_stop(server.server) == MAELYS_EGRESS_OK);
+    CHECK(pthread_join(server_thread, NULL) == 0);
+    CHECK(pthread_join(upstream_thread, NULL) == 0 && upstream.failed == 0);
+    maelys_egress_error_free(error);
+    maelys_egress_config_destroy(config);
+    maelys_egress_policy_destroy(policy);
+    (void)pthread_cond_destroy(&server.condition);
+    (void)pthread_mutex_destroy(&server.lock);
+    (void)pthread_cond_destroy(&capture.condition);
+    (void)pthread_mutex_destroy(&capture.lock);
 }
 
 static void test_operations(void) {
@@ -1697,6 +2057,9 @@ int main(void) {
     fixture_limits();
     RUN(test_receipt_canonical);
     RUN(test_audit_longest_record);
+    RUN(test_audit_journal_of_0_33_0);
+    RUN(test_receipt_upstream_address);
+    RUN(test_receipt_ipv6_address);
     RUN(test_operations);
     RUN(test_connector_guard_and_timeout);
     RUN(test_connector_concurrency);
