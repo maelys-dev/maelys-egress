@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+- **On macOS, a stream or a brokered channel could arrive dead.** XNU's
+  `unp_gc`, which any process on the host runs by closing a Unix socket while
+  rights are in flight, can flush a descriptor whose every reference is in
+  flight while its receiver takes it: the receiver gets a socket that reads
+  end of file while its peer is still connected, and drops what arrives
+  after. Both senders of Egress closed their copy as soon as the descriptor
+  was queued. Measured with a reproducer on a 12-core host, four processes
+  doing so, closing at once lost about one stream in seven and one channel
+  in nine; keeping the copy until the receiver shows it has it lost none in
+  60,000 of each.
+  - The channel server (`maelys_egress_channel_create`, and the channels of
+    `channel broker`) keeps its copy of a delivered stream, on macOS only,
+    until the client's next request, the stream seen in use from that copy,
+    or the end of the channel, and at the latest 1000 ms. While it is kept, a
+    client's `close` sends the relay no FIN: a stream abandoned without a
+    byte either way ends up to 1000 ms later. `shutdown` is unchanged.
+  - The broker keeps its copy of the channel's client end until the lease
+    ends, on every host: one more descriptor per lease.
+  - `protocol/egress-channel-v1.md` §2 and
+    `protocol/egress-channel-bootstrap-v1.md` carry the erratum. No byte,
+    status, header or ABI number changes.
+  - `test-operations` checks on macOS each way the kept stream is released,
+    and that hundreds of streams and brokered channels all carry a round
+    trip while threads close Unix sockets with rights in flight; the copies
+    closed at once fail it.
+
 ## 0.34.0 — 2026-10-26
 
 - **The receipt names the address the upstream connection was established
