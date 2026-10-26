@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.34.1 — 2026-10-26
 
 - **On macOS, a stream or a brokered channel could arrive dead.** XNU's
   `unp_gc`, which any process on the host runs by closing a Unix socket while
