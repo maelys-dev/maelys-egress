@@ -80,6 +80,9 @@ typedef struct egress_connection {
     char policy_digest_hex[65];
     uint64_t policy_generation;
     size_t address_index;
+    /* The pinned address the upstream connection was established to, empty
+     * until it is: what the receipt names. */
+    char upstream_address[EGRESS_MAX_ADDRESS_TEXT];
     maelys_egress_protocol_t protocol;
     char host[EGRESS_MAX_HOST + 1u];
     char authenticated_invocation_id[EGRESS_MAX_INVOCATION_ID + 1u];

@@ -42,7 +42,7 @@ sandboxed workload                 embedding host
         |                                |
         | HTTP proxy / CONNECT / SOCKS5  | native connector session
         +------------------------------- v
-  maelys-egress ABI 5
+  maelys-egress ABI 6
   +-------------------+
   | bounded parsers   |-- authentication
   | exact policy      |-- pinned DNS addresses

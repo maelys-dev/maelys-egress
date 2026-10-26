@@ -567,6 +567,10 @@ uint64_t maelys_egress_receipt_quota_execution_after_bytes(
     const maelys_egress_receipt_t *receipt) {
     return receipt ? receipt->quota_execution_after_bytes : 0u;
 }
+const char *maelys_egress_receipt_upstream_address(
+    const maelys_egress_receipt_t *receipt) {
+    return receipt && receipt->upstream_address[0] ? receipt->upstream_address : NULL;
+}
 
 #define METRIC_GETTER(name, field) \
     uint64_t maelys_egress_metrics_##name(const maelys_egress_metrics_t *metrics) { \

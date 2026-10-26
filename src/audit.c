@@ -62,10 +62,10 @@ int egress_hmac_sha256(
 
 /* What one record needs at its longest, on the side that writes it and on
  * the side that reads it again. The canonical string is the receipt's core,
- * under 1 KiB with every string at its bound and every integer at twenty
- * digits, then the attestor's name, its key id, and its signature in
- * hexadecimal, which alone is twice EGRESS_MAX_ATTESTATION_BYTES: about
- * 2.3 KiB in all. It was built in 2048 bytes, so a receipt carrying a
+ * 1060 bytes at most with every string at its bound, every integer at
+ * twenty digits and the longest address, then the attestor's name, its key
+ * id, and its signature in hexadecimal, which alone is twice
+ * EGRESS_MAX_ATTESTATION_BYTES: about 2.3 KiB in all. It was built in 2048 bytes, so a receipt carrying a
  * 512-byte signature with a long host, invocation and principal did not
  * fit, and the append that failed left the journal unhealthy for every
  * receipt after it. A record is the canonical string in its envelope: the

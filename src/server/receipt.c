@@ -54,6 +54,8 @@ void egress_receipt_emit(
     (void)snprintf(receipt.principal, sizeof(receipt.principal), "%s",
                    connection->principal);
     receipt.policy_generation = connection->policy_generation;
+    (void)snprintf(receipt.upstream_address, sizeof(receipt.upstream_address), "%s",
+                   connection->upstream_address);
     int attestation_ok = 1;
     if (server->config.attestor) {
         maelys_egress_attestor_t *attestor = server->config.attestor;

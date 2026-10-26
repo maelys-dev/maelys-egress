@@ -194,7 +194,10 @@ def run():
                 return receipt
             receipt = request(ports[0], "ok")
             assert receipt["quota"]["executionMax"] == 16 and receipt["quota"]["connectionMax"] == 4096
-            request(ports[1], "denied")
+            # The address the upstream connection was established to; none
+            # for a request the policy refused.
+            assert receipt["address"] == "127.0.0.1", receipt
+            assert request(ports[1], "denied")["address"] == ""
             # Identity and every broker control key are immutable on reload.
             for old, new in [("agent-01", "agent-02"), ("run-42", "run-43"),
                              ("= 777", "= 778"), ("channel_max_clients = 2", "channel_max_clients = 3"),

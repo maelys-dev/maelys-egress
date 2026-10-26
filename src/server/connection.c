@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 
 /* Connection admission and state machine up to the relay: accept, proxy
  * handshake (HTTP/SOCKS), policy match, quota admission, pinned upstream
@@ -207,8 +208,26 @@ int egress_connection_enforce_tunnel_identity(
     return egress_connection_update_watches(server, slot);
 }
 
+/* The address in the numeric form inet_ntop writes, without port, scope or
+ * brackets: what the receipt carries, inside the bytes an attestor signs. */
+static void address_text(const egress_address_t *address, char *output, size_t capacity) {
+    const void *bytes = NULL;
+    if (address->storage.ss_family == AF_INET) {
+        bytes = &((const struct sockaddr_in *)&address->storage)->sin_addr;
+    } else if (address->storage.ss_family == AF_INET6) {
+        bytes = &((const struct sockaddr_in6 *)&address->storage)->sin6_addr;
+    }
+    if (!bytes || !inet_ntop(address->storage.ss_family, bytes, output,
+                             (socklen_t)capacity)) output[0] = '\0';
+}
+
 void egress_connection_connected(maelys_egress_server_t *server, size_t slot) {
     egress_connection_t *connection = &server->connections[slot];
+    /* connect_next moved past the address it connected to. */
+    if (connection->address_index > 0u) {
+        address_text(&connection->destination->addresses[connection->address_index - 1u],
+            connection->upstream_address, sizeof(connection->upstream_address));
+    }
     int tunnel = connection->protocol == MAELYS_EGRESS_PROTOCOL_HTTP_CONNECT ||
         connection->protocol == MAELYS_EGRESS_PROTOCOL_SOCKS5 ||
         connection->protocol == MAELYS_EGRESS_PROTOCOL_CONNECTOR;

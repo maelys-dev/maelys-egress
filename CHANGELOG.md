@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+- **The receipt names the address the upstream connection was established
+  to.** A destination is pinned to up to sixteen addresses, and a receipt
+  could not say which one was used. It now carries it in the numeric form
+  `inet_ntop` writes (`93.184.216.34`, `2001:db8::1`, no port, scope or
+  brackets), empty when no upstream connection was established: a request
+  the policy or a quota refused, or an upstream that refused every pinned
+  address. When the first pinned address refuses and a later one accepts,
+  the receipt names the one that accepted.
+  - **Consumer notice, for whoever verifies, parses or rebuilds the
+    canonical receipt**: it gains a last field, `|address=`, inside the
+    bytes an attestor signs and an audit record holds. A record or a
+    signature made before verifies as it did, over the bytes stored; a
+    journal holds records of both forms, and resumes. A reader that splits
+    `key=value` pairs meets one more key at the end; a consumer that
+    rebuilds the canonical bytes from fields must add it.
+  - **Consumer notice, for whoever reads the lifecycle `receipt` event**: it
+    gains `address`, a string, empty when none was established.
+  - `maelys_egress_receipt_upstream_address()` reads it, NULL when none was
+    established. **`MAELYS_EGRESS_ABI_VERSION` becomes 6**;
+    `MAELYS_EGRESS_ABI_COMPATIBLE_SINCE` stays 3, and `tests/public/abi-5.h`,
+    frozen from v0.33.0, holds revision 5.
+  - The comment of the encoder said that changing the encoding invalidates
+    existing signatures and journals. Both verify over the bytes stored; it
+    now states the rule that holds: a field is only ever appended at the
+    end, and moving, removing or respelling one is a break.
+  - `tests/vectors/audit/journal-0.33.0.jsonl`, written by the published
+    0.33.0 binary, is resumed, appended to and resumed again; an address
+    changed in a record fails the verification; the attestor signs the
+    address; the longest record holds the longest address. Two mutants of
+    `scripts/mutation-check.sh` remove the address from the encoding and
+    name the first pinned address instead of the one that accepted.
+
 - maelys-cli **0.13.0**, which still targets agent-cli-spec 2.21.0: a regex
   search in the caller's memory, which this product does not call, and the
   four agent texts that name it. 0.12.4 corrects a regex search past 4 GiB.

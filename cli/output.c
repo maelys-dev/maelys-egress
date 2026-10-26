@@ -141,6 +141,8 @@ void egress_cli_receipt_sink(void *context, const maelys_egress_receipt_t *recei
         (int64_t)maelys_egress_receipt_protocol(receipt));
     (void)maelys_cli_json_key_string(&writer, "host", text_or_empty(maelys_egress_receipt_host(receipt)));
     (void)maelys_cli_json_key_unsigned(&writer, "port", maelys_egress_receipt_port(receipt));
+    (void)maelys_cli_json_key_string(&writer, "address",
+        text_or_empty(maelys_egress_receipt_upstream_address(receipt)));
     (void)maelys_cli_json_key_string(&writer, "result",
         maelys_egress_result_string(maelys_egress_receipt_result(receipt)));
     (void)maelys_cli_json_key_unsigned(&writer, "durationMs",

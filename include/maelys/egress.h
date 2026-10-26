@@ -29,9 +29,10 @@ extern "C" {
  * under the same number; revision 4 is that interface, numbered once the
  * rule above was adopted. Revision 5 states what a canonical host is, below,
  * and no longer takes for a name the numeric forms a resolver reads as an
- * address. tests/public/abi-3.h and abi-4.h hold the revisions served.
+ * address. Revision 6 adds maelys_egress_receipt_upstream_address.
+ * tests/public/abi-3.h, abi-4.h and abi-5.h hold the revisions served.
  */
-#define MAELYS_EGRESS_ABI_VERSION 5u
+#define MAELYS_EGRESS_ABI_VERSION 6u
 #define MAELYS_EGRESS_ABI_COMPATIBLE_SINCE 3u
 
 /*
@@ -502,6 +503,18 @@ uint64_t maelys_egress_receipt_quota_connection_observed_bytes(
 uint64_t maelys_egress_receipt_quota_execution_before_bytes(
     const maelys_egress_receipt_t *receipt);
 uint64_t maelys_egress_receipt_quota_execution_after_bytes(
+    const maelys_egress_receipt_t *receipt);
+/*
+ * The pinned address the upstream connection was established to, in the
+ * numeric form inet_ntop writes: "93.184.216.34" or "2001:db8::1", without
+ * port, scope identifier or brackets. NULL when no upstream connection was
+ * established: a request refused by the policy, a quota or an upstream that
+ * refused every pinned address. When the first pinned address refuses and
+ * a later one accepts, it names the one that accepted. It is part of the
+ * canonical receipt an attestor signs and an audit record holds. Since
+ * revision 6.
+ */
+const char *maelys_egress_receipt_upstream_address(
     const maelys_egress_receipt_t *receipt);
 
 uint64_t maelys_egress_metrics_accepted(const maelys_egress_metrics_t *metrics);
