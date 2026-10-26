@@ -19,6 +19,10 @@
     rebuilds the canonical bytes from fields must add it.
   - **Consumer notice, for whoever reads the lifecycle `receipt` event**: it
     gains `address`, a string, empty when none was established.
+    `protocol/egress-lifecycle-v1.schema.json` declares it, required, in one
+    of the forms `inet_ntop` writes or empty; `tools/check_schemas.py`
+    refuses a number, `null`, a missing member, a port, brackets and a
+    scope identifier.
   - `maelys_egress_receipt_upstream_address()` reads it, NULL when none was
     established. **`MAELYS_EGRESS_ABI_VERSION` becomes 6**;
     `MAELYS_EGRESS_ABI_COMPATIBLE_SINCE` stays 3, and `tests/public/abi-5.h`,
@@ -30,9 +34,13 @@
   - `tests/vectors/audit/journal-0.33.0.jsonl`, written by the published
     0.33.0 binary, is resumed, appended to and resumed again; an address
     changed in a record fails the verification; the attestor signs the
-    address; the longest record holds the longest address. Two mutants of
-    `scripts/mutation-check.sh` remove the address from the encoding and
-    name the first pinned address instead of the one that accepted.
+    address; a destination pinned to a port of `::1` held without a
+    listener, then to `127.0.0.1`, names `127.0.0.1`; a connection
+    established over IPv6 names `::1`; the longest record holds the longest
+    address. Two mutants of `scripts/mutation-check.sh` remove the address
+    from the encoding and name the first pinned address instead of the one
+    that accepted; each counts as killed only by an assertion on the
+    address.
 
 - maelys-cli **0.13.0**, which still targets agent-cli-spec 2.21.0: a regex
   search in the caller's memory, which this product does not call, and the

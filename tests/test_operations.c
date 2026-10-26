@@ -127,6 +127,26 @@ static int listener_create(uint16_t *out_port) {
     return fd;
 }
 
+/* An IPv6 loopback socket on a port of its own, listening or not: bound
+ * without listen(), it holds the port so that a connection to it is refused,
+ * whatever else runs on the host. -1 when the host has no IPv6 loopback. */
+static int loopback6_create(int listening, uint16_t *out_port) {
+    int fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
+    if (fd < 0) return -1;
+    struct sockaddr_in6 address;
+    memset(&address, 0, sizeof(address));
+    address.sin6_family = AF_INET6;
+    address.sin6_addr = in6addr_loopback;
+    socklen_t length = sizeof(address);
+    if (bind(fd, (struct sockaddr *)&address, sizeof(address)) != 0 ||
+        (listening && listen(fd, 8) != 0) ||
+        getsockname(fd, (struct sockaddr *)&address, &length) != 0) {
+        (void)close(fd); return -1;
+    }
+    *out_port = ntohs(address.sin6_port);
+    return fd;
+}
+
 static int connect_loopback(uint16_t port) {
     int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     struct sockaddr_in address = {.sin_family = AF_INET, .sin_port = htons(port)};
@@ -655,8 +675,10 @@ static void address_receipt_sink(void *opaque, const maelys_egress_receipt_t *re
 /* The receipt names the pinned address the upstream connection was
  * established to, and nothing for a request refused before any connection.
  * The destination is pinned to two addresses here, the first of which
- * refuses: nothing listens on ::1 at that port, or the host has no IPv6 and
- * the first cannot even be tried. The receipt must name the second. */
+ * refuses: a port of ::1 this test holds without listening, or, on a host
+ * without IPv6 loopback, an address that cannot even be tried. Either way
+ * the refusal does not depend on what else runs on the host. The receipt
+ * must name the second. */
 static void test_receipt_upstream_address(void) {
     uint16_t upstream_port = 0u;
     int upstream_listener = listener_create(&upstream_port);
@@ -664,6 +686,8 @@ static void test_receipt_upstream_address(void) {
     upstream_context_t upstream = {.listener = upstream_listener};
     pthread_t upstream_thread;
     CHECK(pthread_create(&upstream_thread, NULL, upstream_main, &upstream) == 0);
+    uint16_t refusing_port = upstream_port;
+    int held = loopback6_create(0, &refusing_port);
 
     address_capture_t capture = {
         .lock = PTHREAD_MUTEX_INITIALIZER, .condition = PTHREAD_COND_INITIALIZER
@@ -686,7 +710,7 @@ static void test_receipt_upstream_address(void) {
         refusing.sin6_len = (uint8_t)sizeof(refusing);
 #endif
         refusing.sin6_family = AF_INET6;
-        refusing.sin6_port = htons(upstream_port);
+        refusing.sin6_port = htons(refusing_port);
         refusing.sin6_addr = in6addr_loopback;
         memset(&destination->addresses[0].storage, 0, sizeof(destination->addresses[0].storage));
         memcpy(&destination->addresses[0].storage, &refusing, sizeof(refusing));
@@ -740,6 +764,7 @@ static void test_receipt_upstream_address(void) {
     CHECK(maelys_egress_server_stop(server.server) == MAELYS_EGRESS_OK);
     CHECK(pthread_join(server_thread, NULL) == 0);
     CHECK(pthread_join(upstream_thread, NULL) == 0 && upstream.failed == 0);
+    if (held >= 0) (void)close(held);
 
     /* The two receipts close in either order: each is told by its result. */
     for (size_t i = 0u; i < 2u && receipts == 2u; ++i) {
@@ -757,6 +782,89 @@ static void test_receipt_upstream_address(void) {
             CHECK(strcmp(tail, "|address=127.0.0.1") == 0);
         }
     }
+    maelys_egress_error_free(error);
+    maelys_egress_config_destroy(config);
+    maelys_egress_policy_destroy(policy);
+    (void)pthread_cond_destroy(&server.condition);
+    (void)pthread_mutex_destroy(&server.lock);
+    (void)pthread_cond_destroy(&capture.condition);
+    (void)pthread_mutex_destroy(&capture.lock);
+}
+
+/* An upstream connection established over IPv6: the receipt names the
+ * address as inet_ntop writes it, "::1", without brackets or scope. A host
+ * without IPv6 loopback cannot run it, and says so. */
+static void test_receipt_ipv6_address(void) {
+    uint16_t upstream_port = 0u;
+    int upstream_listener = loopback6_create(1, &upstream_port);
+    if (upstream_listener < 0) {
+        fprintf(stderr, "receipt over IPv6: skipped, no IPv6 loopback on this host\n");
+        return;
+    }
+    upstream_context_t upstream = {.listener = upstream_listener};
+    pthread_t upstream_thread;
+    CHECK(pthread_create(&upstream_thread, NULL, upstream_main, &upstream) == 0);
+
+    address_capture_t capture = {
+        .lock = PTHREAD_MUTEX_INITIALIZER, .condition = PTHREAD_COND_INITIALIZER
+    };
+    maelys_egress_policy_t *policy = NULL;
+    maelys_egress_config_t *config = NULL;
+    char *error = NULL;
+    CHECK(maelys_egress_policy_create(&policy, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_allow_tcp(policy, "::1", upstream_port, 1,
+        &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_policy_seal(policy, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_create(&config, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_config_set_authentication(config, "maelys",
+        "0123456789abcdef", &error) == MAELYS_EGRESS_OK);
+    maelys_egress_config_set_receipt_sink(config, address_receipt_sink, &capture);
+
+    server_context_t server = {
+        .lock = PTHREAD_MUTEX_INITIALIZER,
+        .condition = PTHREAD_COND_INITIALIZER,
+        .policy = policy,
+        .config = config
+    };
+    pthread_t server_thread;
+    CHECK(pthread_create(&server_thread, NULL, server_main, &server) == 0);
+    (void)pthread_mutex_lock(&server.lock);
+    while (!server.ready) (void)pthread_cond_wait(&server.condition, &server.lock);
+    (void)pthread_mutex_unlock(&server.lock);
+    CHECK(server.result == MAELYS_EGRESS_OK);
+
+    maelys_egress_connector_t *connector = NULL;
+    maelys_egress_session_t *session = NULL;
+    CHECK(maelys_egress_server_connector_create(server.server, "maelys",
+        "0123456789abcdef", &connector, &error) == MAELYS_EGRESS_OK);
+    CHECK(maelys_egress_connector_session_open(connector, "::1", upstream_port, 3000u,
+        &session, &error) == MAELYS_EGRESS_OK);
+    int fd = -1;
+    CHECK(session && maelys_egress_session_take_fd(session, &fd, &error) == MAELYS_EGRESS_OK);
+    maelys_egress_session_release(session);
+    if (fd >= 0) {
+        char pong[4];
+        CHECK(send_all(fd, "ping", 4u));
+        CHECK(recv(fd, pong, sizeof(pong), MSG_WAITALL) == 4 &&
+              memcmp(pong, "ping", 4u) == 0);
+        (void)close(fd);
+    }
+    maelys_egress_connector_release(connector);
+
+    struct timespec deadline;
+    (void)clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec += 10;
+    (void)pthread_mutex_lock(&capture.lock);
+    while (capture.receipts < 1u &&
+           pthread_cond_timedwait(&capture.condition, &capture.lock, &deadline) == 0) {}
+    size_t receipts = capture.receipts;
+    (void)pthread_mutex_unlock(&capture.lock);
+    CHECK(receipts == 1u && capture.results[0] == MAELYS_EGRESS_OK);
+    CHECK(capture.named[0] && strcmp(capture.addresses[0], "::1") == 0);
+
+    CHECK(maelys_egress_server_stop(server.server) == MAELYS_EGRESS_OK);
+    CHECK(pthread_join(server_thread, NULL) == 0);
+    CHECK(pthread_join(upstream_thread, NULL) == 0 && upstream.failed == 0);
     maelys_egress_error_free(error);
     maelys_egress_config_destroy(config);
     maelys_egress_policy_destroy(policy);
@@ -1955,6 +2063,7 @@ int main(void) {
     RUN(test_audit_longest_record);
     RUN(test_audit_journal_of_0_33_0);
     RUN(test_receipt_upstream_address);
+    RUN(test_receipt_ipv6_address);
     RUN(test_operations);
     RUN(test_connector_guard_and_timeout);
     RUN(test_connector_concurrency);

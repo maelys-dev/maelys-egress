@@ -112,6 +112,16 @@ PY
                 printf 'invalid (no bootstrap assertion)\n' >"$work/$name.result"
                 tail -20 "$work/$name.log" >&2
             fi ;;
+        receipt-address-*)
+            # Only an assertion on the address is evidence: a timeout or an
+            # unrelated failure says nothing of what the receipt names.
+            if grep -Eq '^FAIL (\./)?tests/test_operations\.c:[0-9]+: .*address' "$work/$name.log"; then
+                printf 'killed\n' >"$work/$name.result"
+                grep -E '^FAIL ' "$work/$name.log" | sed "s/^/$name: /"
+            else
+                printf 'invalid (no receipt address assertion)\n' >"$work/$name.result"
+                tail -20 "$work/$name.log" >&2
+            fi ;;
         *) printf 'killed\n' >"$work/$name.result" ;;
         esac
     fi

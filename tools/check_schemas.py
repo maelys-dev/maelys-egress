@@ -248,11 +248,30 @@ def check_lifecycle(binary: Path, schema: dict, config: Path) -> None:
     print(f"schema-check: {len(events)} lifecycle events conform")
 
 
+def check_receipt_refusals(schema: dict) -> None:
+    """The schema holds the receipt's address, not only the run that emits it:
+    a consumer validating the stream is given a guarantee, so a wrong type, a
+    missing member or a form inet_ntop never writes must be refused."""
+    def event(receipt: dict) -> dict:
+        return {"schemaVersion": 1, "contract": "maelys-egress-lifecycle/1",
+                "event": "receipt", "receipt": receipt}
+    for address in ("", "127.0.0.1", "2001:db8::1", "::ffff:192.0.2.1"):
+        check(f"receipt with address {address!r}", event({"address": address}), schema)
+    refused = {"address 42": {"address": 42}, "address null": {"address": None},
+               "address missing": {}, "address with a port": {"address": "127.0.0.1:443"},
+               "address in brackets": {"address": "[::1]"},
+               "address with a scope": {"address": "fe80::1%en0"}}
+    for label, receipt in refused.items():
+        if not validate(event(receipt), schema):
+            fail(f"lifecycle schema accepts a receipt with {label}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", type=Path, required=True)
     arguments = parser.parse_args()
     lifecycle_schema = load(ROOT / "protocol" / "egress-lifecycle-v1.schema.json")
+    check_receipt_refusals(lifecycle_schema)
     data_schemas = {path.stem: load(path) for path in (ROOT / "cli" / "schemas").glob("*.json")}
     with tempfile.TemporaryDirectory(prefix="maelys-egress-schema-") as directory:
         root = Path(directory)
