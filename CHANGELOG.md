@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- maelys-cli **0.13.0**, which still targets agent-cli-spec 2.21.0: a regex
+  search in the caller's memory, which this product does not call, and the
+  four agent texts that name it. 0.12.4 corrects a regex search past 4 GiB.
+  `describe`, the help and every envelope are those of 0.33.0. Nothing a
+  user receives changes.
+
 ## 0.33.0 — 2026-10-25
 
 - **The help, and the text of a failure, in French or in English.**
