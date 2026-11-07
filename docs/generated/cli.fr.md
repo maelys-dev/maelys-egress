@@ -11,7 +11,7 @@ maelys-egress COMMAND [OPERANDS] [options]
 
 ## Description
 
-Maelys Egress 0.34.1, un programme du contrat agent-cli/v2 : 'maelys-egress help' en montre l'aide, 'maelys-egress describe --format json' le catalogue d'où cette page est rendue.
+Maelys Egress 0.35.0, un programme du contrat agent-cli/v2 : 'maelys-egress help' en montre l'aide, 'maelys-egress describe --format json' le catalogue d'où cette page est rendue.
 
 ## Commandes
 
