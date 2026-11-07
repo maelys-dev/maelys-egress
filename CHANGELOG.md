@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.35.0 — 2026-11-07
 
 - **The manual page, in English and in French, and the command reference in
   French.** `maelys-egress(1)` is rendered by maelys-cli-man of the pinned
