@@ -139,7 +139,7 @@ CLI_OBJECTS := $(CLI_SOURCES:%.c=$(OBJ)/%.o)
 # have another libmaelys-cli under /opt/homebrew/include; compiling its older
 # public structs and then linking the pinned archive is an ABI mismatch even
 # though both releases carry the same framework ABI number.
-CLI_CPPFLAGS := -I$(MAELYS_CLI_DIR)/include -I$(GENERATED)
+CLI_CPPFLAGS := -I$(MAELYS_CLI_DIR)/c/include -I$(GENERATED)
 CLI_SCHEMAS := $(wildcard cli/schemas/*.json)
 CLI_SCHEMA_SYMBOLS := $(foreach schema,$(CLI_SCHEMAS),\
 	egress_$(subst -,_,$(basename $(notdir $(schema))))_schema=$(schema))
@@ -249,7 +249,7 @@ $(OBJECTS) $(CLI_OBJECTS) $(OBJ)/tests/test_egress.o $(OBJ)/tests/test_operation
 endif
 
 check-cli-contract:
-	@test -f "$(MAELYS_CLI_DIR)/include/maelys/cli.h" || \
+	@test -f "$(MAELYS_CLI_DIR)/c/include/maelys/cli.h" || \
 		{ echo "MAELYS_CLI_DIR must name maelys-cli" >&2; exit 1; }
 	@test "$$(git -C "$(MAELYS_CLI_DIR)" rev-parse HEAD)" = "$(MAELYS_CLI_PIN)" || \
 		{ echo "maelys-cli must be pinned to $(MAELYS_CLI_TAG) ($(MAELYS_CLI_PIN))" >&2; exit 1; }
@@ -257,11 +257,11 @@ check-cli-contract:
 		{ echo "pinned maelys-cli checkout is modified" >&2; exit 1; }
 	@test -z "$$(git -C "$(MAELYS_CLI_DIR)" ls-files --others --exclude-standard)" || \
 		{ echo "pinned maelys-cli checkout carries untracked files" >&2; exit 1; }
-	@grep -Fq '#define MAELYS_CLI_ABI 1' "$(MAELYS_CLI_DIR)/include/maelys/cli/version.h"
+	@grep -Fq '#define MAELYS_CLI_ABI 1' "$(MAELYS_CLI_DIR)/c/include/maelys/cli/version.h"
 	@grep -Fq '#define MAELYS_CLI_VERSION "$(MAELYS_CLI_TAG:v%=%)"' \
-		"$(MAELYS_CLI_DIR)/include/maelys/cli/version.h"
+		"$(MAELYS_CLI_DIR)/c/include/maelys/cli/version.h"
 	@grep -Fq '#define MAELYS_CLI_CONTRACT "agent-cli/v2"' \
-		"$(MAELYS_CLI_DIR)/include/maelys/cli/version.h"
+		"$(MAELYS_CLI_DIR)/c/include/maelys/cli/version.h"
 	@# The framework writes four texts into this repository through
 	@# 'maelys agents install', which nothing here regenerates. Each one names
 	@# the version it came from, so a pin moved without that command leaves a
