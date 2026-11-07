@@ -63,6 +63,11 @@ INSIDE
 docker run --rm -v "$dist:/packages:ro" -v "$work:/check:ro" "$deb_image" \
     sh -c "dpkg -i /packages/$deb >/dev/null && sh /check/use.sh $version"
 echo "check-installed-packages: $deb installs and runs on $deb_image"
+# As a person installs it: dnf, from the file, with no repository. The .rpm
+# carries no OpenPGP signature, its provenance being attested by GitHub, and
+# RPM 6 (Fedora 45, _pkgverify_level all) refuses an unsigned package to a
+# bare `rpm -i`; dnf installs a file given on its command line and says it
+# skipped the check.
 docker run --rm -v "$dist:/packages:ro" -v "$work:/check:ro" "$rpm_image" \
-    sh -c "rpm -i /packages/$rpm && sh /check/use.sh $version"
+    sh -c "dnf install -y -q --disablerepo='*' /packages/$rpm >/dev/null && sh /check/use.sh $version"
 echo "check-installed-packages: $rpm installs and runs on $rpm_image"

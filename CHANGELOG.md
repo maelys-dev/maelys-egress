@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **The .rpm is checked as a person installs it, with `dnf`.** Since
+  `fedora:latest` became Fedora 45, its RPM 6.1 verifies every package at
+  `_pkgverify_level all` and refuses an unsigned one to a bare `rpm -i`,
+  which `scripts/check-installed-packages.sh` used: every `package` job on
+  Linux failed at "does not verify: no signature". The published .rpm,
+  which carries no OpenPGP signature and whose provenance GitHub attests,
+  installs with `dnf install ./maelys-egress-X.Y.Z-1.ARCH.rpm`, which skips
+  the check for a file named on its command line and says so; the check
+  now does that, offline. Nothing a user receives changes.
+
 ## 0.34.1 — 2026-10-26
 
 - **On macOS, a stream or a brokered channel could arrive dead.** XNU's
