@@ -311,6 +311,11 @@ command line.
   failure are in English or in French, as `--lang`, `MAELYS_CLI_LANG` or the
   locale asks; `describe` and the JSON envelopes are the same in every
   language;
+- [command reference in French](docs/generated/cli.fr.md), and the manual
+  page `maelys-egress(1)` in English and in French (`man maelys-egress`,
+  `LANG=fr_FR.UTF-8 man maelys-egress`), which `make install`, the packages
+  and the Homebrew formula install: rendered from the same catalog by
+  maelys-cli-man, never written by hand;
 - [configuration-key reference](docs/generated/config-reference.md): generated
   from the standalone configuration catalog;
 - [Maelys CLI integration guide](docs/maelys-cli-guide.md): framework and

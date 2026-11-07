@@ -190,6 +190,8 @@ cp -a ${linux_stage}/. %{buildroot}/
 /usr/libexec/maelys-sys/
 /usr/share/doc/maelys-egress/
 /usr/share/maelys/commands/egress.json
+/usr/share/man/man1/maelys-egress.1*
+/usr/share/man/fr/man1/maelys-egress.1*
 EOF
 rpmbuild --define "_topdir $rpm_top" -bb "$spec" >/dev/null
 rpm_source="$(find "$rpm_top/RPMS" -type f -name '*.rpm' -print -quit)"

@@ -25,6 +25,18 @@ static const maelys_cli_translation_t french[] = {
      "Argument transmis tel quel au programme. Écrivez le programme et ses "
      "arguments après -- : avant, un mot qui commence par un tiret relève de "
      "cette commande, qui le refuse."},
+    {"List the keys for a person: their type, what they do, and those this "
+     "binary lacks.",
+     "Liste les clés pour une personne : leur type, leur rôle, et celles qui "
+     "manquent à ce binaire."},
+    {"Read the verdict as JSON: data.valid, the policy digest, and each "
+     "violation in data.diagnostics.",
+     "Lit le verdict en JSON : data.valid, l'empreinte de la politique, et "
+     "chaque violation dans data.diagnostics."},
+    {"Start an interpreter by its absolute path, with its script and the "
+     "script's arguments as given.",
+     "Lance un interpréteur par son chemin absolu, avec son script et les "
+     "arguments du script tels quels."},
     {"Read every configuration key, its type and its constraints as JSON.",
      "Lit chaque clé de configuration, son type et ses contraintes, en JSON."},
     {"Check a configuration before starting anything; exit 2 lists what it "

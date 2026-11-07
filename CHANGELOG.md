@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- **The manual page, in English and in French, and the command reference in
+  French.** `maelys-egress(1)` is rendered by maelys-cli-man of the pinned
+  framework from the catalog of the binary it describes, in English and in
+  French, dated by the newest dated entry of this changelog so that one
+  source renders one page. `make install` writes it to
+  `share/man/man1/maelys-egress.1` and `share/man/fr/man1/maelys-egress.1`;
+  the archives, the .deb, the .rpm and the Homebrew formula carry both, so
+  `man maelys-egress` and `LANG=fr_FR.UTF-8 man maelys-egress` read them.
+  `docs/generated/cli.fr.md` is the command reference in French, beside
+  `docs/cli.md`, rendered from `docs/cli-contract.json` for the version
+  `VERSION` names; `scripts/sync-sdk-version.sh` moves that version when
+  `cut` writes `VERSION`. `man-check`, part of `make check`, lints both pages
+  with mandoc where it is installed, holds each to its language and leaves
+  no text of the catalog in English; `contract-check` holds the French
+  reference to its catalog.
+- **Three more examples, in both languages**: `config describe` for a
+  person, `config validate ... --format json` and the verdict it gives, and
+  `channel exec` starting an interpreter with a script and its arguments.
+  The framework parses each against the binary when it starts, and
+  `tests/test_languages.py` requires the French of each.
+
 - **maelys-cli 0.16.0 and agent-cli-spec 2.23.0, the version it targets.**
   Compared with 0.34.1 on the binary built at these pins:
   - **Consumer notice: a refusal of the line names its cause in
