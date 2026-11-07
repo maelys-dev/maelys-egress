@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- maelys-system **0.15.0**: `maelys_sys_owned_last_refusal`, a diagnostic of
+  the owned process groups, and the keeper that reports it. This product
+  calls neither `owned.h` nor the keeper, which its packages carry as the
+  foundation installs them. `MAELYS_SYS_ABI_VERSION` stays 1; outside
+  `version.h`, only `owned.h` changes among the public headers. The
+  packages list the same files. Nothing a user receives changes.
+
 - The README says how to read the French manual page: 0.35.0 wrote
   `LANG=fr_FR.UTF-8 man maelys-egress`, which man-db honours only when that
   locale is installed, and macOS's `man` never does. On Linux, a French
