@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- **maelys-cli 0.16.0 and agent-cli-spec 2.23.0, the version it targets.**
+  Compared with 0.34.1 on the binary built at these pins:
+  - **Consumer notice: a refusal of the line names its cause in
+    `error.issues`.** `config validate` without `--config` answers
+    `VALIDATION_FAILED` as before, with one entry `{"code":
+    "REQUIRED_OPTION", "message": ..., "path": "--config"}`. A consumer that
+    compares a whole failure envelope sees one more member; one that reads
+    `code` and `hint` sees nothing change.
+  - Global options before `--help` or `--version` now answer:
+    `maelys-egress --lang fr --help` is the French help and
+    `maelys-egress --non-interactive --version` the version, where both were
+    `INVALID_COMMAND`.
+  - `describe`, the descriptors of this product's five commands, the
+    configuration and the lifecycle stream do not change.
+  - The C sources of maelys-cli moved under `c/`: the `Makefile` reads its
+    headers from `$(MAELYS_CLI_DIR)/c/include`, in `CLI_CPPFLAGS` and in
+    the checks of the pinned framework. The four agent texts are those
+    `maelys agents install` of 0.16.0 writes.
+
 - **The .rpm is checked as a person installs it, with `dnf`.** Since
   `fedora:latest` became Fedora 45, its RPM 6.1 verifies every package at
   `_pkgverify_level all` and refuses an unsigned one to a bare `rpm -i`,

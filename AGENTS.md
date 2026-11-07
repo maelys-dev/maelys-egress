@@ -66,7 +66,7 @@ License: https://creativecommons.org/licenses/by/4.0/
 When sharing adaptations, retain attribution and indicate your changes.
 -->
 
-# Maelys CLI framework (maelys-cli 0.13.0, 4c28484)
+# Maelys CLI framework (maelys-cli 0.16.0, 8312bc4)
 
 This project builds its command-line interface on `libmaelys_cli`. The
 complete guide is in `docs/maelys-cli-guide.md`; this block is the summary
@@ -174,6 +174,19 @@ write; external programs started with absolute paths and `execve`, never a
 shell or PATH lookup, with a trusted immediate parent held open through exec;
 delegate scripts use a direct absolute interpreter never named `env`; relative
 and `env` shebangs are refused.
+
+## TypeScript and JavaScript products
+
+The unreleased `@maelys-dev/cli` runtime lives in `typescript/`; it runs on
+Node 22.13.0 or later without loading C or starting Python. Use one `Program`
+catalog and `read`, `records`, `transaction`, `execute`, `stream` or `external`
+handlers, with `option`, `flag`, `operand`, `argument`, `constraint` and
+`example` declarations. Run the pinned conformance kit on the product.
+`docs/typescript.md` states the initial supported surface and its limits:
+not every native file-trust or process primitive is ported. Do not substitute
+an unverified host API and claim those guarantees. The example and shared
+surface run through `make typescript-check`; `make check-all` checks all three
+implementations. The npm publication channel is not enabled by this change.
 <!-- maelys-cli:end -->
 
 <!-- maelys-release:begin -->
