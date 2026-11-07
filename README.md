@@ -312,10 +312,13 @@ command line.
   locale asks; `describe` and the JSON envelopes are the same in every
   language;
 - [command reference in French](docs/generated/cli.fr.md), and the manual
-  page `maelys-egress(1)` in English and in French (`man maelys-egress`,
-  `LANG=fr_FR.UTF-8 man maelys-egress`), which `make install`, the packages
-  and the Homebrew formula install: rendered from the same catalog by
-  maelys-cli-man, never written by hand;
+  page `maelys-egress(1)` in English and in French, which `make install`,
+  the packages and the Homebrew formula install: rendered from the same
+  catalog by maelys-cli-man, never written by hand. `man maelys-egress`
+  reads it. On Linux, man-db shows the French page under a French locale
+  that is installed, or with `man -L fr maelys-egress`; macOS's `man` does
+  not choose by locale, and reads it with `man -M "$(brew --prefix)/share/man/fr"
+  maelys-egress` (or `PREFIX/share/man/fr` for `make install`);
 - [configuration-key reference](docs/generated/config-reference.md): generated
   from the standalone configuration catalog;
 - [Maelys CLI integration guide](docs/maelys-cli-guide.md): framework and
