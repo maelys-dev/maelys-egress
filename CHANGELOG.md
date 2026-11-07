@@ -12,6 +12,11 @@
   the check for a file named on its command line and says so; the check
   now does that, offline. Nothing a user receives changes.
 
+- maelys-release **0.66.0**: the three workflow pins, and no managed file.
+  No version since 0.65.0 asks anything of this product: 0.65.1 builds the
+  socle on maelys-cli 0.12.3, and 0.66.0 has `declarations` draw each
+  workflow's job graph. Nothing a user receives changes.
+
 ## 0.34.1 — 2026-10-26
 
 - **On macOS, a stream or a brokered channel could arrive dead.** XNU's
