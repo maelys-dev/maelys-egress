@@ -310,6 +310,13 @@
           "effect": "read",
           "examples": [
             {
+              "summary": "List the keys for a person: their type, what they do, and those this binary lacks.",
+              "words": [
+                "config",
+                "describe"
+              ]
+            },
+            {
               "summary": "Read every configuration key, its type and its constraints as JSON.",
               "words": [
                 "config",
@@ -439,6 +446,17 @@
                 "validate",
                 "--config",
                 "/etc/maelys-egress.conf"
+              ]
+            },
+            {
+              "summary": "Read the verdict as JSON: data.valid, the policy digest, and each violation in data.diagnostics.",
+              "words": [
+                "config",
+                "validate",
+                "--config",
+                "/etc/maelys-egress.conf",
+                "--format",
+                "json"
               ]
             }
           ],
@@ -653,6 +671,20 @@
                 "--",
                 "/usr/local/bin/agent",
                 "--once"
+              ]
+            },
+            {
+              "summary": "Start an interpreter by its absolute path, with its script and the script's arguments as given.",
+              "words": [
+                "channel",
+                "exec",
+                "--config",
+                "/etc/maelys-egress.conf",
+                "--",
+                "/usr/bin/python3",
+                "/opt/agent/run.py",
+                "--task",
+                "build"
               ]
             }
           ],
@@ -900,14 +932,17 @@
             "Inspect the configuration and process resources.": "Examinez la configuration et les ressources du processus.",
             "Inspect the configuration, referenced files and listener availability.": "Examinez la configuration, les fichiers qu'elle r\u00e9f\u00e9rence et la disponibilit\u00e9 des \u00e9coutes.",
             "Inspect the configuration, referenced files and process resources.": "Examinez la configuration, les fichiers qu'elle r\u00e9f\u00e9rence et les ressources du processus.",
+            "List the keys for a person: their type, what they do, and those this binary lacks.": "Liste les cl\u00e9s pour une personne : leur type, leur r\u00f4le, et celles qui manquent \u00e0 ce binaire.",
             "Make the file a regular, single-link file owned by root or the daemon user, without group or world write permission, and not a symbolic link.": "Faites-en un fichier ordinaire \u00e0 un seul lien, appartenant \u00e0 root ou \u00e0 l'utilisateur du d\u00e9mon, sans droit d'\u00e9criture pour le groupe ni pour les autres, et qui ne soit pas un lien symbolique.",
             "Name a regular executable by its absolute path, not writable by group or others, in a directory only its owner or root can modify.": "Nommez un ex\u00e9cutable ordinaire par son chemin absolu, que ni le groupe ni les autres ne peuvent modifier, dans un r\u00e9pertoire que seuls son propri\u00e9taire ou root peuvent modifier.",
             "Name an existing configuration file readable by the daemon.": "Nommez un fichier de configuration existant, lisible par le d\u00e9mon.",
             "Read every configuration key, its type and its constraints as JSON.": "Lit chaque cl\u00e9 de configuration, son type et ses contraintes, en JSON.",
+            "Read the verdict as JSON: data.valid, the policy digest, and each violation in data.diagnostics.": "Lit le verdict en JSON : data.valid, l'empreinte de la politique, et chaque violation dans data.diagnostics.",
             "Run the proxy until SIGINT or SIGTERM, its lifecycle events on stdout.": "Fait tourner le proxy jusqu'\u00e0 SIGINT ou SIGTERM, ses \u00e9v\u00e9nements de cycle de vie sur stdout.",
             "Serve native channels on the private socket the configuration names.": "Sert des canaux natifs sur le socket priv\u00e9 que nomme la configuration.",
             "Serve native channels through a private Unix socket until SIGINT or SIGTERM; stdout carries the lifecycle JSON Lines stream.": "Sert des canaux natifs par un socket Unix priv\u00e9 jusqu'\u00e0 SIGINT ou SIGTERM ; stdout porte le flux JSON Lines du cycle de vie.",
             "Start a program with a channel on descriptor 4 unless the configuration names another; what follows -- is the program's own.": "Lance un programme avec un canal sur le descripteur 4, sauf si la configuration en nomme un autre ; ce qui suit -- appartient au programme.",
+            "Start an interpreter by its absolute path, with its script and the script's arguments as given.": "Lance un interpr\u00e9teur par son chemin absolu, avec son script et les arguments du script tels quels.",
             "Start mediation and run until SIGINT or SIGTERM; stdout carries the lifecycle JSON Lines stream.": "D\u00e9marre la m\u00e9diation et tourne jusqu'\u00e0 SIGINT ou SIGTERM ; stdout porte le flux JSON Lines du cycle de vie.",
             "Start one program with a native channel on an inherited descriptor and exit with its status, 128 + signal if a signal ended it; stdout and stderr are the program's. Not a sandbox: the program keeps its own network access.": "Lance un programme avec un canal natif sur un descripteur h\u00e9rit\u00e9 et sort avec son code, 128 + signal si un signal l'a termin\u00e9 ; stdout et stderr sont ceux du programme. Ce n'est pas un bac \u00e0 sable : le programme garde son propre acc\u00e8s au r\u00e9seau.",
             "The daemon's complete configuration file (schema_version = 1).": "Fichier de configuration complet du d\u00e9mon (schema_version = 1).",

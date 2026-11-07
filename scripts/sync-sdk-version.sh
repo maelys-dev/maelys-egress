@@ -22,3 +22,6 @@ rewrite sdk/node/package.json "s/^(  \"version\": )\"[^\"]*\"/\1\"$version\"/"
 for sdk in python node; do
     rewrite "sdk/$sdk/README.md" "s/(maelys-egress-$sdk-sdk-)[0-9]+\.[0-9]+\.[0-9]+/\1$version/g"
 done
+# The French command reference names the version its catalog describes;
+# contract-check renders it again from VERSION and compares.
+rewrite docs/generated/cli.fr.md "s/^(Maelys Egress )[0-9]+\.[0-9]+\.[0-9]+(, un programme)/\1$version\2/"

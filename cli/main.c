@@ -26,6 +26,9 @@ static const maelys_cli_operand_t exec_operands[] = {
  * example that the command no longer accepts refuses the catalog. The lines
  * the README shows are these, and tests/test_examples.py holds it to that. */
 static const maelys_cli_example_t config_describe_examples[] = {
+    {MAELYS_CLI_EXAMPLE("config describe",
+     "List the keys for a person: their type, what they do, and those this "
+     "binary lacks.")},
     {MAELYS_CLI_EXAMPLE("config describe --format json",
      "Read every configuration key, its type and its constraints as JSON.")},
 };
@@ -34,6 +37,9 @@ static const maelys_cli_example_t config_validate_examples[] = {
     {MAELYS_CLI_EXAMPLE("config validate --config /etc/maelys-egress.conf",
      "Check a configuration before starting anything; exit 2 lists what it "
      "violates.")},
+    {MAELYS_CLI_EXAMPLE("config validate --config /etc/maelys-egress.conf --format json",
+     "Read the verdict as JSON: data.valid, the policy digest, and each "
+     "violation in data.diagnostics.")},
 };
 
 static const maelys_cli_example_t serve_examples[] = {
@@ -51,6 +57,10 @@ static const maelys_cli_example_t exec_examples[] = {
      "channel exec --config /etc/maelys-egress.conf -- /usr/local/bin/agent --once",
      "Start a program with a channel on descriptor 4 unless the configuration "
      "names another; what follows -- is the program's own.")},
+    {MAELYS_CLI_EXAMPLE(
+     "channel exec --config /etc/maelys-egress.conf -- /usr/bin/python3 /opt/agent/run.py --task build",
+     "Start an interpreter by its absolute path, with its script and the "
+     "script's arguments as given.")},
 };
 
 static const maelys_cli_command_t commands[] = {
