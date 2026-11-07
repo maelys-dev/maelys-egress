@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- The README says how to read the French manual page: 0.35.0 wrote
+  `LANG=fr_FR.UTF-8 man maelys-egress`, which man-db honours only when that
+  locale is installed, and macOS's `man` never does. On Linux, a French
+  locale or `man -L fr maelys-egress`; on macOS, `man -M
+  "$(brew --prefix)/share/man/fr" maelys-egress`. Measured on the published
+  0.35.0: Debian with man-db and `-L fr` shows NOM, macOS with `-M` too.
+
 ## 0.35.0 — 2026-11-07
 
 - **The manual page, in English and in French, and the command reference in
